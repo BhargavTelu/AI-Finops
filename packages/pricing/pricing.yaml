@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Pricing fallback table — USD per million tokens.
+# Source of truth: provider Cost API (used when available).
+# This file is used for: forecasts, estimates when Cost API is unavailable.
+# Review monthly — drift can be 20–40% after model price changes.
+# ─────────────────────────────────────────────────────────────────────────────
+version: "2025-01"
+updated_at: "2025-01-01"
+
+providers:
+  openai:
+    models:
+      gpt-4o:
+        input_per_mtok: 2.50
+        output_per_mtok: 10.00
+        cached_per_mtok: 1.25
+      gpt-4o-mini:
+        input_per_mtok: 0.15
+        output_per_mtok: 0.60
+        cached_per_mtok: 0.075
+      gpt-4-turbo:
+        input_per_mtok: 10.00
+        output_per_mtok: 30.00
+        cached_per_mtok: 5.00
+      gpt-3.5-turbo:
+        input_per_mtok: 0.50
+        output_per_mtok: 1.50
+        cached_per_mtok: 0.25
+      o1:
+        input_per_mtok: 15.00
+        output_per_mtok: 60.00
+        cached_per_mtok: 7.50
+      o1-mini:
+        input_per_mtok: 3.00
+        output_per_mtok: 12.00
+        cached_per_mtok: 1.50
+
+  anthropic:
+    models:
+      claude-opus-4-5:
+        input_per_mtok: 15.00
+        output_per_mtok: 75.00
+        cached_per_mtok: 1.50
+      claude-sonnet-4-5:
+        input_per_mtok: 3.00
+        output_per_mtok: 15.00
+        cached_per_mtok: 0.30
+      claude-haiku-4-5:
+        input_per_mtok: 0.80
+        output_per_mtok: 4.00
+        cached_per_mtok: 0.08
+
+  gemini:
+    models:
+      gemini-2.0-flash:
+        input_per_mtok: 0.10
+        output_per_mtok: 0.40
+        cached_per_mtok: 0.025
+      gemini-1.5-pro:
+        input_per_mtok: 1.25
+        output_per_mtok: 5.00
+        cached_per_mtok: 0.3125
+      gemini-1.5-flash:
+        input_per_mtok: 0.075
+        output_per_mtok: 0.30
+        cached_per_mtok: 0.01875

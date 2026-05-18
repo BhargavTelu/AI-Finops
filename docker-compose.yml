@@ -1,0 +1,68 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Local development stack.
+# The Next.js web app runs via `pnpm dev` outside Docker (hot-reload).
+# Only infrastructure services + the Python backend run here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api/src:/app/src
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/api/src
+          target: /app/src
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev
+    volumes:
+      - ./apps/api/src:/app/src
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A api.workers.celery_app worker --loglevel=info --concurrency=2
+
+  beat:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev
+    volumes:
+      - ./apps/api/src:/app/src
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: celery -A api.workers.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler

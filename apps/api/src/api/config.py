@@ -1,0 +1,72 @@
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    env: str = "local"
+
+    # ── Supabase ──────────────────────────────────────────────────────────────
+    supabase_url: str
+    supabase_anon_key: str
+    supabase_service_role_key: str
+    database_url: str
+
+    # ── Clerk ─────────────────────────────────────────────────────────────────
+    clerk_secret_key: str
+    clerk_webhook_secret: str
+    # Frontend API URL shown in Clerk Dashboard → API Keys.
+    # Example: https://your-instance.clerk.accounts.dev
+    # Used to derive the JWKS endpoint for JWT verification.
+    clerk_issuer: str
+
+    # ── Redis ─────────────────────────────────────────────────────────────────
+    redis_url: str = "redis://localhost:6379/0"
+
+    # ── Stripe ────────────────────────────────────────────────────────────────
+    stripe_secret_key: str
+    stripe_webhook_secret: str
+
+    # ── Resend ────────────────────────────────────────────────────────────────
+    resend_api_key: str
+    from_email: str = "noreply@yourdomain.com"
+
+    # ── Cloudflare R2 ─────────────────────────────────────────────────────────
+    r2_bucket_name: str = ""
+    r2_account_id: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+
+    # ── Sentry ────────────────────────────────────────────────────────────────
+    sentry_dsn: str = ""
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    cors_origins: list[str] = ["http://localhost:3000"]
+
+    # ── Encryption ────────────────────────────────────────────────────────────
+    # 32-byte AES-256-GCM key, base64-encoded.
+    # Generated via Supabase Vault in production — never in env vars.
+    encryption_key: str = ""
+
+    # ── Internal AI (platform's own key — not customer keys) ──────────────────
+    # Used by Celery workers for rule-based → AI recommendation upgrade (V1),
+    # anomaly explainer narratives, and the monthly CFO narrative (M4).
+    # Empty in M0–M2 while recommendations are rule-based.
+    anthropic_api_key: str = ""
+
+    # ── AI rate-limit ─────────────────────────────────────────────────────────
+    ai_calls_per_org_per_day: int = 3
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            import json
+
+            return json.loads(v)
+        return v
+
+
+# Singleton — import this everywhere.
+settings = Settings()

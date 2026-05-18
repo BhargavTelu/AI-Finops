@@ -1,0 +1,14 @@
+{
+  "name": "ai-finops",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.1.0",
+  "scripts": {
+    "dev": "pnpm --filter @ai-finops/web dev",
+    "build": "pnpm --filter @ai-finops/web build",
+    "lint": "pnpm --filter @ai-finops/web lint",
+    "typecheck": "pnpm --filter @ai-finops/web typecheck",
+    "test": "pnpm --filter @ai-finops/web test"
+  },
+  "devDependencies": {}
+}

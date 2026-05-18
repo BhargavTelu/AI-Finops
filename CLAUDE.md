@@ -13,7 +13,7 @@ Read this first. Then read the doc linked under §Documentation that's relevant 
 
 Next.js (Vercel) → FastAPI (Railway) → Supabase Postgres. Celery + Upstash Redis for ingestion + nightly aggregation. Clerk auth. Stripe billing. No customer traffic flows through us — we pull from provider Admin APIs.
 
-Full stack table and schema → `docs/architecture.md`.
+Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 
 ## Code Style
 
@@ -72,8 +72,9 @@ Full stack table and schema → `docs/architecture.md`.
 
 ## Documentation
 
-- [Project Spec](project_spec.md) — Full requirements, FRs, milestones
+- [Project Spec](docs/project_spec.md) — Full requirements, FRs, milestones
 - [Architecture](docs/architecture.md) — System design, schema, API, data flow
+- [Setup](docs/setup.md) — Clerk JWT template + Supabase JWT secret (do this before M0 code)
 - [Changelog](docs/changelog.md) — Version history
 - [Project Status](docs/project_status.md) — Current milestone, what's done, what's next
 - Update files in the `docs/` folder after major milestones and major additions to the project.
