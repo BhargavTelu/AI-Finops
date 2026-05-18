@@ -35,21 +35,28 @@ secret). They must use the same signing secret.
    ```json
    {
      "role": "authenticated",
-     "org_id": "{{org.id}}",
-     "user_id": "{{user.id}}"
+     "org_id": "{{org.public_metadata.db_id}}",
+     "user_id": "{{user.public_metadata.db_id}}"
    }
    ```
 
    `role: "authenticated"` is required for Supabase to treat the request
-   as an authenticated user. `org_id` is what every RLS policy reads.
+   as an authenticated user. `org_id` and `user_id` must be the Supabase
+   UUIDs (not Clerk's own string IDs like `org_2...`) because every RLS
+   policy casts `auth.jwt()->>'org_id'` to `::uuid`. The Clerk webhook
+   handler writes these UUIDs into `public_metadata.db_id` automatically
+   when a user or org is first created.
 
 6. Click **Save**. Clerk will show a **Signing secret** — copy it. You
    will paste it into Supabase in the next step.
 
-> **Important:** `{{org.id}}` is only populated when the user has an active
-> organization in their Clerk session. The frontend must call
-> `clerk.setActive({ organization: orgId })` after org selection, before
-> making any Supabase queries.
+> **Important:** `{{org.public_metadata.db_id}}` is only populated after
+> the Clerk webhook fires and the backend writes the DB UUID back to Clerk
+> metadata. The frontend must call `clerk.setActive({ organization: orgId })`
+> after org selection, and users must refresh their session (sign out/in or
+> wait for token rotation) if they sign up before the webhook completes.
+> In practice the webhook completes in well under a second so this race
+> window is not user-visible.
 
 ---
 
