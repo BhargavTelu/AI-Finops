@@ -49,6 +49,11 @@ def _verify_svix_signature(
         ) from None
 
     if abs(int(time.time()) - ts) > _SVIX_TOLERANCE_SECONDS:
+        log.warning(
+            "webhook_timestamp_out_of_tolerance",
+            svix_timestamp=svix_timestamp,
+            server_time=int(time.time()),
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Webhook timestamp out of tolerance",
@@ -70,6 +75,12 @@ def _verify_svix_signature(
     ]
 
     if not any(hmac.compare_digest(expected, p) for p in provided):
+        # Log signature count to distinguish "no v1, signatures" from "wrong secret"
+        log.warning(
+            "webhook_signature_mismatch",
+            provided_count=len(provided),
+            svix_id=svix_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid webhook signature",
