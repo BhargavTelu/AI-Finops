@@ -8,7 +8,10 @@ from api.adapters.base import NormalizedUsageEvent
 
 # Reference: https://platform.openai.com/docs/api-reference/organization/costs
 _BASE_URL = "https://api.openai.com/v1"
-_PAGE_LIMIT = 180  # max allowed by OpenAI
+# OpenAI per-page limits: 1440 for 1m buckets, 168 for 1h buckets, 31 for 1d buckets.
+# We use 1h buckets, so the hard cap is 168 (= 7 days × 24 h).
+# Pagination handles the remaining pages for longer windows.
+_PAGE_LIMIT = 168
 
 
 class OpenAIAdapter:
@@ -60,7 +63,7 @@ class OpenAIAdapter:
         base_params: dict[str, Any] = {
             "start_time": start_ts,
             "end_time": end_ts,
-            "bucket_width": "1h",
+            "bucket_width": "1d",
             "group_by[]": "model",
             "limit": _PAGE_LIMIT,
         }

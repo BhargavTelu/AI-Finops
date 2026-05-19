@@ -54,7 +54,7 @@ async def create_integration(body: IntegrationCreate, org: OrgDep) -> Integratio
                     "org_id": org.org_id,
                     "provider": body.provider,
                     "display_name": body.display_name,
-                    "api_key_enc": api_key_enc.hex(),  # bytea stored as hex string via supabase-py
+                    "api_key_enc": "\\x" + api_key_enc.hex(),  # PostgreSQL bytea hex literal: \x<hex>
                     "status": "active",
                 }
             )

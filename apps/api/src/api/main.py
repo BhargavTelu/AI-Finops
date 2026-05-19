@@ -4,6 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import settings
+
+# Must be imported before any router that calls .delay() so that @shared_task
+# binds to the configured Celery app (Redis broker) rather than the default app
+# (AMQP / no broker).
+import api.workers.celery_app  # noqa: F401
+
 from api.routers import (
     anomalies,
     billing,

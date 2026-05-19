@@ -1,3 +1,5 @@
+import sys
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -15,16 +17,23 @@ celery_app = Celery(
     ],
 )
 
+# Windows (local dev) does not support fork-based multiprocessing or SIGUSR1.
+# Use the 'solo' pool so tasks run in the main process without spawning children.
+# On Linux (Railway production), prefork is used with a hard time limit.
+_is_windows = sys.platform == "win32"
+
 celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
-    # Prevent tasks from running indefinitely
-    task_soft_time_limit=300,   # 5 min soft limit
-    task_time_limit=600,        # 10 min hard limit
-    worker_max_tasks_per_child=100,
+    worker_pool="solo" if _is_windows else "prefork",
+    worker_concurrency=1 if _is_windows else None,
+    # Soft time limit uses SIGUSR1 — not available on Windows.
+    task_soft_time_limit=None if _is_windows else 300,
+    task_time_limit=600,        # 10 min hard kill (SIGKILL, works everywhere)
+    worker_max_tasks_per_child=None if _is_windows else 100,
 )
 
 celery_app.conf.beat_schedule = {

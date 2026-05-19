@@ -6,6 +6,7 @@ import httpx
 import jwt
 import structlog
 from fastapi import Depends, Header, HTTPException, status
+from supabase import create_client
 
 from api.config import settings
 
@@ -46,6 +47,35 @@ async def _get_jwks() -> dict[str, dict[str, Any]]:
     return _cache.keys
 
 
+def _resolve_org_id_from_clerk_claim(o_claim: Any) -> str | None:
+    """
+    Clerk v6 consolidates org data into the 'o' claim instead of a flat
+    org_id string. Extract the Clerk org ID and resolve the Supabase UUID
+    via a DB lookup.
+
+    This fallback fires when the session token hasn't been customised to
+    include org_id = {{org.public_metadata.db_id}} directly. To eliminate
+    this DB round-trip: Clerk Dashboard → Configure → Sessions →
+    Edit default session token → add {"org_id": "{{org.public_metadata.db_id}}"}.
+    """
+    if not isinstance(o_claim, dict):
+        return None
+    clerk_org_id: str | None = o_claim.get("id")
+    if not clerk_org_id:
+        return None
+    db = create_client(settings.supabase_url, settings.supabase_service_role_key)
+    result = (
+        db.table("organizations")
+        .select("id")
+        .eq("clerk_id", clerk_org_id)
+        .limit(1)
+        .execute()
+    )
+    if result.data:
+        return result.data[0]["id"]  # type: ignore[no-any-return]
+    return None
+
+
 # ── OrgContext ─────────────────────────────────────────────────────────────────
 class OrgContext:
     """Extracted from Clerk JWT. Injected into every protected route."""
@@ -65,6 +95,10 @@ async def _require_org(
     Verifies the RS256 signature against Clerk's JWKS endpoint.
     Enforces issuer and expiry. Extracts sub (user_id) and org_id.
     The JWKS is cached in memory and refreshed hourly or on unknown kid.
+
+    org_id resolution order:
+      1. Direct claim: org_id = {{org.public_metadata.db_id}} (custom session token)
+      2. Clerk v6 'o' claim fallback: looks up Supabase UUID by Clerk org ID
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -126,14 +160,13 @@ async def _require_org(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
     user_id: str | None = claims.get("sub")
-    org_id: str | None = claims.get("org_id")
+    # Prefer the custom session-token claim (Supabase UUID); fall back to
+    # resolving via Clerk v6's compressed 'o' claim if not present.
+    org_id: str | None = claims.get("org_id") or _resolve_org_id_from_clerk_claim(claims.get("o"))
 
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
     if not org_id:
-        # org_id is absent when the user has no active organization in their
-        # Clerk session. The frontend must set org context before calling
-        # any protected API routes (see docs/setup.md § Clerk session config).
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="No active organization — activate an org in the Clerk session",

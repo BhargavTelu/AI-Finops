@@ -123,7 +123,11 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
 
     try:
         cipher = EncryptionService(settings.encryption_key)
-        key_bytes = cipher.decrypt(bytes.fromhex(row["api_key_enc"]))
+        # Supabase returns BYTEA with \x prefix (PostgreSQL hex format); strip it.
+        enc_hex = row["api_key_enc"]
+        if enc_hex.startswith("\\x"):
+            enc_hex = enc_hex[2:]
+        key_bytes = cipher.decrypt(bytes.fromhex(enc_hex))
 
         now = datetime.now(timezone.utc)
         start = now - timedelta(days=_BACKFILL_DAYS)
@@ -199,7 +203,11 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
 
     try:
         cipher = EncryptionService(settings.encryption_key)
-        key_bytes = cipher.decrypt(bytes.fromhex(row["api_key_enc"]))
+        # Supabase returns BYTEA with \x prefix (PostgreSQL hex format); strip it.
+        enc_hex = row["api_key_enc"]
+        if enc_hex.startswith("\\x"):
+            enc_hex = enc_hex[2:]
+        key_bytes = cipher.decrypt(bytes.fromhex(enc_hex))
 
         now = datetime.now(timezone.utc)
         # Fall back to 4h lookback if no prior sync — matches the beat cadence
