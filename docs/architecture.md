@@ -209,7 +209,7 @@ class NormalizedUsageEvent:
     raw_meta: dict
 ```
 
-**OpenAI:** `GET /v1/organization/costs` + `/v1/organization/usage/completions`. Header `Authorization: Bearer sk-admin-...`. Cursor pagination. Refresh every 4h.
+**OpenAI:** `GET /v1/organization/costs` + `/v1/organization/usage/completions`. Header `Authorization: Bearer sk-admin-...`. Two-pass cursor pagination: completions first (builds token lookup), costs second (yields events). `bucket_width=1d`, `limit=31` (OpenAI daily bucket max is 31; hourly is 168; minute is 1440). Refresh every 4h.
 
 **Anthropic:** `GET /v1/organizations/usage_report/messages` + `/cost_report`. Headers: `x-api-key: sk-ant-admin-...`, `anthropic-version: 2023-06-01`.
 
@@ -223,13 +223,18 @@ class NormalizedUsageEvent:
 ```
 User → Web: paste Admin key
 Web → API: POST /integrations
-API → Provider: test call
-API: pgcrypto encrypt + insert + enqueue backfill_job
-API → Web: 201
-Worker: paginate provider → insert usage_events → rebuild summaries
-Web: polls /usage/summary every 5s → chart renders
+API → Provider: validate key (live ping)
+API: AES-256-GCM encrypt → store as BYTEA (\x-prefixed hex) → audit_events → enqueue backfill_integration
+API → Web: 201 IntegrationRead
+Worker (backfill_integration):
+  paginate provider (30d) → delete-before-insert usage_events → enqueue aggregate_org
+Worker (aggregate_org):
+  usage_events → UPSERT daily_cost_summaries
+Dashboard: fetches /usage/summary + /usage/timeseries → chart renders
 ```
 Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
+
+**BYTEA storage convention:** Admin keys are stored as `"\\x" + ciphertext.hex()` so PostgREST/Supabase returns them in `\x<hex>` format. All decrypt paths must strip the `\x` prefix before calling `bytes.fromhex()`.
 
 ### Nightly (00:30 UTC, per org)
 ```
@@ -284,6 +289,7 @@ Statistics not ML because: explainable to CFO, runs in ms, sufficient at <50 cus
 
 ## Engineering Reqs
 
+- **`celery_app.py` import order:** must be imported in `api/main.py` before any router that calls `.delay()`. `@shared_task` tasks bind to whichever Celery app is constructed first — without this import they bind to a default app with `broker_url=None` (AMQP fallback) instead of Redis.
 - **Lang:** TS strict in `/web`, no `any`. Python 3.11 with `ruff` + `mypy` + `black`.
 - **CI:** lint + typecheck + tests on every PR. No direct push to `main`.
 - **Tests:** unit-test pricing math, anomaly logic, tag-rule engine (target 80% on these). One e2e happy path per milestone. No frontend tests in MVP.
@@ -291,10 +297,30 @@ Statistics not ML because: explainable to CFO, runs in ms, sufficient at <50 cus
 - **Logging:** structlog JSON. Every line: `request_id`, `org_id`, `actor_user_id`, `event`.
 - **PostHog events:** signup, org_created, provider_connected, tag_created, budget_created, anomaly_viewed, recommendation_applied, pdf_downloaded, checkout_completed.
 
+## Operational Notes
+
+### Celery worker platforms
+
+| Platform | Pool | Concurrency | Soft limit | Notes |
+|---|---|---|---|---|
+| Windows (local dev) | `solo` | 1 | disabled | No `fork`, no SIGUSR1. `solo` pool runs tasks in main process. |
+| Linux (Railway prod) | `prefork` | default | 300s | SIGKILL hard limit at 600s. Max 100 tasks/child before restart. |
+
+Set in `api/workers/celery_app.py` via `sys.platform == "win32"` check.
+
+### ENCRYPTION_KEY bootstrap
+
+Generate once per environment:
+```bash
+python -c "import secrets, base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+```
+Set as `ENCRYPTION_KEY=<output>` in `.env` (local) or Railway env vars (production). An empty key raises `ValueError` before any DB operation.
+
 ## Security (non-negotiable)
 
-- Admin keys: never touch frontend. Server action encrypts immediately, form resets, never returned to client.
-- AES-256-GCM via pgcrypto. Key in Supabase Vault, not env vars.
+- Admin keys: never touch frontend. Server-side only: validate → encrypt → store. Never returned to client. Never logged.
+- AES-256-GCM via `EncryptionService` (32-byte key, 96-bit nonce prepended to ciphertext). Key in env var locally; Supabase Vault in production.
+- BYTEA storage: `"\\x" + ciphertext.hex()` so Supabase returns `\x<hex>` format; strip prefix before `bytes.fromhex()` on all decrypt paths.
 - RLS on every customer-data table. Two-tenant SQL probe before every deploy.
 - `audit_events` row on every key/budget mutation.
 - Upstash rate limiter: 60 req/min/user on public routes.
