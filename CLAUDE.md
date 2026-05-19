@@ -74,7 +74,7 @@ Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 
 - [Project Spec](docs/project_spec.md) — Full requirements, FRs, milestones
 - [Architecture](docs/architecture.md) — System design, schema, API, data flow
-- [Setup](docs/setup.md) — Clerk JWT template + Supabase JWT secret (do this before M0 code)
+- [Setup](docs/setup.md) — Clerk JWT template + Supabase JWT secret (completed for M0; re-read before deploying to a new environment)
 - [Changelog](docs/changelog.md) — Version history
 - [Project Status](docs/project_status.md) — Current milestone, what's done, what's next
 - Update files in the `docs/` folder after major milestones and major additions to the project.

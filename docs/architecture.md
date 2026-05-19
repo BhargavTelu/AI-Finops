@@ -74,8 +74,8 @@ UUIDv7 ids · `created_at`/`updated_at` on all tables · UTC timestamps · RLS o
 
 ```sql
 -- IDENTITY (mirrors Clerk)
-users (id uuid PK, email text unique, full_name, created_at)
-organizations (id uuid PK, name, plan text default 'trial', trial_ends_at, created_at)
+users (id uuid PK, clerk_id text unique, email text unique, full_name, created_at, updated_at)
+organizations (id uuid PK, clerk_id text unique, name, plan text default 'trial', trial_ends_at, created_at, updated_at)
 organization_members (id, org_id FK, user_id FK, role text default 'admin', UNIQUE(org_id, user_id))
 
 -- INTEGRATIONS
@@ -302,7 +302,7 @@ Statistics not ML because: explainable to CFO, runs in ms, sufficient at <50 cus
 
 ## Pre-deploy smoke
 
-1. RLS probe passes (two-tenant isolation).
+1. RLS probe passes: run `infra/scripts/smoke-test.sql` — requires `SET LOCAL ROLE authenticated` before SELECT probes (the `postgres` superuser bypasses all RLS `USING` clauses).
 2. Signup → org → connect → chart works on staging.
 3. Stripe test checkout completes; webhook updates `billing`.
 4. No new Sentry errors in last 1h.
