@@ -59,15 +59,23 @@ class OpenAIAdapter:
 
         # Pass 1: build token lookup keyed by (start_time_unix, model)
         token_lookup: dict[tuple[int, str], dict[str, int]] = {}
-        base_params: dict[str, Any] = {
+        usage_params: dict[str, Any] = {
             "start_time": start_ts,
             "end_time": end_ts,
             "bucket_width": "1d",
             "group_by[]": "model",
             "limit": _PAGE_LIMIT,
         }
+        # /organization/costs group_by only supports: line_item, project_id, user_id, api_key_id
+        cost_params: dict[str, Any] = {
+            "start_time": start_ts,
+            "end_time": end_ts,
+            "bucket_width": "1d",
+            "group_by[]": "line_item",
+            "limit": _PAGE_LIMIT,
+        }
 
-        for bucket in self._paginate(key, "/organization/usage/completions", base_params):
+        for bucket in self._paginate(key, "/organization/usage/completions", usage_params):
             for result in bucket.get("results", []):
                 model = result.get("model") or "unknown"
                 token_lookup[(bucket["start_time"], model)] = {
@@ -78,9 +86,9 @@ class OpenAIAdapter:
                 }
 
         # Pass 2: yield NormalizedUsageEvent for each cost bucket result
-        for bucket in self._paginate(key, "/organization/costs", base_params):
+        for bucket in self._paginate(key, "/organization/costs", cost_params):
             for result in bucket.get("results", []):
-                model = result.get("model") or "unknown"
+                model = result.get("line_item") or "unknown"
                 amount = result.get("amount", {})
                 cost = Decimal(str(amount.get("value") or 0))
 

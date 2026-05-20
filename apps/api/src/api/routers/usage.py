@@ -13,7 +13,7 @@ from supabase import create_client
 
 from api.config import settings
 from api.deps import OrgDep
-from api.schemas.usage import DailyPoint, ForecastResult, UsageSummary
+from api.schemas.usage import DailyPoint, ExploreRow, ForecastResult, UsageSummary
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -117,13 +117,68 @@ async def get_timeseries(
     return points
 
 
+_EXPLORE_DIMENSIONS = frozenset(
+    {"provider", "model", "feature_tag", "team_tag", "customer_tag", "env_tag"}
+)
+
+
 @router.get("/explore")
-async def get_explore(org: OrgDep) -> dict:
+async def get_explore(
+    org: OrgDep,
+    range: str = Query(default="30d", pattern=r"^\d+d$"),
+    group_by: str = Query(default="model"),
+    provider: str | None = Query(default=None),
+) -> list[ExploreRow]:
     """
     Pivot data for Cost Explorer (TanStack Table).
-    Supports grouping by provider, model, feature_tag, team_tag, customer_tag, date.
+    Groups daily_cost_summaries by a single dimension and returns aggregated totals
+    with percentage-of-total. Sorted by cost descending.
     """
-    raise NotImplementedError
+    if group_by not in _EXPLORE_DIMENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid group_by '{group_by}'. Must be one of: {', '.join(sorted(_EXPLORE_DIMENSIONS))}",
+        )
+
+    period_start, period_end = _parse_range(range)
+    db = _get_supabase()
+
+    q = (
+        db.table("daily_cost_summaries")
+        .select(f"{group_by}, total_cost_usd, total_requests, total_tokens")
+        .eq("org_id", org.org_id)
+        .gte("day", period_start.isoformat())
+        .lte("day", period_end.isoformat())
+    )
+    if provider:
+        q = q.eq("provider", provider)
+
+    result = q.execute()
+
+    # Group in Python — multiple rows per dimension value when other tag columns differ
+    groups: dict[str, dict] = defaultdict(
+        lambda: {"cost": Decimal("0"), "reqs": 0, "tokens": 0}
+    )
+    for r in result.data:
+        key: str = r[group_by] or ""  # tags default to "" in DB; guard against None
+        groups[key]["cost"] += Decimal(str(r["total_cost_usd"]))
+        groups[key]["reqs"] += r["total_requests"]
+        groups[key]["tokens"] += r["total_tokens"]
+
+    grand_total = sum(v["cost"] for v in groups.values())
+
+    rows = [
+        ExploreRow(
+            group_key=k,
+            total_cost_usd=v["cost"],
+            total_requests=v["reqs"],
+            total_tokens=v["tokens"],
+            pct_of_total=float(v["cost"] / grand_total * 100) if grand_total else 0.0,
+        )
+        for k, v in groups.items()
+    ]
+    rows.sort(key=lambda r: r.total_cost_usd, reverse=True)
+    return rows
 
 
 @router.get("/forecast")

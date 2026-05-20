@@ -95,7 +95,7 @@ class TestIngestWindow:
     def test_raises_for_unsupported_provider(self) -> None:
         db = _mock_db()
         with pytest.raises(ValueError, match="Unsupported provider"):
-            _ingest_window(db, INTEGRATION_ID, ORG_ID, "anthropic", KEY_BYTES, START, END)
+            _ingest_window(db, INTEGRATION_ID, ORG_ID, "cohere", KEY_BYTES, START, END)
 
     def test_batches_large_event_sets(self) -> None:
         """Events > 500 should be inserted in multiple batches."""

@@ -2,6 +2,8 @@ import structlog
 from fastapi import APIRouter, HTTPException
 from supabase import create_client
 
+from api.adapters.anthropic import AnthropicAdapter
+from api.adapters.gemini import GeminiAdapter
 from api.adapters.openai import OpenAIAdapter
 from api.config import settings
 from api.deps import OrgDep
@@ -13,9 +15,11 @@ log = structlog.get_logger()
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
-# Map provider slug → adapter instance (extend when Anthropic/Gemini land)
+# Map provider slug → adapter instance
 _ADAPTERS = {
     "openai": OpenAIAdapter(),
+    "anthropic": AnthropicAdapter(),
+    "gemini": GeminiAdapter(),
 }
 
 

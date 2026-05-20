@@ -31,6 +31,7 @@ const STATUS_BADGE: Record<IntegrationRead["status"], string> = {
 export function IntegrationsPage({ integrations: initial }: Props) {
   const { getToken } = useAuth();
   const [list, setList] = useState<IntegrationRead[]>(initial);
+  const [provider, setProvider] = useState("openai");
   const [displayName, setDisplayName] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [submitState, setSubmitState] = useState<SubmitState>("idle");
@@ -46,7 +47,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
       const token = await getToken();
       const api = createApiClient(token!);
       const created = await api.post<IntegrationRead>("/integrations", {
-        provider: "openai",
+        provider,
         display_name: displayName,
         api_key: apiKey,
       });
@@ -90,17 +91,21 @@ export function IntegrationsPage({ integrations: initial }: Props) {
       <div className="rounded-lg border bg-card p-6">
         <h2 className="mb-4 text-base font-medium">Connect a provider</h2>
         <form onSubmit={handleConnect} className="space-y-4">
-          {/* Provider — static in M1; a select will replace this in M2 */}
           <div>
             <label className="mb-1.5 block text-sm font-medium" htmlFor="provider">
               Provider
             </label>
-            <div
+            <select
               id="provider"
-              className="flex h-9 w-full max-w-xs items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+              disabled={submitState === "loading"}
+              className="flex h-9 w-full max-w-xs rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
             >
-              OpenAI
-            </div>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Gemini</option>
+            </select>
           </div>
 
           <div>

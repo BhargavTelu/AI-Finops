@@ -35,5 +35,17 @@ class TagRuleRead(BaseModel):
     match_pattern: str
     priority: int
     enabled: bool
+    tags: dict | None = None  # joined tag info: {"type": ..., "name": ...}
 
     model_config = {"from_attributes": True}
+
+
+class TagRulePreview(BaseModel):
+    match_type: Literal["regex", "substring", "exact"]
+    match_pattern: str = Field(min_length=1)
+
+
+class PreviewMatch(BaseModel):
+    api_key_label: str
+    provider: str
+    model: str

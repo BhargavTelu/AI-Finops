@@ -12,9 +12,12 @@ import structlog
 from celery import shared_task
 from supabase import create_client
 
+from api.adapters.anthropic import AnthropicAdapter
+from api.adapters.gemini import GeminiAdapter
 from api.adapters.openai import OpenAIAdapter
 from api.config import settings
 from api.services.encryption import EncryptionService
+from api.services.tag_engine import apply_rules, compile_rules
 
 log = structlog.get_logger()
 
@@ -24,6 +27,8 @@ _BATCH_SIZE = 500
 # Map provider slug → adapter instance
 _ADAPTERS: dict[str, Any] = {
     "openai": OpenAIAdapter(),
+    "anthropic": AnthropicAdapter(),
+    "gemini": GeminiAdapter(),
 }
 
 
@@ -59,6 +64,16 @@ def _ingest_window(
 
     events = list(adapter.fetch_costs(key_bytes, start, end))
 
+    # Load enabled tag rules for this org once — compiled before the event loop
+    rules_result = (
+        db.table("tag_rules")
+        .select("match_type, match_pattern, priority, enabled, tags(type, name)")
+        .eq("org_id", org_id)
+        .eq("enabled", True)
+        .execute()
+    )
+    compiled = compile_rules(rules_result.data)
+
     # Remove existing rows for this integration+window before inserting
     db.table("usage_events").delete().eq("integration_id", integration_id).gte(
         "bucket_hour", start.isoformat()
@@ -74,10 +89,7 @@ def _ingest_window(
             "provider": event.provider,
             "model": event.model,
             "api_key_label": event.api_key_label,
-            "feature_tag": None,  # tag-rule engine fills this in a later milestone
-            "team_tag": None,
-            "customer_tag": None,
-            "env_tag": None,
+            **apply_rules(event.api_key_label, compiled),
             "input_tokens": event.input_tokens,
             "output_tokens": event.output_tokens,
             "cached_tokens": event.cached_tokens,

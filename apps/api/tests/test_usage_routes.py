@@ -160,3 +160,110 @@ class TestGetTimeseries:
     def test_unsupported_group_by_returns_400(self) -> None:
         resp = client.get("/api/v1/usage/timeseries?range=30d&group_by=feature_tag")
         assert resp.status_code == 400
+
+
+# ── GET /usage/explore ────────────────────────────────────────────────────────
+
+class TestGetExplore:
+    def _row(self, dimension: str, value: str, cost: str, reqs: int, tokens: int) -> dict:
+        """Build a mock daily_cost_summaries row for a given dimension column."""
+        return {dimension: value, "total_cost_usd": cost, "total_requests": reqs, "total_tokens": tokens}
+
+    def test_groups_by_provider(self) -> None:
+        rows = [
+            self._row("provider", "openai", "10.00", 100, 50000),
+            self._row("provider", "anthropic", "5.00", 50, 25000),
+        ]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=provider&range=30d")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 2
+        keys = {r["group_key"] for r in body}
+        assert keys == {"openai", "anthropic"}
+
+    def test_groups_by_model(self) -> None:
+        rows = [
+            self._row("model", "gpt-4o", "8.00", 80, 40000),
+            self._row("model", "claude-sonnet-4-5", "3.00", 30, 15000),
+        ]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 2
+        assert body[0]["group_key"] == "gpt-4o"  # higher cost first
+
+    def test_sums_cost_requests_tokens_for_same_group_key(self) -> None:
+        """Multiple rows with same dimension value must be summed."""
+        rows = [
+            self._row("model", "gpt-4o", "3.00", 30, 10000),
+            self._row("model", "gpt-4o", "2.00", 20, 8000),  # same model, different tag combo
+        ]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        r = body[0]
+        assert Decimal(r["total_cost_usd"]) == Decimal("5.00")
+        assert r["total_requests"] == 50
+        assert r["total_tokens"] == 18000
+
+    def test_pct_of_total_sums_to_100(self) -> None:
+        rows = [
+            self._row("provider", "openai", "75.00", 100, 50000),
+            self._row("provider", "anthropic", "25.00", 50, 25000),
+        ]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=provider&range=30d")
+
+        body = resp.json()
+        total_pct = sum(r["pct_of_total"] for r in body)
+        assert abs(total_pct - 100.0) < 0.01  # float tolerance
+
+    def test_sorted_by_cost_descending(self) -> None:
+        rows = [
+            self._row("model", "gpt-4o-mini", "1.00", 10, 5000),
+            self._row("model", "gpt-4o", "9.00", 90, 45000),
+            self._row("model", "o1", "5.00", 5, 2000),
+        ]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        body = resp.json()
+        costs = [Decimal(r["total_cost_usd"]) for r in body]
+        assert costs == sorted(costs, reverse=True)
+
+    def test_empty_db_returns_empty_list(self) -> None:
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db([])):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_invalid_group_by_returns_400(self) -> None:
+        resp = client.get("/api/v1/usage/explore?group_by=wallet&range=30d")
+        assert resp.status_code == 400
+        assert "wallet" in resp.json()["detail"]
+
+    def test_provider_filter_param_accepted(self) -> None:
+        """Provider filter is forwarded to DB query without breaking the response."""
+        rows = [self._row("model", "gpt-4o", "5.00", 50, 20000)]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d&provider=openai")
+
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_pct_of_total_zero_when_all_costs_zero(self) -> None:
+        """Guard against divide-by-zero when all rows have zero cost."""
+        rows = [self._row("model", "gpt-4o", "0.00", 10, 5000)]
+        with patch("api.routers.usage._get_supabase", return_value=_mock_db(rows)):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        body = resp.json()
+        assert body[0]["pct_of_total"] == 0.0

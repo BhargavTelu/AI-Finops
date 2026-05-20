@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Route } from "next";
 
 import { cn } from "@/lib/utils";
 
-const links = [
+const links: { href: Route<string>; label: string }[] = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/cost-explorer", label: "Cost Explorer" },
   { href: "/settings", label: "Settings" },
 ];
 
