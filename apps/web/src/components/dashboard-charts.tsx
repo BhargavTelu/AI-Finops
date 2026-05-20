@@ -23,30 +23,41 @@ const costBarFormatter = (value: number) => `$${value.toFixed(2)}`;
 
 export function DashboardCharts({ chartData, models, barData }: Props) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* 30-day cost trend */}
-      <div className="rounded-lg border bg-card p-6">
-        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Cost trend (30 days)</h2>
+      <div className="rounded-xl border border-border/60 bg-card p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-medium">Cost trend</h2>
+          <p className="text-xs text-muted-foreground">Daily spend by model over 30 days</p>
+        </div>
         {chartData.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">No data for this period.</p>
+          <div className="flex h-60 items-center justify-center rounded-lg border border-dashed border-border">
+            <p className="text-sm text-muted-foreground">No data for this period.</p>
+          </div>
         ) : (
           <AreaChart
             data={chartData}
             index="date"
             categories={models}
             valueFormatter={costFormatter}
-            className="mt-4 h-72"
+            className="h-64"
             showLegend={models.length > 1}
             showGridLines
+            curveType="monotone"
           />
         )}
       </div>
 
       {/* Cost by model */}
-      <div className="rounded-lg border bg-card p-6">
-        <h2 className="mb-1 text-sm font-medium text-muted-foreground">Cost by model (30 days)</h2>
+      <div className="rounded-xl border border-border/60 bg-card p-5">
+        <div className="mb-4">
+          <h2 className="text-sm font-medium">Cost by model</h2>
+          <p className="text-xs text-muted-foreground">Top 10 models by total spend</p>
+        </div>
         {barData.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">No data for this period.</p>
+          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border">
+            <p className="text-sm text-muted-foreground">No data for this period.</p>
+          </div>
         ) : (
           <BarChart
             data={barData}
@@ -54,7 +65,6 @@ export function DashboardCharts({ chartData, models, barData }: Props) {
             categories={["cost"]}
             valueFormatter={costBarFormatter}
             layout="vertical"
-            className="mt-4"
             style={{ height: `${Math.max(180, barData.length * 44)}px` }}
             showLegend={false}
             yAxisWidth={180}

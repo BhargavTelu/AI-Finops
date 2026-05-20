@@ -45,11 +45,45 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+      },
+      keyframes: {
+        "fade-in": {
+          "0%": { opacity: "0", transform: "translateY(8px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        "slide-in-from-right": {
+          "0%": { opacity: "0", transform: "translateX(16px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        "counter-up": {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+      },
+      animation: {
+        "fade-in": "fade-in 0.3s ease-out forwards",
+        "slide-in-right": "slide-in-from-right 0.25s ease-out forwards",
+        "counter-up": "counter-up 0.4s ease-out forwards",
+        shimmer: "shimmer 2s linear infinite",
       },
     },
   },
