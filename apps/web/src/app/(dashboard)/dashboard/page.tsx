@@ -89,7 +89,11 @@ export default async function DashboardPage() {
     );
   }
   const barData = [...modelTotals.entries()]
-    .map(([model, cost]) => ({ model, cost }))
+    .map(([model, cost]) => ({
+      // Truncate long model version suffixes for bar chart readability
+      model: model.length > 28 ? model.slice(0, 26) + "…" : model,
+      cost,
+    }))
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10);
 

@@ -53,8 +53,11 @@ export function DashboardCharts({ chartData, models, barData }: Props) {
             index="model"
             categories={["cost"]}
             valueFormatter={costBarFormatter}
-            className="mt-4 h-64"
+            layout="vertical"
+            className="mt-4"
+            style={{ height: `${Math.max(180, barData.length * 44)}px` }}
             showLegend={false}
+            yAxisWidth={180}
           />
         )}
       </div>

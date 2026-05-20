@@ -27,11 +27,27 @@ Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 
 ## UI Style
 
-- shadcn/ui + Tailwind. No custom CSS unless shadcn can't do it.
-- Charts: Tremor first, Recharts when Tremor doesn't fit.
-- Tables: TanStack Table (required for Cost Explorer pivot).
-- Empty states matter — every screen needs one.
-- Dashboard p95 ≤ 800ms. If a query is slow, hit `daily_cost_summaries`, never raw `usage_events`.
+**Component library:** shadcn/ui + Tailwind. No custom CSS unless shadcn can't do it.
+**Charts:** Tremor first, Recharts for custom shapes.
+**Tables:** TanStack Table (required for Cost Explorer pivot).
+**Motion:** Framer Motion installed. Use for:
+  - Page/route transitions (fade + slide, 200ms)
+  - Dashboard number counters (animate on load)
+  - Empty state illustrations entering
+  - Alert/toast entrance (slide-in from top-right)
+  - DO NOT use for table rows, chart renders, or anything in a list > 10 items (perf)
+
+**Design tokens (use consistently):**
+  - Font: Inter (already in shadcn)
+  - Radius: rounded-xl for cards, rounded-lg for buttons, rounded-md for inputs
+  - Spacing: 4px base grid (Tailwind default)
+  - Dashboard bg: bg-background, cards: bg-card with border
+  - Accent: use your primary color from shadcn theme
+
+**Every screen needs:**
+  - Empty state (with a clear CTA, not just "no data")
+  - Loading skeleton (not a spinner — use shadcn Skeleton)
+  - Error state with a retry action
 
 ## Constraints & Policies
 

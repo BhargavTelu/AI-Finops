@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import structlog
 from fastapi import APIRouter, HTTPException
 from supabase import create_client
@@ -9,6 +11,7 @@ from api.config import settings
 from api.deps import OrgDep
 from api.schemas.integrations import IntegrationCreate, IntegrationRead
 from api.services.encryption import EncryptionService
+from api.workers.aggregation import aggregate_org
 from api.workers.ingestion import backfill_integration
 
 log = structlog.get_logger()
@@ -150,6 +153,22 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
 
     if not result.data:
         raise HTTPException(status_code=404, detail="Integration not found")
+
+    # Remove all raw events for this integration so they no longer appear in dashboards.
+    # Summaries are rebuilt by the aggregation task triggered below.
+    try:
+        db.table("usage_events").delete().eq("integration_id", integration_id).execute()
+        # Wipe org summaries for this date range so stale provider rows are removed,
+        # then immediately re-aggregate from the remaining usage_events.
+        today = datetime.now(timezone.utc).date()
+        from_date = today - timedelta(days=31)
+        db.table("daily_cost_summaries").delete().eq("org_id", org.org_id).gte(
+            "day", from_date.isoformat()
+        ).execute()
+        aggregate_org.delay(org.org_id)
+    except Exception as exc:
+        # Non-fatal — stale data will be cleaned up on the next nightly aggregation run
+        log.warning("revoke_cleanup_failed", org_id=org.org_id, integration_id=integration_id, error=str(exc))
 
     # Audit log — non-fatal if this fails
     try:

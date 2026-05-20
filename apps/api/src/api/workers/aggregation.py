@@ -41,16 +41,37 @@ def aggregate_all_orgs() -> None:
 @shared_task
 def aggregate_org(org_id: str) -> None:
     """
-    GROUP BY (day, provider, model, *_tag) → UPSERT daily_cost_summaries.
+    GROUP BY (day, provider, model, *_tag) → rebuild daily_cost_summaries.
     Processes all days up to yesterday UTC — never today's partial-day data.
-    Safe to re-run: the UPSERT on the 8-column unique key makes it idempotent.
+    Delete-before-insert ensures revoked-integration data is purged on every run.
     """
     db = _get_supabase()
 
     today = datetime.now(timezone.utc).date()
     from_date = today - timedelta(days=31)
 
-    # Paginate through usage_events to stay within REST response limits
+    # Only aggregate events from non-revoked integrations so revoking an
+    # integration immediately removes its data on the next aggregation run.
+    integrations_result = (
+        db.table("integrations")
+        .select("id")
+        .eq("org_id", org_id)
+        .neq("status", "revoked")
+        .execute()
+    )
+    active_ids = [row["id"] for row in integrations_result.data]
+
+    # Always wipe the window first — removes stale rows from previously revoked
+    # integrations even when no active events exist for the period.
+    db.table("daily_cost_summaries").delete().eq("org_id", org_id).gte(
+        "day", from_date.isoformat()
+    ).execute()
+
+    if not active_ids:
+        log.info("aggregation_no_active_integrations", org_id=org_id)
+        return
+
+    # Paginate through usage_events scoped to active integrations only
     offset = 0
     all_rows: list[dict] = []
     while True:
@@ -61,6 +82,7 @@ def aggregate_org(org_id: str) -> None:
                 "cost_usd, request_count, input_tokens, output_tokens, cached_tokens, bucket_hour"
             )
             .eq("org_id", org_id)
+            .in_("integration_id", active_ids)
             .gte("bucket_hour", from_date.isoformat())
             .lt("bucket_hour", today.isoformat())
             .range(offset, offset + _PAGE_SIZE - 1)
