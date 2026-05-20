@@ -211,11 +211,41 @@ class NormalizedUsageEvent:
 
 **OpenAI:** `GET /v1/organization/costs` + `/v1/organization/usage/completions`. Header `Authorization: Bearer sk-admin-...`. Two-pass cursor pagination: completions first (builds token lookup), costs second (yields events). `bucket_width=1d`, `limit=31` (OpenAI daily bucket max is 31; hourly is 168; minute is 1440). Refresh every 4h.
 
-**Anthropic:** `GET /v1/organizations/usage_report/messages` + `/cost_report`. Headers: `x-api-key: sk-ant-admin-...`, `anthropic-version: 2023-06-01`.
+**Anthropic:** `GET /v1/organizations/usage_report/messages`. Headers: `x-api-key: sk-ant-admin-...`, `anthropic-version: 2023-06-01`, `anthropic-beta: usage-report-2024-07-01`. Cursor pagination via `next_page` token. Cost computed from `pricing.yaml` (per-Mtok rates for input, output, cache-read). `cache_read_input_tokens` mapped to `cached_tokens`; `cache_creation_input_tokens` preserved in `raw_meta`. Standard Admin API — not Enterprise-gated.
 
-**Gemini:** Cloud Billing API on the Gemini project. Validate granularity in M2 week 1; defer to V1 if weak.
+**Gemini:** Key validation only (M2). `validate()` hits `GET https://generativelanguage.googleapis.com/v1beta/models?key={api_key}` — 200 = valid. `fetch_costs()` is a no-op generator: AI Studio API keys have no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account (different auth model from simple API keys). Cost collection deferred to V1. Integration status saves as `active` but zero events are inserted.
 
-**Pricing:** prefer provider Cost API values. `pricing.yaml` is fallback + used for forecasts. Monthly review.
+**Pricing:** prefer provider Cost API values. `pricing.yaml` is fallback + used for Anthropic cost calculation and forecasts. Monthly review.
+
+## Tag-Rule Engine
+
+Pure-function module at `api/services/tag_engine.py`. No DB access — fully unit-testable in isolation.
+
+```python
+@dataclass(frozen=True)
+class CompiledRule:
+    tag_type: str       # "feature" | "team" | "customer" | "env"
+    tag_name: str       # value to store, e.g. "chat-v2"
+    match_type: str     # "regex" | "substring" | "exact"
+    match_pattern: str
+    priority: int       # lower = higher priority
+
+def compile_rules(db_rows: list[dict]) -> list[CompiledRule]:
+    """Filter disabled, parse PostgREST embedded tag join, sort priority ASC."""
+
+def apply_rules(label: str | None, rules: list[CompiledRule]) -> dict[str, str | None]:
+    """Returns {feature_tag, team_tag, customer_tag, env_tag}. First match per type wins.
+    Stops early when all 4 types assigned. None/empty label treated as empty string."""
+```
+
+**Matching semantics:**
+- `exact` — full string equality, case-sensitive
+- `substring` — `pattern in label` (Python `in` operator)
+- `regex` — `re.search(pattern, label)`; invalid regex returns `False` (no exception propagation)
+
+**Ingestion wire-up:** `_ingest_window()` in `ingestion.py` calls `compile_rules()` once per window (before the event loop), then `apply_rules(event.api_key_label, compiled)` per event. Result dict is spread directly into the `usage_events` row via `**apply_rules(...)`. Tag assignments are denormalized at write time — zero query overhead at read time.
+
+**PostgREST join syntax:** `db.table("tag_rules").select("*, tags(type, name)")` returns `tags: {"type": ..., "name": ...}` embedded in each row. The `compile_rules()` function reads from this embedded key.
 
 ## Core Flows
 
@@ -238,13 +268,13 @@ Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
 
 ### Nightly (00:30 UTC, per org)
 ```
-aggregate_usage_events   → upsert daily_cost_summaries
-detect_anomalies         → insert anomalies, enqueue notify
-check_budgets            → enqueue budget alerts on threshold cross
-generate_recommendations → rule-based (V1: Claude Haiku)
+aggregate_usage_events   → upsert daily_cost_summaries              [M1 ✅]
+detect_anomalies         → insert anomalies, enqueue notify          [M3]
+check_budgets            → enqueue budget alerts on threshold cross   [M3]
+generate_recommendations → rule-based (V1: Claude Haiku)             [M3]
 ```
 
-### Slack digest (09:00 org-local)
+### Slack digest (09:00 UTC) [M3]
 ```
 build_digest_payload     → yesterday spend, 7d avg, MoM, top 3 drivers, open anomalies
 chat.postMessage         → Slack

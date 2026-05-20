@@ -59,7 +59,8 @@ SaaS that gives AI startups per-feature/team/customer cost attribution, anomaly 
 
 Each milestone ends with a working, demoable slice. Don't skip ahead.
 
-### M0 · Foundation (4 days)
+### M0 · Foundation (4 days) ✅ COMPLETE (2026-05-19)
+
 - Next.js 14 + Supabase + Clerk scaffolded
 - `users`, `organizations`, `organization_members` tables with RLS
 - Two-tenant SQL probe confirms isolation
@@ -67,7 +68,8 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 
 **Done:** Two users sign up to separate orgs, can't read each other's rows.
 
-### M1 · First Integration + First Chart (7 days)
+### M1 · First Integration + First Chart (7 days) ✅ COMPLETE (2026-05-19)
+
 - `/settings/integrations` form: connect OpenAI Admin key (validate → encrypt → store)
 - Celery worker on Railway: backfill 30d on connect, refresh every 4h
 - Ingestion: `/v1/organization/costs` + `/v1/organization/usage/completions` → `usage_events`
@@ -78,11 +80,17 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 
 **Out of scope:** Anthropic, Gemini, tagging, anomalies, Slack, payment.
 
-### M2 · Multi-Provider + Attribution Wedge (11 days)
-- Anthropic ingestion (`/v1/organizations/usage_report/messages` + `/cost_report`)
-- Gemini ingestion (verify granularity in week 1 — if weak, defer to V1)
-- Tag CRUD + tag-rules engine (runs at ingestion, denormalizes into `usage_events`)
-- Cost Explorer pivot table (TanStack Table): drag dimensions, sortable, filterable, totals, % of total
+### M2 · Multi-Provider + Attribution Wedge (11 days) ✅ COMPLETE (2026-05-20)
+
+- Anthropic adapter — `/v1/organizations/usage_report/messages` with cursor pagination; cost computed from `pricing.yaml`; `cache_read_input_tokens` mapped to `cached_tokens`
+- Gemini adapter — key validation only (`/v1beta/models?key=`); `fetch_costs()` is a no-op (AI Studio has no billing endpoint; Cloud Billing API requires OAuth2 — deferred to V1)
+- Tag CRUD + tag-rules engine (`services/tag_engine.py`) — pure functions; exact/substring/regex match on `api_key_label`; rules applied at ingestion time; denormalized into `usage_events` columns
+- `POST /tag-rules/preview` — dry-run a rule against last 7 days of events
+- `GET /usage/explore` — pivot data for Cost Explorer grouped by provider/model/tag, with `pct_of_total`
+- Cost Explorer UI (`/cost-explorer`) — TanStack Table; group_by + range + provider filter dropdowns
+- `/settings/tags` UI — tag CRUD + rule CRUD + preview
+- Fixed: `integrations.py` `_ADAPTERS` missing Anthropic and Gemini entries
+- **117 tests passing, 2 skipped. 0 TypeScript errors.**
 
 **Done:** Design partner with 2+ providers sees Cost Explorer and says "I had no idea X was that expensive."
 
@@ -135,9 +143,14 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 | Stale pricing tables (20–40% drift) | Use provider Cost API where available; monthly review of `pricing.yaml` |
 | Over-engineer M0 | Time-box: M0 = 4 days. Cut scope, not time. |
 
-## Open Questions (resolve before M1)
+## Open Questions
 
-1. Anthropic Enterprise Analytics API — Enterprise-tier-gated? If yes → V1. If no → consider M2.
-2. Gemini billing granularity — verify in week 1; defer to V1 if weak.
-3. Stripe trial: 14 days vs none? Decide after first 5 design partner pricing conversations.
-4. Pricing test: $299 entry or $99 thinner Starter for top-of-funnel?
+**Resolved:**
+1. ~~Anthropic Enterprise Analytics API — Enterprise-tier-gated?~~ → Standard Admin API, not Enterprise-gated. Shipped in M2.
+2. ~~Gemini billing granularity — verify in week 1~~ → AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account. Key validation ships M2, cost collection deferred to V1.
+
+**Active (resolve before M3):**
+3. Stripe trial: 14 days vs none? Decide after first 5 design partner pricing conversations. (M4)
+4. Pricing test: $299 entry or $99 thinner Starter for top-of-funnel? (M4)
+5. Budget reset cycle: calendar month vs rolling 30 days? → prefer calendar month for CFO alignment (M3)
+6. Slack app registration: create in dev workspace before starting M3 Group C

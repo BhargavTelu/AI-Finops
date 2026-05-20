@@ -45,6 +45,7 @@ def _mock_db() -> MagicMock:
     db.upsert.return_value = db
     db.eq.return_value = db
     db.neq.return_value = db
+    db.in_.return_value = db
     db.gte.return_value = db
     db.lt.return_value = db
     db.range.return_value = db
@@ -125,6 +126,8 @@ class TestIngestWindow:
 class TestAggregateOrg:
     def _run_aggregate(self, usage_rows: list[dict]) -> list[dict]:
         """Run aggregate_org with mocked DB returning given usage_rows."""
+        exec_integration = MagicMock()
+        exec_integration.data = [{"id": "int-id-1"}]  # one active integration
         exec_with_data = MagicMock()
         exec_with_data.data = usage_rows
         exec_empty = MagicMock()
@@ -132,8 +135,13 @@ class TestAggregateOrg:
 
         db = _mock_db()
 
-        # First call to execute() returns usage rows (single page), second returns empty page
-        db.execute.side_effect = [exec_with_data, exec_empty]
+        # execute() call order in aggregate_org:
+        # 1. integrations select (to filter active integration IDs)
+        # 2. daily_cost_summaries delete (clear window before upsert)
+        # 3. usage_events page 1 (actual data)
+        # 4. usage_events page 2 (empty — terminates pagination)
+        # 5. daily_cost_summaries upsert().execute() (captured by db.upsert side_effect)
+        db.execute.side_effect = [exec_integration, exec_empty, exec_with_data, exec_empty, exec_empty]
 
         upserted: list[dict] = []
 

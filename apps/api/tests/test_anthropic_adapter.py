@@ -36,7 +36,8 @@ def _bucket(
     end: str,
     results: list[dict],
 ) -> dict:
-    return {"start_time": start, "end_time": end, "results": results}
+    # Real Anthropic API uses "starting_at" / "ending_at" (not "start_time")
+    return {"starting_at": start, "ending_at": end, "results": results}
 
 
 def _result(

@@ -1,31 +1,110 @@
 # Project Status
 
-## Current Milestone: M2 — Multi-Provider + Attribution Wedge
+## Current Milestone: M3 — Intelligence Layer
 
-**Status:** Starting M2. M1 verified complete 2026-05-19.
+**Status:** M2 verified complete 2026-05-20. Starting M3.
 
 ---
 
-## M2 Tasks
+## M3 Tasks
 
-- [ ] Anthropic adapter (`adapters/anthropic.py`) — `/v1/organizations/usage_report/messages` + `/cost_report`, verify granularity
-- [ ] Anthropic ingestion wired into `backfill_integration` + `refresh_integration`
-- [ ] Gemini adapter — verify billing API granularity in week 1; defer to V1 if insufficient
-- [ ] Tag CRUD (`GET/POST/PATCH/DELETE /tags`)
-- [ ] Tag-rules CRUD (`GET/POST/PATCH/DELETE /tag-rules`) + `POST /tag-rules/preview` dry-run
-- [ ] Tag-rule engine: runs at ingestion, denormalizes tags into `usage_events` columns
-- [ ] `GET /usage/explore` — pivot data for Cost Explorer (group by provider/model/tag/date)
-- [ ] Cost Explorer page — TanStack Table with drag dimensions, sort, filter, totals, % of total
-- [ ] Multi-provider unified dashboard view (USD-normalized across providers)
-- [ ] `timeseries` endpoint extended to support `group_by=feature_tag|team_tag|customer_tag`
+### Group A — Anomaly Detection
 
-**M2 done-condition:** Design partner with 2+ providers sees Cost Explorer and says "I had no idea X was that expensive."
+- [ ] `detect_anomalies(org_id, today)` Celery task — rolling 7-day mean + 2σ algorithm; >$10 floor; severity: low (z≥2), medium (z≥3), high (z≥4); groups by (model, feature_tag, team_tag, customer_tag)
+- [ ] `detect_all_orgs` beat task — runs at 01:00 UTC nightly; dispatches `detect_anomalies` per org
+- [ ] Wire `detect_all_orgs` into Celery beat schedule (stub already present in `celery_app.py`)
+- [ ] `GET /anomalies?status=open|acknowledged|dismissed` — list anomalies for org ordered by `detected_at DESC`
+- [ ] `PATCH /anomalies/:id` — acknowledge or dismiss; updates `status` field
+- [ ] `AnomalyRead` Pydantic schema: `id`, `detected_at`, `scope_kind`, `scope_value`, `baseline_usd`, `actual_usd`, `spike_pct`, `severity`, `status`, `context`
+- [ ] `/anomalies` frontend page — anomaly log table; severity badges (low=yellow, medium=orange, high=red); ack/dismiss buttons; empty state "No anomalies detected"
+- [ ] Unit tests: anomaly algorithm math (z-score, floor, severity thresholds, < 14 days history skip)
 
-**Out of scope for M2:** Anomalies, budgets, Slack, billing, recommendations, forecasting.
+### Group B — Budgets + Email Alerts
+
+- [ ] `GET/POST/PATCH/DELETE /budgets` — CRUD; scope types: `global`, `provider`, `model`, `feature_tag`, `team_tag`, `customer_tag`, `env_tag`; `monthly_limit` in USD; `alert_at_pct` default 80
+- [ ] `BudgetCreate` / `BudgetRead` Pydantic schemas
+- [ ] `check_budgets(org_id)` Celery task — runs after nightly aggregation; compares MTD spend per scope to monthly limit; fires alert at 80% and 100% thresholds (once per threshold per month via `notified_at` guard in DB)
+- [ ] Resend email: 80% warning template + 100% exceeded template — to org owner email; include scope name, limit, current spend, % used
+- [ ] `/settings/budgets` frontend page — budget list with scope/limit/current spend/% bar; add/delete form; empty state with CTA
+- [ ] Unit tests: budget check math, threshold guard (re-notify prevention)
+
+### Group C — Slack Integration
+
+- [ ] Slack OAuth flow: `GET /slack/oauth/callback` — exchanges code for bot token; stores encrypted in `slack_integrations` table; writes `installed_by`
+- [ ] `POST /slack/disconnect` — deletes `slack_integrations` row; revokes token via Slack API
+- [ ] `send_daily_digest(org_id)` Celery task — builds digest payload (yesterday spend, 7d avg, MoM delta, top 3 cost drivers, count of open anomalies, count of open budgets near threshold); `chat.postMessage` to org channel; records `sent_at` in `slack_digests` for idempotency
+- [ ] `send_daily_digests` beat task — runs at 09:00 UTC; dispatches per org with connected Slack; wire into `celery_app.py` (stub already present)
+- [ ] Real-time anomaly alert: when `detect_anomalies` creates a new anomaly with severity ≥ medium, post to Slack channel with spike %, baseline, actual, model/tag context
+- [ ] Real-time budget alert: when `check_budgets` crosses 80% or 100%, post to Slack in addition to email
+- [ ] `/settings/slack` frontend page — connect Slack button (OAuth redirect); connected state shows workspace + channel; disconnect button; empty state with CTA
+- [ ] Unit tests: digest payload builder; Slack message format; alert trigger logic
+
+### Group D — Recommendations Engine
+
+- [ ] `generate_recommendations(org_id)` Celery task — runs nightly after aggregation; rule-based (no AI in M3)
+- [ ] Rule 1 — **Model downgrade**: detect models with avg cost/request > $0.01 and request count > 100; recommend switching to a cheaper model in the same family; compute projected savings
+- [ ] Rule 2 — **Prompt caching**: detect repeated calls (same model, same feature_tag, high request count); recommend enabling prompt caching; estimate savings based on cache-read price vs input price
+- [ ] Rule 3 — **Batch API**: detect high request_count with small token counts (avg < 2K tokens); recommend Batch API for applicable models (OpenAI `gpt-4o`, `gpt-4o-mini`); 50% cost reduction estimate
+- [ ] Deduplication: `UNIQUE(org_id, type, scope_value)` for `status=new` recs — don't re-insert if already open
+- [ ] `GET /recommendations?status=new|applied|dismissed` — list recs ordered by `projected_savings_usd DESC`
+- [ ] `PATCH /recommendations/:id` — mark `applied` or `dismissed`; sets `resolved_at`
+- [ ] `RecommendationRead` Pydantic schema: `id`, `type`, `title`, `description`, `projected_savings_usd`, `confidence`, `status`, `generated_at`
+- [ ] `/recommendations` frontend page — rec cards with title, savings badge, evidence summary, apply/dismiss buttons; filter by status; empty state "No recommendations yet — data needed"
+- [ ] Unit tests: each recommendation rule logic; deduplication; savings calculation
+
+### M3 Done-condition
+
+Test org with synthetic spike fires anomaly → Slack alert lands in < 10 min → recommendations list shows 3+ items with savings estimates.
+
+### M3 Out of scope
+
+- Stripe billing, CFO PDF, landing page, onboarding wizard (M4)
+- AI-generated recommendation narratives (V1 — Claude Haiku)
+- Per-user Slack DMs (V1)
 
 ---
 
 ## Completed Milestones
+
+### M2 — Multi-Provider + Attribution Wedge ✅ (verified 2026-05-20)
+
+**117 tests passing, 2 skipped. 0 TypeScript errors.**
+
+**Group A — Anthropic Adapter**
+- [x] `AnthropicAdapter` (`api/adapters/anthropic.py`) — `validate()` + `fetch_costs()`
+- [x] `validate()`: pings `/v1/organizations/usage_report/messages`; raises `ValueError` on 401/403/unexpected/network error
+- [x] `fetch_costs()`: paginated via `_paginate()` with `next_page` cursor; yields `NormalizedUsageEvent` per model-hour bucket; `_compute_cost()` uses pricing.yaml rates for input/output/cache-read tokens; maps `cache_read_input_tokens` → `cached_tokens`; preserves `cache_creation_input_tokens` in `raw_meta`; skips zero-cost zero-token rows
+- [x] 19 tests in `tests/test_anthropic_adapter.py`
+
+**Group B — Cost Explorer**
+- [x] `GET /usage/explore` — queries `daily_cost_summaries`; groups by provider/model/feature_tag/team_tag/customer_tag/env_tag; optional provider filter; returns `list[ExploreRow]` with `pct_of_total`
+- [x] `ExploreRow` schema: `group_value`, `total_cost_usd`, `total_requests`, `pct_of_total`
+- [x] Cost Explorer page at `/cost-explorer` — server component with validated query params
+- [x] `ExploreControls` client component — Group By + Range + Provider dropdowns; updates URL params
+- [x] `ExploreTable` component — TanStack Table; sortable columns; `% of total` column; totals row
+- [x] 21 tests in `tests/test_usage_routes.py`
+
+**Group C — Tag System**
+- [x] `tag_engine.py` — `CompiledRule` dataclass; `compile_rules()` (filters disabled, parses PostgREST join, sorts by priority); `_matches()` (exact/substring/regex with invalid-regex safety); `apply_rules()` (first match per type, early exit at 4 assigned)
+- [x] Tags CRUD: `GET/POST/PATCH/DELETE /tags` — 409 on duplicate, 404 on missing, cascade delete propagates to rules
+- [x] Tag Rules CRUD: `GET/POST/PATCH/DELETE /tag-rules` — tag_id ownership check on create; list includes embedded tag info via PostgREST join
+- [x] `POST /tag-rules/preview` — dry-run against last 7 days of `usage_events`; reuses `_matches()`; returns up to 20 deduplicated `{api_key_label, provider, model}` tuples
+- [x] Tag engine wired into `_ingest_window()` — rules compiled once per window, applied per event, results spread into row dict via `**apply_rules(...)`
+- [x] `/settings/tags` page — `TagsClient` with tag CRUD + rule CRUD + preview; color badges per tag type; empty states
+- [x] 28 tests in `tests/test_tag_engine.py` + 16 tests in `tests/test_tag_routes.py` = 44 tag tests
+
+**Group D — Gemini Adapter**
+- [x] `GeminiAdapter` (`api/adapters/gemini.py`) — `validate()` hits AI Studio models endpoint; `fetch_costs()` is no-op generator (billing deferred to V1 — no usage-reporting endpoint on AI Studio API)
+- [x] 8 tests in `tests/test_gemini_adapter.py`
+
+**Bug fixed during M2**
+- [x] `integrations.py` `_ADAPTERS` dict only contained `OpenAIAdapter` — Anthropic and Gemini keys returned 422 "not yet supported"; fixed by adding `AnthropicAdapter` and `GeminiAdapter`
+
+**Resolved open questions**
+- Anthropic Admin API is not Enterprise-gated — implemented using standard `x-api-key` header
+- Gemini AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2 (different auth model) — key validation ships in M2, cost collection deferred to V1
+
+---
 
 ### M1 — First Integration + First Chart ✅ (verified 2026-05-19)
 
@@ -41,7 +120,7 @@
 - [x] `GET /usage/summary` — aggregate totals (cost, requests, tokens) for a date range from `daily_cost_summaries`
 - [x] `GET /usage/timeseries` — daily cost points grouped by model; aggregates tag-split rows in Python
 - [x] Pydantic schemas: `IntegrationCreate`, `IntegrationRead`, `UsageSummary`, `DailyPoint`
-- [x] Settings/integrations page — server component + `IntegrationsPage` client component: connect form (validate → encrypt → store), integration list with status badges, revoke button
+- [x] Settings/integrations page — server component + `IntegrationsPage` client component: connect form, integration list with status badges, revoke button
 - [x] Dashboard page — server component fetches + pivots data; stat cards (30d cost/requests/tokens); `DashboardCharts` client component with Tremor `AreaChart` (30d trend) + `BarChart` (cost by model)
 - [x] Windows-compatible Celery worker: `worker_pool="solo"` on `win32`, `prefork` on Linux (Railway)
 - [x] 37 tests passing (37 pass, 2 skipped)
@@ -80,17 +159,17 @@
 
 | Milestone | Focus | Days |
 |---|---|---|
-| M3 | Anomaly detection + budgets + Slack | 11 |
+| M3 | Anomaly detection + budgets + Slack + recommendations | 11 |
 | M4 | Billing + CFO PDF + polish + landing page | 9 |
 
 ---
 
-## Open Questions (M2)
+## Open Questions (M3)
 
-1. Anthropic Enterprise Analytics API — is it Enterprise-gated? → affects M2 timeline
-2. Gemini billing granularity — verify in M2 week 1; defer to V1 if weak
-3. Stripe trial: 14 days vs none?
-4. Entry price: $299 vs $99 for top-of-funnel experiment?
+1. Slack app credentials — create Slack app in dev before starting Group C; requires redirect URI for OAuth callback
+2. Resend sender domain — confirm verified sender domain before Group B email alerts
+3. Budget reset cycle — confirm monthly (calendar month) vs rolling 30 days; calendar month simpler for CFO reporting
+4. Recommendation confidence scoring — `high/medium/low` or numeric 0–1? Keep categorical for M3 (simpler UI)
 
 ---
 

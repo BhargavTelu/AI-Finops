@@ -89,7 +89,8 @@ class TestFetchCosts:
                 "start_time": ts,
                 "end_time": ts + 3600,
                 "results": [
-                    {"model": "gpt-4o", "amount": {"value": 0.50, "currency": "usd"}}
+                    # Costs API groups by line_item — adapter reads result.get("line_item")
+                    {"line_item": "gpt-4o", "amount": {"value": 0.50, "currency": "usd"}}
                 ],
             }
         ]
@@ -173,7 +174,8 @@ class TestFetchCosts:
             return {
                 "start_time": ts,
                 "end_time": ts + 3600,
-                "results": [{"model": model, "amount": {"value": cost, "currency": "usd"}}],
+                # Costs API groups by line_item — adapter reads result.get("line_item")
+                "results": [{"line_item": model, "amount": {"value": cost, "currency": "usd"}}],
             }
 
         # completions: single empty page

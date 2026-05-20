@@ -6,7 +6,86 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] — M2 in progress
+## [Unreleased] — M3 in progress
+
+---
+
+## [0.3.0] — M2 Multi-Provider + Attribution Wedge (2026-05-20)
+
+117 tests passing, 2 skipped. 0 TypeScript errors.
+
+### Added
+
+**Anthropic Adapter** (`api/adapters/anthropic.py`)
+- Implements `UsageAdapter` protocol: `validate()` + `fetch_costs()`
+- `validate()`: pings `GET /v1/organizations/usage_report/messages` with a 1-day window; raises `ValueError` with human-readable message on 401/403/unexpected status; wraps `httpx.RequestError` into `ValueError("Network error: ...")`
+- `fetch_costs()`: paginated `GET /v1/organizations/usage_report/messages` — cursor-based pagination via `_paginate()` helper with `next_page` token; yields `NormalizedUsageEvent` per model-hour bucket; computes cost from `pricing.yaml` via `_compute_cost()` (per-Mtok rates for input, output, cache-read); maps `cache_read_input_tokens` → `cached_tokens`, preserves `cache_creation_input_tokens` in `raw_meta`; skips rows where all tokens are zero and cost is zero
+- Pricing support: `claude-opus-4-5`, `claude-sonnet-4-5`, `claude-haiku-4-5` (and legacy variants) from `packages/pricing/pricing.yaml`; unknown models yield event with `cost_usd=Decimal("0")`
+- Required headers: `x-api-key`, `anthropic-version: 2023-06-01`, `anthropic-beta: usage-report-2024-07-01`
+- 19 tests in `tests/test_anthropic_adapter.py`: validate 200/401/403/500/network error; cost math per token type; pagination; multi-model buckets; zero-cost skip; unknown model handling; `raw_meta` field preservation
+
+**Gemini Adapter** (`api/adapters/gemini.py`)
+- `validate()`: `GET https://generativelanguage.googleapis.com/v1beta/models?key={api_key}` — 200 → `True`; non-200 → `ValueError` with status code; `httpx.RequestError` → `ValueError("Could not reach Gemini API: ...")`
+- `fetch_costs()`: empty generator (returns immediately); logs `gemini_billing_not_available` via structlog with reason; AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account — deferred to V1
+- Users can connect and validate Gemini keys; integration saves as `active`; zero cost events are inserted
+- 8 tests in `tests/test_gemini_adapter.py`: validate 200/400/401/403/network error; key sent as query param (not header); fetch_costs returns empty; fetch_costs makes zero HTTP calls
+
+**Tag-Rule Engine** (`api/services/tag_engine.py`)
+- Pure-function module, no DB access, fully unit-testable in isolation
+- `CompiledRule` frozen dataclass: `tag_type`, `tag_name`, `match_type`, `match_pattern`, `priority`
+- `compile_rules(db_rows)`: converts PostgREST rows (tag_rules joined with tags via `select("*, tags(type, name)")`), filters disabled rules, parses embedded `tags: {"type": ..., "name": ...}` dict, sorts by `priority` ASC (lower = higher priority)
+- `_matches(rule, label)`: `exact` (case-sensitive equality), `substring` (`in` operator), `regex` (`re.search` with `try/except re.error` returning `False` on invalid pattern — no propagation)
+- `apply_rules(label, rules)`: returns `dict[str, str | None]` with keys `feature_tag`, `team_tag`, `customer_tag`, `env_tag`; first matching rule per tag type wins; stops early when all 4 types assigned; `None`/empty label treated as empty string
+- 28 tests in `tests/test_tag_engine.py`: compile_rules (7), exact matching (4), substring matching (4), regex matching (4), priority and multi-type (7), None/empty label safety (2)
+
+**Tags API** (`api/routers/tags.py`) — all 8 endpoints implemented (previously all stubs)
+- `GET /tags` — list all org tags ordered by type then name
+- `POST /tags` — create tag; 409 on `UNIQUE(org_id, type, name)` violation; 422 for invalid `type` enum
+- `PATCH /tags/:id` — update name + color; 404 if not found or wrong org
+- `DELETE /tags/:id` — hard delete; cascades to `tag_rules` via `ON DELETE CASCADE`; 404 if not found
+- `GET /tag-rules` — list rules ordered by priority, joined with `tags(type, name)` via PostgREST embedded resource syntax
+- `POST /tag-rules` — validates `tag_id` belongs to org before insert; returns `TagRuleRead` with embedded tag info
+- `PATCH /tag-rules/:id` — update match_type, match_pattern, priority, enabled
+- `DELETE /tag-rules/:id` — 204 on success; 404 if not found
+- `POST /tag-rules/preview` — dry-run a pattern against last 7 days of `usage_events`; builds a temporary `CompiledRule` to reuse `_matches()`; returns up to 20 deduplicated `{api_key_label, provider, model}` matches; no DB writes
+- Pydantic schemas: `TagCreate`, `TagRead`, `TagRuleCreate`, `TagRuleRead` (with `tags: dict | None = None` for joined data), `TagRulePreview`, `PreviewMatch`
+- 16 tests in `tests/test_tag_routes.py`: list/create/delete tags; list/create/delete rules; preview with match/no-match/deduplication
+
+**Tag Engine — Ingestion Wire-up** (`api/workers/ingestion.py`)
+- `compile_rules()` called once per `_ingest_window()` invocation (before the event loop) — loads enabled tag rules for the org joined with tag name/type
+- `apply_rules(event.api_key_label, compiled)` called per event — result dict spread into `usage_events` row via `**apply_rules(...)`
+- Tag assignments denormalized directly into `feature_tag`, `team_tag`, `customer_tag`, `env_tag` columns at write time — zero query overhead at read time
+- `GeminiAdapter` added to `_ADAPTERS` dict
+
+**Cost Explorer API** (`api/routers/usage.py`)
+- `GET /usage/explore?range=<7d|30d|90d>&group_by=<provider|model|feature_tag|team_tag|customer_tag|env_tag>&provider=<optional>` — queries `daily_cost_summaries`, aggregates in Python, returns `list[ExploreRow]` with `group_value`, `total_cost_usd`, `total_requests`, `pct_of_total`
+- `pct_of_total` computed server-side; always sums to 100% across returned rows
+- Optional `provider` filter applied at DB level
+- 21 tests in `tests/test_usage_routes.py` (extended from M1): explore grouping, pct_of_total math, provider filter, empty state, invalid group_by
+
+**Cost Explorer UI** (`apps/web/src/app/(dashboard)/cost-explorer/`)
+- Server component (`page.tsx`): validates `group_by` and `range` query params against allowlists; parallel fetch of explore data; renders empty state with link to integrations if no data
+- `ExploreControls` client component: dropdown selects for Group By (provider/model/feature_tag/team_tag/customer_tag/env_tag) and Range (7d/30d/90d); optional provider filter; updates URL via `router.push` with new params; instant re-fetch on change
+- `ExploreTable` component: TanStack Table with sortable columns; `% of total` column; totals row pinned at bottom; handles empty data; formatted USD and number columns
+- TypeScript types: `ExploreRow` added to `lib/types.ts`
+
+**Tags Settings UI** (`apps/web/src/app/(dashboard)/settings/tags/`)
+- Server component (`page.tsx`): parallel fetch of tags + rules; passes `token` to client component for client-side API calls
+- `TagsClient` client component (`tags-client.tsx`): manages tag list, rules list, form visibility, error messages, preview results with local state; calls `router.refresh()` after mutations to resync server state
+- Tag CRUD: create form (type select, name input, hex color picker); inline error on 409 duplicate; delete with cascade info; empty state CTA
+- Rule CRUD: create form (tag dropdown, match type select, monospace pattern input, priority number); delete
+- Preview: `POST /tag-rules/preview` → shows matching api_key_labels with provider/model; empty state if no matches
+- Tag type color badges: feature=blue, team=purple, customer=green, env=orange
+- TypeScript types: `Tag`, `TagRule`, `TagType`, `MatchType`, `PreviewMatch` added to `lib/types.ts`
+
+### Fixed
+
+- **`integrations.py` `_ADAPTERS` only contained OpenAI**: Anthropic and Gemini keys were returning 422 "not yet supported". Fixed by adding `AnthropicAdapter` and `GeminiAdapter` to the `_ADAPTERS` dict in `integrations.py`
+
+### Resolved (M2 open questions)
+
+- **Anthropic Enterprise Analytics API**: uses standard Admin API (`x-api-key`), not Enterprise-gated — implemented in M2
+- **Gemini billing granularity**: AI Studio API keys have no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account (different auth model from simple API keys) — cost collection deferred to V1; key validation ships in M2
 
 ---
 
