@@ -2,31 +2,46 @@
 
 ## Current Milestone: M3 — Intelligence Layer
 
-**Status:** M2 verified complete 2026-05-20. Starting M3.
+**Status:** M3 Group A (Anomaly Detection) complete 2026-05-21. M3 Group B (Budgets + Email Alerts) complete 2026-05-21. Starting Group C.
 
 ---
 
 ## M3 Tasks
 
-### Group A — Anomaly Detection
+### Group A — Anomaly Detection ✅ (complete 2026-05-21)
 
-- [ ] `detect_anomalies(org_id, today)` Celery task — rolling 7-day mean + 2σ algorithm; >$10 floor; severity: low (z≥2), medium (z≥3), high (z≥4); groups by (model, feature_tag, team_tag, customer_tag)
-- [ ] `detect_all_orgs` beat task — runs at 01:00 UTC nightly; dispatches `detect_anomalies` per org
-- [ ] Wire `detect_all_orgs` into Celery beat schedule (stub already present in `celery_app.py`)
-- [ ] `GET /anomalies?status=open|acknowledged|dismissed` — list anomalies for org ordered by `detected_at DESC`
-- [ ] `PATCH /anomalies/:id` — acknowledge or dismiss; updates `status` field
-- [ ] `AnomalyRead` Pydantic schema: `id`, `detected_at`, `scope_kind`, `scope_value`, `baseline_usd`, `actual_usd`, `spike_pct`, `severity`, `status`, `context`
-- [ ] `/anomalies` frontend page — anomaly log table; severity badges (low=yellow, medium=orange, high=red); ack/dismiss buttons; empty state "No anomalies detected"
-- [ ] Unit tests: anomaly algorithm math (z-score, floor, severity thresholds, < 14 days history skip)
+**131 tests passing, 2 skipped. 0 TypeScript errors.**
 
-### Group B — Budgets + Email Alerts
+- [x] `detect_anomalies(org_id, today)` Celery task — rolling 7-day mean + 2σ algorithm; >$10 floor; severity: low (z≥2), medium (z≥3), high (z≥4); groups by (model, feature_tag, team_tag, customer_tag)
+- [x] `detect_all_orgs` beat task — runs at 01:00 UTC nightly; dispatches `detect_org` per org
+- [x] Beat schedule already wired in `celery_app.py` — no change needed
+- [x] `GET /anomalies?status=open|acked|dismissed` — list anomalies for org ordered by `detected_at DESC`
+- [x] `PATCH /anomalies/:id` — acknowledge or dismiss; updates `status` field; ownership-checked (404 on wrong org)
+- [x] `AnomalyRead` Pydantic schema: `id`, `detected_at`, `scope_kind`, `scope_value`, `baseline_usd`, `actual_usd`, `spike_pct`, `severity`, `status`, `context`
+- [x] `/anomalies` frontend page — status tabs (open/acknowledged/dismissed); anomaly log table; severity badges (low=amber, medium=orange, high=red); ack/dismiss buttons with optimistic UI; loading skeleton; empty state; error state
+- [x] `AnomalyRead` / `AnomalyStatus` / `AnomalySeverity` types added to `apps/web/src/lib/types.ts`
+- [x] Unit tests: algorithm math (11 tests in `test_anomaly.py`) — z-score, floor, severity boundary thresholds, spike_pct edge cases, minimum data length
+- [x] Worker unit tests (9 tests in `test_anomaly_detection.py`) — spike detection + insert, no-spike, $10 floor, dedup guard, no-data, scope fields, dispatcher
 
-- [ ] `GET/POST/PATCH/DELETE /budgets` — CRUD; scope types: `global`, `provider`, `model`, `feature_tag`, `team_tag`, `customer_tag`, `env_tag`; `monthly_limit` in USD; `alert_at_pct` default 80
-- [ ] `BudgetCreate` / `BudgetRead` Pydantic schemas
-- [ ] `check_budgets(org_id)` Celery task — runs after nightly aggregation; compares MTD spend per scope to monthly limit; fires alert at 80% and 100% thresholds (once per threshold per month via `notified_at` guard in DB)
-- [ ] Resend email: 80% warning template + 100% exceeded template — to org owner email; include scope name, limit, current spend, % used
-- [ ] `/settings/budgets` frontend page — budget list with scope/limit/current spend/% bar; add/delete form; empty state with CTA
-- [ ] Unit tests: budget check math, threshold guard (re-notify prevention)
+**Bug fixed:** `first_day` computed as `today - 14` (yielding 14-item history) instead of `today - 15`; `detect_anomalies()` always returned `None`. Caught by worker unit tests.
+
+---
+
+### Group B — Budgets + Email Alerts ✅ (complete 2026-05-21)
+
+**171 tests passing, 2 skipped. 0 TypeScript errors.**
+
+- [x] `GET/POST/PATCH/DELETE /budgets` — CRUD; scope types: `global`, `provider`, `model`, `feature_tag`, `team_tag`, `customer_tag`, `env_tag`; `monthly_limit` in USD; `alert_at_pct` default 80; 409 on duplicate scope
+- [x] `BudgetCreate` / `BudgetRead` / `BudgetUpdate` Pydantic schemas — corrected `scope_type` enum from stub; `BudgetRead` includes computed `current_spend_mtd` and `spent_pct`
+- [x] `check_org(org_id)` / `check_all_orgs()` Celery tasks in `workers/budget_checks.py` — runs at 02:00 UTC (after aggregation + anomaly detection); compares MTD spend per scope; fires at `alert_at_pct` and 100% thresholds; 100% supersedes warning (no double-alert)
+- [x] `notified_80_at` / `notified_100_at` idempotency guard — once per threshold per calendar month; DB migration `20260521000000_fix_budgets_schema.sql` adds columns + fixes constraint
+- [x] `send_budget_alert` Celery task in `notifications.py` — Resend email; 80% warning template + 100% exceeded template; scope label, limit, MTD spend, % used; retries on failure
+- [x] `/budgets` frontend page — server component + `BudgetsClient`; budget list with progress bars (green/amber/red); Add Budget dialog (scope selector, scope value input, limit, alert%); inline delete with confirmation; empty state with CTA; loading skeleton
+- [x] `BudgetRead` / `BudgetScopeType` types added to `apps/web/src/lib/types.ts`
+- [x] Beat schedule wired: `check-budgets` at 02:00 UTC in `celery_app.py`
+- [x] 40 new tests: 24 in `test_budget_checks.py` (threshold math, idempotency guard, scope filtering, zero-limit, custom threshold) + 16 in `test_budget_routes.py` (CRUD, org isolation, 409, 404, validation)
+
+**Bug found and fixed:** `check_org` fell through to 80% alert check when 100% was already notified same month (only `continue`d when sending, not when guard blocked). Fixed: always `continue` when `spent_pct >= 100`. Caught by `test_100pct_guard_prevents_resend_same_month`.
 
 ### Group C — Slack Integration
 
@@ -166,10 +181,10 @@ Test org with synthetic spike fires anomaly → Slack alert lands in < 10 min �
 
 ## Open Questions (M3)
 
-1. Slack app credentials — create Slack app in dev before starting Group C; requires redirect URI for OAuth callback
-2. Resend sender domain — confirm verified sender domain before Group B email alerts
-3. Budget reset cycle — confirm monthly (calendar month) vs rolling 30 days; calendar month simpler for CFO reporting
-4. Recommendation confidence scoring — `high/medium/low` or numeric 0–1? Keep categorical for M3 (simpler UI)
+1. **Slack app credentials** — create Slack app in dev workspace before starting Group C; requires redirect URI for OAuth callback (**blocking for Group C**)
+2. ~~Resend sender domain — confirm verified sender domain before Group B email alerts~~ — **resolved**: `resend_api_key` + `from_email` already in `config.py`; Group B email alerts ship with existing config
+3. ~~Budget reset cycle — calendar month vs rolling 30 days~~ — **resolved**: calendar month; implemented as `date_trunc('month')` comparison
+4. ~~Recommendation confidence scoring — categorical vs numeric~~ — **resolved**: `high/medium/low` categorical for M3
 
 ---
 

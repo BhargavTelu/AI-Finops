@@ -13,6 +13,7 @@ celery_app = Celery(
         "api.workers.ingestion",
         "api.workers.aggregation",
         "api.workers.anomaly_detection",
+        "api.workers.budget_checks",
         "api.workers.notifications",
     ],
 )
@@ -52,9 +53,14 @@ celery_app.conf.beat_schedule = {
         "task": "api.workers.notifications.send_daily_digests",
         "schedule": crontab(hour=9, minute=0),
     },
-    # Nightly anomaly detection (after aggregation)
+    # Nightly anomaly detection (after aggregation at 00:30)
     "detect-anomalies": {
         "task": "api.workers.anomaly_detection.detect_all_orgs",
         "schedule": crontab(hour=1, minute=0),
+    },
+    # Nightly budget checks (after anomaly detection at 01:00)
+    "check-budgets": {
+        "task": "api.workers.budget_checks.check_all_orgs",
+        "schedule": crontab(hour=2, minute=0),
     },
 }

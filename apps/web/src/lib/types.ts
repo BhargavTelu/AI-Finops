@@ -62,3 +62,43 @@ export interface PreviewMatch {
   provider: string;
   model: string;
 }
+
+export type BudgetScopeType =
+  | "global"
+  | "provider"
+  | "model"
+  | "feature_tag"
+  | "team_tag"
+  | "customer_tag"
+  | "env_tag";
+
+export interface BudgetRead {
+  id: string;
+  org_id: string;
+  scope_type: BudgetScopeType;
+  scope_value: string | null;
+  monthly_limit: string; // Decimal → string
+  alert_at_pct: number;
+  hard_cap: boolean;
+  created_at: string;
+  updated_at: string;
+  current_spend_mtd: string; // Decimal → string, computed by API
+  spent_pct: number;         // 0–100+
+}
+
+export type AnomalySeverity = "low" | "medium" | "high";
+export type AnomalyStatus = "open" | "acked" | "dismissed";
+
+export interface AnomalyRead {
+  id: string;
+  org_id: string;
+  detected_at: string; // ISO datetime string
+  scope_kind: string;
+  scope_value: string | null;
+  baseline_usd: string; // Decimal → string
+  actual_usd: string;   // Decimal → string
+  spike_pct: number;
+  severity: AnomalySeverity;
+  status: AnomalyStatus;
+  context: Record<string, unknown> | null;
+}

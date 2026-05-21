@@ -6,7 +6,124 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] — M3 in progress
+## [Unreleased] — M3 Group C + D in progress
+
+---
+
+## [0.4.1] — M3 Group B: Budgets + Email Alerts (2026-05-21)
+
+171 tests passing, 2 skipped. 0 TypeScript errors.
+
+### Added
+
+**Database migration** (`infra/migrations/20260521000000_fix_budgets_schema.sql`)
+- Fixed `budgets.scope_type` CHECK constraint — original migration only allowed `('global', 'tag', 'model')`; corrected to the full spec enum: `('global', 'provider', 'model', 'feature_tag', 'team_tag', 'customer_tag', 'env_tag')`
+- Added `notified_80_at TIMESTAMPTZ` and `notified_100_at TIMESTAMPTZ` columns on `budgets` — tracks when each threshold alert was last sent; `NULL` = never notified; guard checks `date_trunc('month')` equality to allow one alert per threshold per calendar month
+
+**Budget Pydantic schemas** (`api/schemas/budgets.py`)
+- `BudgetScopeType` — `Literal` with all 7 scope values
+- `BudgetCreate` — `scope_type`, `scope_value` (required for all non-global types, 422 if missing), `monthly_limit` (`Decimal`, `gt=0`), `alert_at_pct` (default 80, 1–100), `hard_cap` (bool, default False)
+- `BudgetUpdate` — partial: `monthly_limit` and/or `alert_at_pct` only; 422 if both absent
+- `BudgetRead` — all stored fields plus `current_spend_mtd: Decimal` and `spent_pct: int` computed at read time by the route handler
+
+**Budget CRUD routes** (`api/routers/budgets.py`)
+- `GET /budgets` — lists all org budgets ordered by `created_at DESC`; computes MTD spend per budget scope by summing `daily_cost_summaries` for the current calendar month
+- `POST /budgets` — application-level uniqueness check (409 on duplicate `(org_id, scope_type, scope_value)`); `scope_value` forced `NULL` for global type
+- `PATCH /budgets/:id` — ownership check (404 on wrong org); updates `monthly_limit` and/or `alert_at_pct`; 422 if no fields provided
+- `DELETE /budgets/:id` — ownership check (404 on wrong org); 204 on success
+- MTD spend computed by `_compute_scope_spend()` helper — selects from `daily_cost_summaries` for the current calendar month with scope-type-specific column filter
+
+**Budget check worker** (`api/workers/budget_checks.py` — new file)
+- `check_all_orgs()` — `@shared_task`; queries all orgs with at least one budget; dispatches `check_org.delay(org_id)` per unique org; logs dispatch count
+- `check_org(org_id)` — for each budget: computes MTD scope spend; at 100%+ fires `send_budget_alert.delay(budget_id, 100, org_id)` + writes `notified_100_at`; always `continue`s (never falls through to warning check); at `alert_at_pct`+ fires `send_budget_alert.delay(budget_id, pct, org_id)` + writes `notified_80_at`; both guarded by `_same_calendar_month()` to prevent re-alerts within the same month
+- `_same_calendar_month(ts_str)` — pure helper; `None`, empty string, and malformed dates return `False`; compares `(year, month)` against current UTC time; handles `Z` suffix in ISO strings
+- `_compute_scope_spend(db, org_id, scope_type, scope_value)` — sums `total_cost_usd` from `daily_cost_summaries` for current calendar month with scope-appropriate `eq()` filter; `global` scope applies no additional filter
+
+**send_budget_alert task** (`api/workers/notifications.py` — stub implemented)
+- Fetches budget row and org admin email (via `organization_members` role='admin' → `users.email`, oldest member = org owner)
+- Calls Resend API with HTML email; subject and template differ by threshold:
+  - 80% warning: amber-accented table with scope, limit, MTD spend, % used
+  - 100% exceeded: red-accented table with same fields; subject prefixed "Budget exceeded"
+- Retries up to 3× on Resend failure via `self.retry(exc=exc)`
+- Logs `budget_alert_sent` / `budget_alert_send_failed` / `budget_alert_no_admin_email` / `budget_alert_budget_not_found`
+
+**Celery beat schedule** (`api/workers/celery_app.py`)
+- `check-budgets`: `check_all_orgs` at 02:00 UTC (after aggregation at 00:30 and anomaly detection at 01:00)
+- `api.workers.budget_checks` added to `include` list
+
+**Frontend `/budgets` page** (`apps/web/src/app/(dashboard)/budgets/`)
+- `page.tsx` — server component; fetches `GET /budgets` with Clerk token; passes `initialBudgets` to client; catch-all on error returns empty list
+- `budgets-client.tsx` — `BudgetsClient` component with:
+  - Budget table: Scope, Monthly limit, MTD spend, Usage (progress bar), Alert at, Actions columns
+  - Progress bar (`SpendBar`): green < alert threshold, amber at warning, red at 100%+
+  - MTD spend cell coloured red (exceeded) or amber (warning) using the same thresholds
+  - Exceeded counter banner ("N budgets exceeded this month") shown when `spent_pct >= 100`
+  - Add Budget dialog with: scope type selector, conditional scope value input (hidden for global), monthly limit input, alert threshold input with explanatory hint text; 409 and validation errors shown inline
+  - Inline delete with two-step confirmation (Yes / No) per row; optimistic removal on success
+  - Empty state with CTA button that opens the Add Budget dialog
+  - Framer Motion `AnimatePresence` + `motion.tr` for row enter/exit animations
+- `loading.tsx` — shadcn Skeleton matching 4-row × 6-column table structure
+
+**TypeScript types** (`apps/web/src/lib/types.ts`)
+- `BudgetScopeType` union type
+- `BudgetRead` interface with all fields including computed `current_spend_mtd` and `spent_pct`
+
+**Unit tests**
+- `tests/test_budget_checks.py` (24 tests):
+  - `TestSameCalendarMonth` (6): None, empty string, current month, previous month, Z-suffix, malformed string
+  - `TestComputeScopeSpend` (6): global sums all rows, empty returns zero, provider eq call, model eq call, feature_tag scope, multiple rows summed
+  - `TestCheckOrg` (12): below threshold no alert, at 80% fires, over 80% fires, at 100% fires exceeded not warning, over 100% fires exceeded, 80% guard same month, 100% guard same month, new month allows re-alert, no budgets early return, `notified_80_at` written after alert, zero-limit skipped, custom alert threshold
+- `tests/test_budget_routes.py` (16 tests):
+  - `TestListBudgets` (3): empty list, returns budget with computed spend, 100% spend reported correctly
+  - `TestCreateBudget` (7): global budget, model without scope_value → 422, model with scope_value, duplicate → 409, negative limit → 422, zero limit → 422, all 7 scope types accepted
+  - `TestUpdateBudget` (3): update limit, wrong org → 404, empty body → 422
+  - `TestDeleteBudget` (2): delete own → 204, wrong org → 404
+
+### Fixed
+
+- **`check_org` double-alert bug**: when `notified_100_at` was already set for the current month, the `continue` statement was inside the inner `if not _same_calendar_month(...)` block — so a guarded 100% budget still fell through to the 80% threshold check and fired a spurious warning alert. Fixed by moving `continue` unconditionally outside the guard: whenever `spent_pct >= 100`, skip the warning check regardless of whether the 100% alert was sent. Caught by `test_100pct_guard_prevents_resend_same_month`.
+
+---
+
+## [0.4.0] — M3 Group A: Anomaly Detection (2026-05-21)
+
+131 tests passing, 2 skipped. 0 TypeScript errors.
+
+### Added
+
+**Anomaly Detection Worker** (`api/workers/anomaly_detection.py`)
+- `detect_all_orgs` Celery task — queries all orgs with active integrations; dispatches `detect_org.delay(org_id)` per unique org; logs dispatch count
+- `detect_org` Celery task — for each distinct (model, feature_tag, team_tag, customer_tag) group in `daily_cost_summaries`: fetches 15 days of history in one query; sums costs per day across providers; fills date gaps with $0; calls `services.anomaly.detect_anomalies(history)`; inserts anomaly row to DB on detection; deduplicates by checking open anomalies already detected today for the same scope; enqueues `send_anomaly_alert.delay(anomaly_id)` for severity ≥ medium (Group C implements the alert body)
+- `scope_kind = "model"`, `scope_value = model_name`; tag context (feature_tag, team_tag, customer_tag) stored in `context` jsonb alongside spike details
+- Beat schedule was already wired at 01:00 UTC in `celery_app.py` — no change required
+
+**Anomaly API Routes** (`api/routers/anomalies.py`)
+- `GET /anomalies?status=open|acked|dismissed` — queries `anomalies` table filtered by org + status; ordered by `detected_at DESC`; returns `list[AnomalyRead]`; status validated as `Literal` type (not raw string)
+- `PATCH /anomalies/:id` — ownership check (404 if anomaly not in org); updates `status` to `acked` or `dismissed`; returns updated `AnomalyRead`
+
+**Frontend `/anomalies` page** (`apps/web/src/app/(dashboard)/anomalies/`)
+- `page.tsx` — server component; validates `?status` URL param against allowlist; fetches `/anomalies?status=<status>` with Clerk token; passes to client
+- `anomalies-client.tsx` — status tabs (Open / Acknowledged / Dismissed) updating URL via `router.push`; anomaly table with columns: Time, Scope, Spike%, Baseline/day, Actual, Severity, Actions; Ack + Dismiss buttons calling `PATCH /anomalies/:id`; optimistic removal from current tab on update; error banner with dismiss; empty state per tab
+- Severity badges: low = amber, medium = orange, high = red (dark-mode aware)
+- `loading.tsx` — shadcn Skeleton skeleton matching table structure (5 rows, 7 columns)
+
+**TypeScript types** (`apps/web/src/lib/types.ts`)
+- `AnomalyRead`, `AnomalySeverity`, `AnomalyStatus` added
+
+**Unit tests** (`tests/test_anomaly.py` — extended to 11 tests)
+- `test_low_severity_at_two_sigma_boundary` — z in [2, 3) → severity `"low"`
+- `test_medium_severity_at_three_sigma_boundary` — z in [3, 4) → severity `"medium"`
+- `test_spike_pct_zero_when_mean_is_zero` — mean=0 edge case; no divide-by-zero
+- `test_returns_correct_baseline_and_actual_usd` — Decimal values preserved correctly
+- `test_exactly_fifteen_data_points_is_sufficient` — minimum data length boundary
+
+**Worker tests** (`tests/test_anomaly_detection.py` — 9 tests, new file)
+- `TestDetectOrg`: spike detected → insert called; flat baseline → no insert; actual below $10 floor → no insert; insufficient history → no insert; open anomaly today → dedup skip; no data → early exit; scope fields on insert
+- `TestDetectAllOrgs`: dispatches per unique org (deduplicates repeated org_id); no dispatch on empty integrations
+
+### Fixed
+
+- **`first_day` off-by-one**: computed as `today - 14` (producing a 14-item history list); `detect_anomalies()` requires ≥15 items and always returned `None`. Fixed to `today - _HISTORY_DAYS` (`today - 15`). Bug caught by worker unit tests before any data hit the DB.
 
 ---
 

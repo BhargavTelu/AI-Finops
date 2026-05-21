@@ -117,7 +117,13 @@ tag_rules (id, org_id, tag_id FK, match_type, match_pattern, priority int defaul
 INDEX (org_id, enabled, priority)
 
 -- INTELLIGENCE
-budgets (id, org_id, scope_type, scope_value, monthly_limit numeric(12,2), alert_at_pct int default 80, hard_cap bool, created_by)
+budgets (
+  id, org_id, scope_type, scope_value,          -- scope_type: global|provider|model|feature_tag|team_tag|customer_tag|env_tag
+  monthly_limit numeric(12,2), alert_at_pct int default 80, hard_cap bool, created_by,
+  notified_80_at timestamptz,                    -- last time 80% alert sent; NULL = never; guards once-per-month re-send
+  notified_100_at timestamptz,                   -- last time 100% alert sent; same guard
+  created_at, updated_at
+)
 anomalies (id, org_id, detected_at, scope_kind, scope_value, baseline_usd, actual_usd, spike_pct, severity, status default 'open', context jsonb, notified_at)
 INDEX (org_id, detected_at DESC)
 recommendations (id, org_id, type, title, description, projected_savings_usd, confidence, evidence jsonb, status default 'new', generated_at, resolved_at)
@@ -266,12 +272,13 @@ Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
 
 **BYTEA storage convention:** Admin keys are stored as `"\\x" + ciphertext.hex()` so PostgREST/Supabase returns them in `\x<hex>` format. All decrypt paths must strip the `\x` prefix before calling `bytes.fromhex()`.
 
-### Nightly (00:30 UTC, per org)
+### Nightly pipeline (UTC, per org)
 ```
-aggregate_usage_events   → upsert daily_cost_summaries              [M1 ✅]
-detect_anomalies         → insert anomalies, enqueue notify          [M3]
-check_budgets            → enqueue budget alerts on threshold cross   [M3]
-generate_recommendations → rule-based (V1: Claude Haiku)             [M3]
+00:30  aggregate_usage_events   → upsert daily_cost_summaries              [M1 ✅]
+01:00  detect_anomalies         → insert anomalies, enqueue notify          [M3 Group A ✅]
+02:00  check_budgets            → compare MTD spend to limits, enqueue      [M3 Group B ✅]
+           send_budget_alert    → Resend email at alert_at_pct + 100%       [M3 Group B ✅]
+??:??  generate_recommendations → rule-based (V1: Claude Haiku)             [M3 Group D]
 ```
 
 ### Slack digest (09:00 UTC) [M3]
@@ -306,6 +313,31 @@ def detect_anomalies(org_id, today):
 ```
 
 Statistics not ML because: explainable to CFO, runs in ms, sufficient at <50 customers, no warm-up.
+
+## Budget Check Algorithm
+
+```
+For each budget in org:
+  mtd_spend = SUM(daily_cost_summaries.total_cost_usd)
+              WHERE org_id = org_id
+                AND day BETWEEN first_of_month AND today
+                AND <scope_filter>          ← eq(provider|model|*_tag) or none (global)
+
+  spent_pct = int(mtd_spend / monthly_limit * 100)
+
+  if spent_pct >= 100:
+    if notified_100_at NOT in current calendar month:
+      send_budget_alert(budget_id, 100, org_id)   ← Resend email
+      write notified_100_at = now()
+    continue                                       ← 100% supersedes warning; no double-alert
+
+  if spent_pct >= alert_at_pct:
+    if notified_80_at NOT in current calendar month:
+      send_budget_alert(budget_id, alert_at_pct, org_id)
+      write notified_80_at = now()
+```
+
+Idempotency: `notified_80_at` / `notified_100_at` timestamps are compared at `(year, month)` granularity — one alert per threshold per calendar month regardless of how many nightly runs execute.
 
 ## AI Layer
 
