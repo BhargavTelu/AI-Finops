@@ -3,9 +3,13 @@ Notification workers:
   send_daily_digests  — Slack digest at 09:00 UTC (Group C)
   send_anomaly_alert  — real-time Slack alert on new anomaly (Group C)
   send_budget_alert   — email at alert_at_pct / 100% of budget (Group B)
+                        + Slack (Group C)
 """
 
+import calendar
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Any
 
 import resend
 import structlog
@@ -13,8 +17,16 @@ from celery import shared_task
 from supabase import create_client
 
 from api.config import settings
+from api.services.encryption import EncryptionService
+from api.services.slack_client import post_message
 
 log = structlog.get_logger()
+
+_SEVERITY_EMOJI = {
+    "low": ":warning:",
+    "medium": ":large_orange_diamond:",
+    "high": ":rotating_light:",
+}
 
 
 def _get_supabase():
@@ -44,6 +56,36 @@ def _get_org_admin_email(db, org_id: str) -> str | None:
         .execute()
     )
     return user.data[0]["email"] if user.data else None
+
+
+def _get_slack_channel(db, org_id: str) -> tuple[str, str] | None:
+    """
+    Return (bot_token, channel_id) for the org's Slack integration.
+    Returns None if no Slack integration is connected.
+    Decrypts the bot token using EncryptionService.
+    """
+    result = (
+        db.table("slack_integrations")
+        .select("bot_token_enc, channel_id")
+        .eq("org_id", org_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return None
+
+    row = result.data[0]
+    raw_hex: str = row["bot_token_enc"]
+    try:
+        cipher = EncryptionService(settings.encryption_key)
+        # Supabase returns bytea as \x<hex>; strip prefix before decoding.
+        blob = bytes.fromhex(raw_hex.lstrip("\\x"))
+        bot_token = cipher.decrypt(blob).decode()
+    except Exception as exc:
+        log.error("slack_token_decrypt_failed", org_id=org_id, error=str(exc))
+        return None
+
+    return bot_token, row["channel_id"]
 
 
 def _scope_label(scope_type: str, scope_value: str | None) -> str:
@@ -132,13 +174,237 @@ def _exceeded_email_html(scope_label: str, limit_usd: Decimal, spend_usd: Decima
 """
 
 
+def _anomaly_slack_blocks(anomaly: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build Slack Block Kit payload for an anomaly alert."""
+    severity: str = anomaly.get("severity", "low")
+    emoji = _SEVERITY_EMOJI.get(severity, ":warning:")
+    scope_value: str = anomaly.get("scope_value", "unknown")
+    spike_pct: int = anomaly.get("spike_pct", 0)
+    baseline: str = f"${Decimal(str(anomaly['baseline_usd'])):,.2f}"
+    actual: str = f"${Decimal(str(anomaly['actual_usd'])):,.2f}"
+
+    context = anomaly.get("context") or {}
+    tag_parts = [
+        f"Team: {context['team_tag']}" for _ in [1] if context.get("team_tag")
+    ] + [
+        f"Feature: {context['feature_tag']}" for _ in [1] if context.get("feature_tag")
+    ] + [
+        f"Customer: {context['customer_tag']}" for _ in [1] if context.get("customer_tag")
+    ]
+
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{emoji} *Cost Anomaly Detected* — `{scope_value}`",
+            },
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Severity*\n{severity.capitalize()}"},
+                {"type": "mrkdwn", "text": f"*Spike*\n+{spike_pct}% above baseline"},
+                {"type": "mrkdwn", "text": f"*Baseline/day*\n{baseline}"},
+                {"type": "mrkdwn", "text": f"*Yesterday*\n{actual}"},
+            ],
+        },
+    ]
+
+    if tag_parts:
+        blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": " · ".join(tag_parts)}],
+            }
+        )
+
+    return blocks
+
+
+def _budget_slack_blocks(
+    scope_label: str,
+    limit_usd: Decimal,
+    spend_usd: Decimal,
+    pct: int,
+    is_exceeded: bool,
+) -> list[dict[str, Any]]:
+    """Build Slack Block Kit payload for a budget alert."""
+    if is_exceeded:
+        header = f":red_circle: *Budget Exceeded* — {pct}% of limit used"
+    else:
+        header = f":warning: *Budget Warning* — {pct}% of limit used"
+
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": header},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Scope*\n{scope_label}"},
+                {"type": "mrkdwn", "text": f"*Monthly Limit*\n${limit_usd:,.2f}"},
+                {"type": "mrkdwn", "text": f"*MTD Spend*\n${spend_usd:,.2f}"},
+                {"type": "mrkdwn", "text": f"*% Used*\n{pct}%"},
+            ],
+        },
+    ]
+
+
+def _fetch_digest_data(db, org_id: str, yesterday: date) -> dict[str, Any]:
+    """
+    Collect metrics for the daily digest from daily_cost_summaries and anomalies.
+    Returns: yesterday_usd, avg_7d_usd, mom_pct (None if no prior data),
+             top_drivers (list of {label, usd}), open_anomaly_count.
+    """
+    yesterday_str = yesterday.isoformat()
+    week_ago_str = (yesterday - timedelta(days=6)).isoformat()
+
+    # 7 days of data (includes yesterday) — drives three metrics at once.
+    week_rows: list[dict[str, Any]] = (
+        db.table("daily_cost_summaries")
+        .select("day, model, total_cost_usd")
+        .eq("org_id", org_id)
+        .gte("day", week_ago_str)
+        .lte("day", yesterday_str)
+        .execute()
+    ).data
+
+    yesterday_rows = [r for r in week_rows if r["day"][:10] == yesterday_str]
+    yesterday_usd = sum(Decimal(str(r["total_cost_usd"])) for r in yesterday_rows)
+
+    driver_by_model: dict[str, Decimal] = {}
+    for r in yesterday_rows:
+        model_name = r.get("model") or "unknown"
+        driver_by_model[model_name] = (
+            driver_by_model.get(model_name, Decimal("0")) + Decimal(str(r["total_cost_usd"]))
+        )
+    top_drivers = sorted(driver_by_model.items(), key=lambda kv: kv[1], reverse=True)[:3]
+
+    # Divide by 7 regardless of how many days have data (sparse = cheaper than expected).
+    week_total = sum(Decimal(str(r["total_cost_usd"])) for r in week_rows)
+    avg_7d_usd = week_total / 7
+
+    # This-month MTD (month start → yesterday).
+    first_of_month = yesterday.replace(day=1)
+    mtd_rows: list[dict[str, Any]] = (
+        db.table("daily_cost_summaries")
+        .select("total_cost_usd")
+        .eq("org_id", org_id)
+        .gte("day", first_of_month.isoformat())
+        .lte("day", yesterday_str)
+        .execute()
+    ).data
+    this_mtd = sum(Decimal(str(r["total_cost_usd"])) for r in mtd_rows)
+
+    # Previous month, same day range (handles month-length differences).
+    lm_year = yesterday.year if yesterday.month > 1 else yesterday.year - 1
+    lm_month = yesterday.month - 1 if yesterday.month > 1 else 12
+    lm_max_day = calendar.monthrange(lm_year, lm_month)[1]
+    lm_end = date(lm_year, lm_month, min(yesterday.day, lm_max_day))
+    lm_start = date(lm_year, lm_month, 1)
+
+    lm_rows: list[dict[str, Any]] = (
+        db.table("daily_cost_summaries")
+        .select("total_cost_usd")
+        .eq("org_id", org_id)
+        .gte("day", lm_start.isoformat())
+        .lte("day", lm_end.isoformat())
+        .execute()
+    ).data
+    last_mtd = sum(Decimal(str(r["total_cost_usd"])) for r in lm_rows)
+
+    mom_pct: int | None = None
+    if last_mtd > 0:
+        mom_pct = int(((this_mtd - last_mtd) / last_mtd * 100).to_integral_value())
+
+    anomaly_count = len(
+        db.table("anomalies")
+        .select("id")
+        .eq("org_id", org_id)
+        .eq("status", "open")
+        .execute()
+        .data
+    )
+
+    return {
+        "yesterday_usd": yesterday_usd,
+        "avg_7d_usd": avg_7d_usd,
+        "mom_pct": mom_pct,
+        "top_drivers": [{"label": model, "usd": usd} for model, usd in top_drivers],
+        "open_anomaly_count": anomaly_count,
+    }
+
+
+def _digest_slack_blocks(
+    digest_date: date,
+    yesterday_usd: Decimal,
+    avg_7d_usd: Decimal,
+    mom_pct: int | None,
+    top_drivers: list[dict[str, Any]],
+    open_anomaly_count: int,
+) -> list[dict[str, Any]]:
+    """Build Slack Block Kit payload for the daily cost digest."""
+    # Cross-platform date string (%-d is Linux-only).
+    date_str = f"{digest_date.strftime('%A, %b')} {digest_date.day}"
+
+    if mom_pct is None:
+        mom_text = "No prior month data"
+    elif mom_pct > 0:
+        mom_text = f"+{mom_pct}% vs last month"
+    elif mom_pct < 0:
+        mom_text = f"{mom_pct}% vs last month"
+    else:
+        mom_text = "Flat vs last month"
+
+    blocks: list[dict[str, Any]] = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"AI Cost Digest — {date_str}"},
+        },
+        {
+            "type": "section",
+            "fields": [
+                {"type": "mrkdwn", "text": f"*Yesterday*\n${yesterday_usd:,.2f}"},
+                {"type": "mrkdwn", "text": f"*7-day avg*\n${avg_7d_usd:,.2f}/day"},
+                {"type": "mrkdwn", "text": f"*Month-over-month*\n{mom_text}"},
+                {"type": "mrkdwn", "text": f"*Open anomalies*\n{open_anomaly_count}"},
+            ],
+        },
+    ]
+
+    if top_drivers:
+        driver_lines = "\n".join(
+            f"• `{d['label']}` — ${d['usd']:,.2f}" for d in top_drivers
+        )
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Top cost drivers (yesterday)*\n{driver_lines}",
+                },
+            }
+        )
+
+    return blocks
+
+
+# ── Celery tasks ───────────────────────────────────────────────────────────────
+
 @shared_task
 def send_daily_digests() -> None:
     """
     Enqueue send_slack_digest for every org with Slack connected.
     Sent at 09:00 UTC; per-org timezone adjustment is a V1 improvement.
     """
-    raise NotImplementedError
+    db = _get_supabase()
+    result = db.table("slack_integrations").select("org_id").execute()
+    org_ids = [row["org_id"] for row in result.data]
+    for org_id in org_ids:
+        send_slack_digest.delay(org_id)
+    log.info("daily_digests_dispatched", count=len(org_ids))
 
 
 @shared_task(bind=True, max_retries=2)
@@ -148,19 +414,135 @@ def send_slack_digest(self, org_id: str) -> None:  # type: ignore[misc]
     Payload: yesterday spend, 7d avg, MoM delta, top 3 cost drivers, open anomalies.
     Records sent_at for idempotency.
     """
-    raise NotImplementedError
+    db = _get_supabase()
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+
+    # Skip if already sent for this date (Celery retry guard).
+    existing = (
+        db.table("slack_digests")
+        .select("id")
+        .eq("org_id", org_id)
+        .eq("digest_date", yesterday.isoformat())
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        log.info("digest_already_sent", org_id=org_id, digest_date=yesterday.isoformat())
+        return
+
+    slack = _get_slack_channel(db, org_id)
+    if slack is None:
+        return
+
+    bot_token, channel_id = slack
+    data = _fetch_digest_data(db, org_id, yesterday)
+    blocks = _digest_slack_blocks(
+        digest_date=yesterday,
+        yesterday_usd=data["yesterday_usd"],
+        avg_7d_usd=data["avg_7d_usd"],
+        mom_pct=data["mom_pct"],
+        top_drivers=data["top_drivers"],
+        open_anomaly_count=data["open_anomaly_count"],
+    )
+    fallback = (
+        f"AI Cost Digest for {yesterday.isoformat()}: "
+        f"${data['yesterday_usd']:,.2f} yesterday, "
+        f"{data['open_anomaly_count']} open anomalies"
+    )
+
+    try:
+        post_message(bot_token, channel_id, blocks, fallback)
+    except ValueError as exc:
+        log.error("digest_send_failed", org_id=org_id, error=str(exc))
+        raise self.retry(exc=exc)
+
+    # Record successful send; failure here is non-fatal — digest is already posted.
+    try:
+        db.table("slack_digests").insert(
+            {
+                "org_id": org_id,
+                "digest_date": yesterday.isoformat(),
+                "channel_id": channel_id,
+            }
+        ).execute()
+    except Exception as exc:
+        log.warning("digest_record_failed", org_id=org_id, error=str(exc))
+
+    log.info(
+        "digest_sent",
+        org_id=org_id,
+        digest_date=yesterday.isoformat(),
+        channel_id=channel_id,
+    )
 
 
 @shared_task(bind=True, max_retries=3)
 def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
-    """Send real-time Slack alert when a new anomaly is inserted."""
-    raise NotImplementedError
+    """
+    Post a real-time Slack alert when a new anomaly with severity ≥ medium is
+    inserted. Called directly from anomaly_detection.detect_org for qualifying
+    anomalies — the wire is live; only this task body was a stub.
+    """
+    db = _get_supabase()
+
+    anomaly_result = (
+        db.table("anomalies")
+        .select("id, org_id, scope_kind, scope_value, baseline_usd, actual_usd, spike_pct, severity, context")
+        .eq("id", anomaly_id)
+        .limit(1)
+        .execute()
+    )
+    if not anomaly_result.data:
+        log.warning("anomaly_alert_not_found", anomaly_id=anomaly_id)
+        return
+
+    anomaly = anomaly_result.data[0]
+    org_id: str = anomaly["org_id"]
+
+    slack = _get_slack_channel(db, org_id)
+    if slack is None:
+        # Org hasn't connected Slack — silently skip (common case pre-install).
+        log.debug("anomaly_alert_no_slack", org_id=org_id, anomaly_id=anomaly_id)
+        return
+
+    bot_token, channel_id = slack
+    blocks = _anomaly_slack_blocks(anomaly)
+    severity = anomaly.get("severity", "low")
+    fallback = (
+        f"Cost anomaly on {anomaly.get('scope_value', 'unknown')}: "
+        f"+{anomaly.get('spike_pct', 0)}% spike ({severity} severity)"
+    )
+
+    try:
+        post_message(bot_token, channel_id, blocks, fallback)
+    except ValueError as exc:
+        log.error("anomaly_alert_send_failed", org_id=org_id, anomaly_id=anomaly_id, error=str(exc))
+        raise self.retry(exc=exc)
+
+    log.info(
+        "anomaly_alert_sent",
+        org_id=org_id,
+        anomaly_id=anomaly_id,
+        severity=severity,
+        channel_id=channel_id,
+    )
+
+    # Record when the Slack alert was sent — non-fatal if the DB write fails.
+    # The alert was already delivered; this is audit data only.
+    try:
+        db.table("anomalies").update(
+            {"notified_at": datetime.now(timezone.utc).isoformat()}
+        ).eq("id", anomaly_id).execute()
+    except Exception as exc:
+        log.warning("anomaly_notified_at_update_failed", anomaly_id=anomaly_id, error=str(exc))
 
 
 @shared_task(bind=True, max_retries=3)
 def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # type: ignore[misc]
     """
     Send email via Resend when spend crosses alert_at_pct (warning) or 100% (exceeded).
+    Also posts to Slack if the org has a connected integration (best-effort — email
+    is not retried on Slack failure).
     The notified_*_at guard in budget_checks.py ensures this fires at most once per
     threshold per calendar month — this task is idempotent by design.
     """
@@ -225,3 +607,25 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
     except Exception as exc:
         log.error("budget_alert_send_failed", org_id=org_id, budget_id=budget_id, error=str(exc))
         raise self.retry(exc=exc)
+
+    # ── Slack notification (best-effort — failure does not retry the email) ───
+    slack = _get_slack_channel(db, org_id)
+    if slack is None:
+        return
+
+    bot_token, channel_id = slack
+    blocks = _budget_slack_blocks(scope_label, monthly_limit, mtd_spend, pct, is_exceeded)
+    fallback = f"Budget {'exceeded' if is_exceeded else 'warning'}: {scope_label} at {pct}% of ${monthly_limit:,.2f}/mo"
+
+    try:
+        post_message(bot_token, channel_id, blocks, fallback)
+        log.info(
+            "budget_slack_alert_sent",
+            org_id=org_id,
+            budget_id=budget_id,
+            pct=pct,
+            channel_id=channel_id,
+        )
+    except Exception as exc:
+        # Non-fatal — email already sent; Slack failure is logged but not retried.
+        log.warning("budget_slack_alert_failed", org_id=org_id, budget_id=budget_id, error=str(exc))

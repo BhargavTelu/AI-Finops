@@ -173,8 +173,9 @@ GET    /recommendations?status=new
 PATCH  /recommendations/:id             apply/dismiss
 
 # Slack
-POST   /slack/oauth/callback
-POST   /slack/disconnect
+GET    /slack/status                    connection state (connected, workspace, channel)
+POST   /slack/oauth/callback            exchange code → encrypt token → upsert slack_integrations
+POST   /slack/disconnect                revoke token (best-effort) + delete row
 
 # Reports
 GET    /reports
@@ -253,6 +254,28 @@ def apply_rules(label: str | None, rules: list[CompiledRule]) -> dict[str, str |
 
 **PostgREST join syntax:** `db.table("tag_rules").select("*, tags(type, name)")` returns `tags: {"type": ..., "name": ...}` embedded in each row. The `compile_rules()` function reads from this embedded key.
 
+## Slack Client Service
+
+Pure-function module at `api/services/slack_client.py`. No heavy SDK — uses `httpx` directly (avoids ~5MB Slack SDK transitive dep chain). All functions raise `ValueError` on API error so Celery can retry.
+
+```python
+def exchange_code(code, client_id, client_secret, redirect_uri) -> dict:
+    """POST /api/oauth.v2.access → full Slack response dict. ValueError on ok=false."""
+
+def revoke_token(bot_token) -> None:
+    """POST /api/auth.revoke. Best-effort — logs warning, does not raise."""
+
+def post_message(bot_token, channel_id, blocks, fallback_text) -> None:
+    """POST /api/chat.postMessage. ValueError on ok=false (triggers Celery retry)."""
+```
+
+**Bot token storage:** AES-256-GCM encrypted → stored as BYTEA (`\x`-prefixed hex) in `slack_integrations.bot_token_enc`. Same `EncryptionService` used for Admin API keys. Strip `\x` prefix before `bytes.fromhex()` on all decrypt paths.
+
+**Slack alert types:**
+- Anomaly alert — Block Kit with severity emoji (🟡 low / 🟠 medium / 🔴 high), spike %, baseline, actual, model name, tag context; dispatched by `detect_org` for severity ≥ medium; `max_retries=3`
+- Budget alert — Block Kit with `:warning:` (at threshold) or `:red_circle:` (100%+) header, scope label, limit, MTD spend, % used; best-effort after Resend email; failure does not retry
+- Daily digest — Block Kit with date header, yesterday spend, 7d avg, MoM delta, top-3 cost drivers, open anomaly count; idempotency via `slack_digests` table; `max_retries=2`
+
 ## Core Flows
 
 ### Connect key (TTV critical)
@@ -276,16 +299,21 @@ Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
 ```
 00:30  aggregate_usage_events   → upsert daily_cost_summaries              [M1 ✅]
 01:00  detect_anomalies         → insert anomalies, enqueue notify          [M3 Group A ✅]
+           send_anomaly_alert   → post Block Kit to Slack (severity ≥ med)  [M3 Group C ✅]
 02:00  check_budgets            → compare MTD spend to limits, enqueue      [M3 Group B ✅]
-           send_budget_alert    → Resend email at alert_at_pct + 100%       [M3 Group B ✅]
+           send_budget_alert    → Resend email + best-effort Slack post      [M3 Group B+C ✅]
+09:00  send_daily_digests       → per-org Slack digest (idempotency guard)  [M3 Group C ✅]
 ??:??  generate_recommendations → rule-based (V1: Claude Haiku)             [M3 Group D]
 ```
 
-### Slack digest (09:00 UTC) [M3]
+### Slack digest (09:00 UTC) ✅ [M3 Group C complete]
 ```
-build_digest_payload     → yesterday spend, 7d avg, MoM, top 3 drivers, open anomalies
-chat.postMessage         → Slack
-record sent_at           → slack_digests (idempotency)
+send_daily_digests()           → fan-out: one send_slack_digest.delay per org
+send_slack_digest(org_id)      → idempotency check (slack_digests UNIQUE org_id+date)
+_fetch_digest_data()           → 4 DB queries: yesterday+7d avg+top drivers | MTD | last-month | open anomalies
+_digest_slack_blocks()         → Block Kit: header, spend fields, MoM delta, top-3 drivers, anomaly count
+post_message()                 → chat.postMessage (httpx, no SDK)
+INSERT slack_digests           → idempotency record (prevents duplicate on Celery retry)
 ```
 
 ### Stripe lifecycle

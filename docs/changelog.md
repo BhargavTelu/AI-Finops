@@ -6,7 +6,72 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] — M3 Group C + D in progress
+## [Unreleased] — M3 Group D in progress
+
+---
+
+## [0.5.0] — M3 Group C: Slack Integration (2026-05-21)
+
+221 tests passing, 2 skipped. 0 TypeScript errors in new files.
+
+### Added
+
+**Slack OAuth + Status + Disconnect API** (`api/routers/slack.py` — new file)
+- `GET /slack/status` — returns `SlackStatusResponse` (`connected`, `workspace_id`, `channel_name`, `channel_id`, `installed_at`); returns `{connected: false}` when no row exists
+- `POST /slack/oauth/callback` — receives `{code, state}` from frontend; calls `slack_client.exchange_code()` to swap for bot token; validates that `incoming_webhook.channel_id` is present (HTTP 400 if missing); AES-256-GCM encrypts the bot token; upserts `slack_integrations` row with `on_conflict="org_id"` so reconnecting to a different channel replaces the existing row; resolves `installed_by` UUID from Clerk user_id before insert
+- `POST /slack/disconnect` — revokes bot token via `slack_client.revoke_token()` (best-effort; DB row always deleted even if Slack revocation fails); deletes `slack_integrations` row; 404 if not connected
+
+**Slack Client Service** (`api/services/slack_client.py` — new file)
+- `exchange_code(code, client_id, client_secret, redirect_uri)` — `POST https://slack.com/api/oauth.v2.access`; raises `ValueError` on `ok=false`
+- `revoke_token(bot_token)` — `POST https://slack.com/api/auth.revoke`; best-effort (logs warning, does not raise)
+- `post_message(bot_token, channel_id, blocks, fallback_text)` — `POST https://slack.com/api/chat.postMessage`; raises `ValueError` on `ok=false` for Celery retry; 10s timeout via `httpx` (no Slack SDK — avoids large dependency)
+
+**Pydantic Schemas** (`api/schemas/slack.py` — new file)
+- `SlackOAuthCallbackBody` — `code: str`, `state: str` (CSRF token = Clerk org_id)
+- `SlackStatusResponse` — `connected: bool`; optional `workspace_id`, `channel_name`, `channel_id`, `installed_at`
+
+**Daily Digest Worker** (`api/workers/notifications.py` — implemented from stub)
+- `send_daily_digests()` — fan-out `@shared_task`; queries all orgs with a `slack_integrations` row; dispatches `send_slack_digest.delay(org_id)` per org; logs dispatch count
+- `send_slack_digest(org_id)` — per-org task with `max_retries=2`; idempotency guard via `slack_digests` table (UNIQUE on `org_id, digest_date`) — skips if already sent today; retrieves and decrypts bot token; calls `_fetch_digest_data()` then `_digest_slack_blocks()`; records row in `slack_digests` on success; retries on Slack `ValueError`
+- `_fetch_digest_data(db, org_id, yesterday)` — 4 queries: (1) 7-day window with model breakdown → yesterday total + 7d avg + top-3 cost drivers; (2) this-month MTD; (3) last-month same day range (MoM %); (4) open anomaly count; MoM returns `None` if no prior-month data
+- `_digest_slack_blocks(digest_date, yesterday_usd, avg_7d_usd, mom_pct, top_drivers, open_anomaly_count)` — Slack Block Kit payload: header with date, fields for spend + MoM + 7d avg, top-driver bullets, anomaly count, fallback text for mobile
+
+**Real-time Anomaly Alert** (`api/workers/notifications.py` + `api/workers/anomaly_detection.py`)
+- `send_anomaly_alert(anomaly_id)` — `@shared_task` with `max_retries=3`; fetches anomaly row + org Slack channel; skips silently if anomaly or Slack not found; posts Block Kit message with severity emoji (🟡/🟠/🔴), spike %, baseline, actual, model name, and tag context when set
+- `_anomaly_slack_blocks()` — severity-keyed header; fields: Spike%, Baseline/day, Actual, Severity; context block appended when any tag is non-null
+- Wire-up in `detect_org` (`anomaly_detection.py`): calls `send_anomaly_alert.delay(anomaly_id)` when `severity in ("medium", "high")` after inserting anomaly row
+
+**Real-time Budget Slack Alert** (`api/workers/notifications.py`)
+- `send_budget_alert` updated — after Resend email, makes a best-effort Slack post; Slack failure does not trigger retry (email is authoritative)
+- `_budget_slack_blocks()` — `:warning:` or `:red_circle:` header; fields: scope label, limit, MTD spend, % used
+- `_scope_label()` — human-readable scope text ("Global", "Provider: openai", "Feature tag: chat", etc.)
+
+**Settings layout + tab nav** (`apps/web/src/app/(dashboard)/settings/`)
+- `layout.tsx` — server layout wrapping all settings sub-pages with `SettingsTabs`
+- `settings-tabs.tsx` — "use client" tab nav: Integrations / Tag Rules / Slack; `usePathname()` drives active border; typed with `as Route<string>` cast (same pattern as `nav-links.tsx`)
+
+**Frontend `/settings/slack` page** (`apps/web/src/app/(dashboard)/settings/slack/`)
+- `page.tsx` — server component; fetches `GET /slack/status`; builds full Slack OAuth URL server-side from `SLACK_CLIENT_ID` + `SLACK_REDIRECT_URI` env vars (avoids `NEXT_PUBLIC_` exposure); passes `successMsg`/`errorMsg` from `searchParams` as props
+- `slack-client.tsx` — connected state: workspace ID, channel name, installed date; Reconnect link + Disconnect button (`POST /slack/disconnect`); disconnected state: empty state with `#` icon + "Connect Slack" CTA or unconfigured warning; "What you'll receive" feature list; `PageMotion` Framer Motion wrapper
+- `loading.tsx` — `animate-pulse` Skeleton matching connected-state layout
+- `callback/page.tsx` — server component OAuth callback; reads `code`/`state`/`error` from `searchParams`; calls `POST /slack/oauth/callback`; redirects to `/settings/slack?connected=true` on success or `/settings/slack?error=<message>` on failure
+
+**TypeScript types** (`apps/web/src/lib/types.ts`)
+- `SlackStatus` interface: `connected: boolean`; optional `workspace_id`, `channel_name`, `channel_id`, `installed_at`
+
+**Environment variables** (`apps/web/.env.local.example`)
+- `SLACK_CLIENT_ID` — OAuth app client ID (server-side only)
+- `SLACK_REDIRECT_URI` — defaults to `http://localhost:3000/settings/slack/callback`
+
+**Unit tests — 50 new tests across 3 files**
+- `tests/test_slack_routes.py` (9 tests): `TestSlackStatus` — not connected, connected with full fields; `TestSlackOAuthCallback` — successful connect, exchange error → 400, no channel → 400, unconfigured server → 503; `TestSlackDisconnect` — deletes row, not-connected → 404
+- `tests/test_notifications_slack.py` (19 tests): `TestAnomalySlackBlocks` (6) — severity emojis, spike/value fields, tag context block present/absent, medium/high/low variants; `TestBudgetSlackBlocks` (3) — warning/exceeded headers, scope + amounts; `TestGetSlackChannel` (3) — None when not connected, returns decrypted token+channel, None on decrypt error; `TestSendAnomalyAlert` (4) — posts when connected, skips on missing anomaly, skips on missing Slack, uses correct channel; `TestSendBudgetAlertSlack` (3) — posts to Slack when connected, skips gracefully when not connected, Slack failure does not raise
+- `tests/test_notifications_digest.py` (22 tests): `TestDigestSlackBlocks` (6) — date in header, spend in fields, MoM positive/negative/absent, top-driver bullets; `TestFetchDigestData` (8) — yesterday total, 7d avg, top-3 driver sort, MoM math, open anomaly count; `TestSendDailyDigests` (2) — dispatches per connected org, no dispatch if none; `TestSendSlackDigest` (6) — posts digest, skips missing Slack, idempotency guard, records in `slack_digests`, Slack failure retries
+
+### Fixed
+
+- **`send_anomaly_alert` never wrote `anomalies.notified_at`**: the `notified_at` column exists in the `anomalies` schema to record when the Slack alert was sent, but the task exited after `post_message` without writing it. Fixed: after a successful `post_message`, the task now updates `anomalies.notified_at = now()` (best-effort; a failed DB write logs a warning but does not re-raise). Two tests updated to account for the additional `execute()` call.
+- **`TypeError: unsupported operand type(s) for +=: 'list_iterator' and 'list'`** in `test_slack_failure_retries`: once `MagicMock.side_effect` is assigned a list, Python converts it to a `list_iterator`; appending with `+=` raises `TypeError`. Fixed by building the complete side-effect list upfront (`one_attempt * 3`) before assigning to the mock.
 
 ---
 

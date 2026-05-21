@@ -13,7 +13,7 @@ Read this first. Then read the doc linked under §Documentation that's relevant 
 
 Next.js (Vercel) → FastAPI (Railway) → Supabase Postgres. Celery + Upstash Redis for ingestion + nightly aggregation + anomaly detection + budget alerts. Clerk auth. Stripe billing. No customer traffic flows through us — we pull from provider Admin APIs.
 
-**Current milestone: M3 (Intelligence Layer)** — M0, M1, M2, M3-A (Anomaly Detection), M3-B (Budgets + Email Alerts) complete. Starting M3-C (Slack Integration).
+**Current milestone: M3 (Intelligence Layer)** — M0, M1, M2, M3-A (Anomaly Detection), M3-B (Budgets + Email Alerts), M3-C (Slack Integration) complete. Starting M3-D (Recommendations Engine).
 
 Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 

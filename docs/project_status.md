@@ -2,7 +2,7 @@
 
 ## Current Milestone: M3 — Intelligence Layer
 
-**Status:** M3 Group A (Anomaly Detection) complete 2026-05-21. M3 Group B (Budgets + Email Alerts) complete 2026-05-21. Starting Group C.
+**Status:** M3 Group A (Anomaly Detection) complete 2026-05-21. M3 Group B (Budgets + Email Alerts) complete 2026-05-21. M3 Group C (Slack Integration) complete 2026-05-21. Starting Group D.
 
 ---
 
@@ -43,16 +43,32 @@
 
 **Bug found and fixed:** `check_org` fell through to 80% alert check when 100% was already notified same month (only `continue`d when sending, not when guard blocked). Fixed: always `continue` when `spent_pct >= 100`. Caught by `test_100pct_guard_prevents_resend_same_month`.
 
-### Group C — Slack Integration
+### Group C — Slack Integration ✅ (complete 2026-05-21)
 
-- [ ] Slack OAuth flow: `GET /slack/oauth/callback` — exchanges code for bot token; stores encrypted in `slack_integrations` table; writes `installed_by`
-- [ ] `POST /slack/disconnect` — deletes `slack_integrations` row; revokes token via Slack API
-- [ ] `send_daily_digest(org_id)` Celery task — builds digest payload (yesterday spend, 7d avg, MoM delta, top 3 cost drivers, count of open anomalies, count of open budgets near threshold); `chat.postMessage` to org channel; records `sent_at` in `slack_digests` for idempotency
-- [ ] `send_daily_digests` beat task — runs at 09:00 UTC; dispatches per org with connected Slack; wire into `celery_app.py` (stub already present)
-- [ ] Real-time anomaly alert: when `detect_anomalies` creates a new anomaly with severity ≥ medium, post to Slack channel with spike %, baseline, actual, model/tag context
-- [ ] Real-time budget alert: when `check_budgets` crosses 80% or 100%, post to Slack in addition to email
-- [ ] `/settings/slack` frontend page — connect Slack button (OAuth redirect); connected state shows workspace + channel; disconnect button; empty state with CTA
-- [ ] Unit tests: digest payload builder; Slack message format; alert trigger logic
+**221 tests passing, 2 skipped. 0 TypeScript errors in new files.**
+
+- [x] `GET /slack/status` — returns `SlackStatusResponse`; `{connected: false}` when no row exists
+- [x] `POST /slack/oauth/callback` — exchanges code for bot token; AES-256-GCM encrypts; upserts `slack_integrations` (upsert allows channel switching); resolves `installed_by` UUID from Clerk user_id; HTTP 400 if `incoming_webhook.channel_id` absent
+- [x] `POST /slack/disconnect` — revokes token (best-effort); always deletes `slack_integrations` row; 404 if not connected
+- [x] `slack_client.py` service — `exchange_code()`, `revoke_token()`, `post_message()`; pure `httpx` (no Slack SDK); 10s timeout; `ValueError` on `ok=false` for Celery retry handling
+- [x] `SlackOAuthCallbackBody` / `SlackStatusResponse` Pydantic schemas in `api/schemas/slack.py`
+- [x] `send_daily_digests()` — fan-out task; queries orgs with `slack_integrations`; dispatches `send_slack_digest.delay(org_id)` per org
+- [x] `send_slack_digest(org_id)` — per-org digest with `max_retries=2`; idempotency guard via `slack_digests` UNIQUE(`org_id, digest_date`) — skips if already sent today; records row in `slack_digests` on success
+- [x] `_fetch_digest_data()` — 4 queries: yesterday total + 7d avg + top-3 drivers, this-month MTD, last-month same period (MoM %), open anomaly count
+- [x] `_digest_slack_blocks()` — Block Kit payload: header with date, spend + MoM + 7d avg fields, top-driver bullets, anomaly count; mobile fallback text
+- [x] `send_anomaly_alert(anomaly_id)` — `max_retries=3`; severity emoji (🟡/🟠/🔴); spike %, baseline, actual, tag context; skips if anomaly or Slack not found
+- [x] Wire-up in `detect_org` — dispatches `send_anomaly_alert.delay()` when `severity in ("medium", "high")` after anomaly insert
+- [x] Budget Slack alert in `send_budget_alert` — best-effort Slack post after Resend email; `:warning:` at threshold, `:red_circle:` at 100%; Slack failure does not retry
+- [x] `_budget_slack_blocks()` + `_scope_label()` helpers
+- [x] `apps/web/src/app/(dashboard)/settings/layout.tsx` — settings layout with `SettingsTabs` client component
+- [x] `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` — Integrations / Tag Rules / Slack tabs; `usePathname()` active state; `Route<string>` cast
+- [x] `/settings/slack/page.tsx` — server component; fetches status; builds OAuth URL server-side from `SLACK_CLIENT_ID`; passes flash messages from `searchParams`
+- [x] `/settings/slack/slack-client.tsx` — connected state (workspace, channel, installed date, Reconnect + Disconnect); disconnected empty state with CTA; "What you'll receive" feature list; `PageMotion` wrapper
+- [x] `/settings/slack/loading.tsx` — `animate-pulse` Skeleton
+- [x] `/settings/slack/callback/page.tsx` — server component OAuth callback; redirects to `?connected=true` or `?error=<message>`
+- [x] `SlackStatus` TypeScript interface in `apps/web/src/lib/types.ts`
+- [x] `SLACK_CLIENT_ID` + `SLACK_REDIRECT_URI` added to `.env.local.example`
+- [x] 50 new tests: 9 in `test_slack_routes.py` (routes CRUD + error cases) + 19 in `test_notifications_slack.py` (block builders, alert dispatch) + 22 in `test_notifications_digest.py` (digest data, blocks, idempotency, retry)
 
 ### Group D — Recommendations Engine
 

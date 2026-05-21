@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     resend_api_key: str
     from_email: str = "noreply@yourdomain.com"
 
+    # ── Slack ──────────────────────────────────────────────────────────────────
+    # Create a Slack app at api.slack.com/apps, request scopes:
+    #   incoming-webhook, chat:write
+    # Set redirect URI to: <NEXT_PUBLIC_APP_URL>/settings/slack/callback
+    slack_client_id: str = ""
+    slack_client_secret: str = ""
+    # Must match exactly what's registered in the Slack app settings.
+    slack_redirect_uri: str = "http://localhost:3000/settings/slack/callback"
+
     # ── Cloudflare R2 ─────────────────────────────────────────────────────────
     r2_bucket_name: str = ""
     r2_account_id: str = ""

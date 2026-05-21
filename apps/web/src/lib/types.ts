@@ -86,6 +86,14 @@ export interface BudgetRead {
   spent_pct: number;         // 0–100+
 }
 
+export interface SlackStatus {
+  connected: boolean;
+  workspace_id?: string | null;
+  channel_name?: string | null;
+  channel_id?: string | null;
+  installed_at?: string | null;
+}
+
 export type AnomalySeverity = "low" | "medium" | "high";
 export type AnomalyStatus = "open" | "acked" | "dismissed";
 
