@@ -10,6 +10,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
+## [0.5.1] — Gap Analysis & Test Hardening (2026-05-22)
+
+324 tests passing, 2 skipped. 103 new gap-coverage tests across 11 new test files.
+
+### Added
+
+**Gap test suite** — 29 documented gaps covered by 103 test functions across 11 new files:
+
+- `tests/test_aggregation_worker.py` — Gap-01 (happy path), Gap-02 (concurrent race), Gap-03 (pagination termination), Gap-04 (NULL/empty tag coalescing)
+- `tests/test_ingestion_gaps.py` — Gap-05 (concurrent refresh race), Gap-06 (partial batch failure guard), Gap-07 (`refresh_all_integrations` dispatch)
+- `tests/test_worker_race_conditions.py` — Gap-08 (anomaly detection concurrent race), Gap-09 (dedup guard blocks double-insert), Gap-10 (budget check concurrent race)
+- `tests/test_deps_jwt.py` — Gap-11 (`alg:none` and HS256 algorithm confusion), Gap-12 (JWKS concurrent refresh race), Gap-13 (unknown `kid` forced-refresh), Gap-14 (JWKS fetch timeout), Gap-15 (malformed `o` claim → 403 not 500)
+- `tests/test_open_bugs.py` — Gap-16 (BUG-02: `.single()` raises on missing row), Gap-17 (BUG-03: `lstrip` vs `removeprefix` semantics)
+- `tests/test_adapter_gaps.py` — Gap-18 (OpenAI two-pass failure), Gap-19 (provider 429 raises `ValueError`), Gap-20 (Anthropic adapter basic coverage), Gap-21 (pagination stops on `has_more=False`)
+- `tests/test_tag_engine_security.py` — Gap-22 (ReDoS completes < 5s, invalid regex → `False`)
+- `tests/test_notification_gaps.py` — Gap-23 (digest idempotency TOCTOU race documented), Gap-24 (Resend failure blocks Slack; no admin email returns early)
+- `tests/test_route_gaps.py` — Gap-25 (Slack OAuth missing `team` key), Gap-26 (cascade delete failure → still 204)
+- `tests/test_webhook_gaps.py` — Gap-27 (Svix multiple signatures: first-valid-wins, all-invalid → 400)
+- `tests/test_config_gaps.py` — Gap-28 (encryption key validated at `EncryptionService.__init__`), Gap-29 (CORS plain string raises `JSONDecodeError`)
+
+### Fixed
+
+**Production code**
+
+- **`routers/webhooks.py` — `_handle_membership_created` unhandled exception (Gap-16/BUG-02)**
+  - `.single().execute()` raised `PGRST116` when no row existed; exception propagated as 500 from the wrong place (a downstream `KeyError` on `data["id"]` rather than the intended `HTTPException`)
+  - Wrapped both `.single().execute()` calls in `try/except`; raises `HTTPException(500)` immediately on any exception so Svix retries delivery
+  - Added `isinstance(data, dict) and "id" in data` guard: catches the PostgREST error-dict case (non-empty dict that is truthy but has no `"id"` key)
+
+- **`routers/slack.py` — `slack_resp["team"]["id"]` `KeyError` (Gap-25)**
+  - Direct key access raised `KeyError → 500` when Slack omitted the `team` field (e.g., misconfigured OAuth scopes)
+  - Changed to `slack_resp.get("team") or {}` + `.get("id", "")` with an explicit `HTTPException(400, "Slack response missing workspace info.")` when `workspace_id` is empty
+  - Now returns 400 instead of 500, matching the behavior for the already-handled missing `channel_id` case
+
+- **`services/encryption.py` — `binascii.Error` not caught (Gap-28)**
+  - `base64.b64decode()` raised `binascii.Error("Incorrect padding")` for malformed keys; error message did not match the descriptive error pattern expected by callers
+  - Wrapped decode in `try/except Exception`; re-raises as `ValueError(f"Encryption key must be valid base64: {exc}")` so all key-validation errors are consistently `ValueError` with a descriptive message
+
+- **`packages/pricing/pricing.yaml` — missing Claude 3.5 models (Gap-20)**
+  - `claude-3-5-sonnet-20241022` and `claude-3-5-haiku-20241022` absent from the Anthropic section; `_compute_cost()` silently returned `Decimal("0")` for these widely-used models
+  - Added both at current public pricing: Sonnet at $3.00/$15.00/$0.30 per MTok, Haiku at $0.80/$4.00/$0.08 per MTok
+
+---
+
 ## [0.5.0] — M3 Group C: Slack Integration (2026-05-21)
 
 221 tests passing, 2 skipped. 0 TypeScript errors in new files.

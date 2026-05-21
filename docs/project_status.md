@@ -43,6 +43,35 @@
 
 **Bug found and fixed:** `check_org` fell through to 80% alert check when 100% was already notified same month (only `continue`d when sending, not when guard blocked). Fixed: always `continue` when `spent_pct >= 100`. Caught by `test_100pct_guard_prevents_resend_same_month`.
 
+### Gap Analysis & Test Hardening ✅ (complete 2026-05-22)
+
+**324 tests passing, 2 skipped. 103 new gap tests all green.**
+
+A systematic gap analysis identified 29 untested code paths across 11 categories. All 29 gaps now have regression tests (103 test functions total). Four production bugs were fixed in the process.
+
+**Production bugs fixed:**
+- [x] `routers/webhooks.py` — `_handle_membership_created` used `.single().execute()` which raises `PGRST116` unhandled (5xx from wrong place). Replaced with `try/except` around each `.single()` call and added `isinstance(data, dict) and "id" in data` guard to also catch PostgREST error-dict responses. (Gap-16)
+- [x] `routers/slack.py` — `slack_resp["team"]["id"]` raised `KeyError` when Slack omits the `team` key (misconfigured scopes). Changed to `.get("team") or {}` + `.get("id", "")` with explicit `HTTPException(400)`. (Gap-25)
+- [x] `services/encryption.py` — `base64.b64decode()` raised `binascii.Error("Incorrect padding")` for malformed keys; error message didn't match the descriptive pattern tests expected. Wrapped decode in `try/except`; re-raises as `ValueError`. (Gap-28)
+- [x] `packages/pricing/pricing.yaml` — `claude-3-5-sonnet-20241022` and `claude-3-5-haiku-20241022` missing from pricing table; `_compute_cost()` silently returned `Decimal("0")`. Added both models at current pricing ($3/$15/$0.30 and $0.80/$4/$0.08 per MTok). (Gap-20)
+
+**Test infrastructure fixes (test-side bugs, not production):**
+- [x] `test_aggregation_worker.py` (Gap-02) — Concurrent test raced to `patch()` the same module-level function from two threads; one thread's mock overwrote the other's. Fixed by patching once with `side_effect=make_db` outside threads.
+- [x] `test_ingestion_gaps.py` (Gap-06) — `patch("api.workers.ingestion.aggregate_org")` failed because `aggregate_org` is a local import inside `backfill_integration`. Changed to `patch("api.workers.aggregation.aggregate_org")`.
+- [x] `test_route_gaps.py` (Gap-25/26) — `patch("api.routers.slack._require_org")` failed because `_require_org` lives in `api.deps`. Switched to `app.dependency_overrides[_require_org]`; also fixed wrong URL prefix and missing `state` field in request body.
+- [x] `test_notification_gaps.py` (Gap-24) — `_compute_scope_spend` is locally imported in `notifications.py`; changed patch target to `api.workers.budget_checks._compute_scope_spend`.
+- [x] `test_notification_gaps.py` — `with (...) as (a, *b):` syntax (tuple unpacking after parenthesized `with`) is not valid Python; moved each `as` clause onto its individual `patch()`.
+
+**Gap coverage by priority:**
+
+| Priority | Gaps | Tests | Notes |
+|----------|------|-------|-------|
+| Critical | Gap-01, 02, 05, 06, 08, 10, 18 | 7 groups | Aggregation pipeline, concurrency races, ingestion failures, adapter two-pass |
+| High | Gap-03, 07, 11–14, 16, 19–21, 22–23, 25, 27 | 15 groups | JWT security, JWKS races, Anthropic adapter, regex ReDoS, Slack KeyError, Svix multi-sig |
+| Medium | Gap-04, 09, 15, 17, 24, 26, 28–29 | 7 groups | Tag coalescing, anomaly dedup, CORS/encryption config, lstrip semantics, cascade cleanup |
+
+---
+
 ### Group C — Slack Integration ✅ (complete 2026-05-21)
 
 **221 tests passing, 2 skipped. 0 TypeScript errors in new files.**
@@ -207,3 +236,8 @@ Test org with synthetic spike fires anomaly → Slack alert lands in < 10 min �
 ## Known Debt
 
 See `architecture.md` § Known V1 debt.
+
+**Remaining known gaps (documented, not yet fixed in production):**
+- Gap-02/05/08/10 — No distributed Redis lock on concurrent `aggregate_org`, `refresh_integration`, `detect_org`, or `check_org` tasks. Tests document the race; fix requires a Redis `SET NX EX` lock wrapper in each worker.
+- Gap-11/12/13/14 — JWT `alg:none` is rejected but JWKS concurrent refresh race and unknown-kid forced-refresh path have edge cases. Tests document current behavior; full fix requires a thread-safe JWKS cache.
+- Gap-23 — `send_slack_digest` has a TOCTOU race: Slack post can succeed but `slack_digests` INSERT can fail, leaving no idempotency record. Test documents the window; fix requires wrapping both operations in a DB transaction.
