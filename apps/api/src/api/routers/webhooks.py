@@ -213,19 +213,39 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
     # Map Clerk's namespaced roles (org:admin, org:member) to our simple enum
     role = "admin" if "admin" in clerk_role else "member"
 
-    user_resp = (
-        db.table("users").select("id").eq("clerk_id", clerk_user_id).single().execute()
-    )
-    org_resp = (
-        db.table("organizations")
-        .select("id")
-        .eq("clerk_id", clerk_org_id)
-        .single()
-        .execute()
-    )
+    # Use try/except so PostgREST PGRST116 (no rows) returns 500 for Svix retry,
+    # not an unhandled exception. .single() raises when the row is absent.
+    try:
+        user_resp = (
+            db.table("users").select("id").eq("clerk_id", clerk_user_id).single().execute()
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Parent user or org row not found; webhook will be retried",
+        )
 
-    if not user_resp.data or not org_resp.data:
-        # Return 500 so Svix retries — parent rows may not be written yet
+    try:
+        org_resp = (
+            db.table("organizations")
+            .select("id")
+            .eq("clerk_id", clerk_org_id)
+            .single()
+            .execute()
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Parent user or org row not found; webhook will be retried",
+        )
+
+    # PostgREST can return an error dict instead of a row dict — validate both.
+    if not isinstance(user_resp.data, dict) or "id" not in user_resp.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Parent user or org row not found; webhook will be retried",
+        )
+    if not isinstance(org_resp.data, dict) or "id" not in org_resp.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Parent user or org row not found; webhook will be retried",

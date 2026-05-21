@@ -32,15 +32,18 @@ def exchange_code(code: str, client_id: str, client_secret: str, redirect_uri: s
     Raises ValueError with a human-readable message on failure (bad code,
     revoked app, network error, etc.).
     """
-    with httpx.Client(timeout=_TIMEOUT) as client:
-        resp = client.post(
-            f"{_SLACK_API}/oauth.v2.access",
-            data={
-                "code": code,
-                "redirect_uri": redirect_uri,
-            },
-            auth=(client_id, client_secret),
-        )
+    try:
+        with httpx.Client(timeout=_TIMEOUT) as client:
+            resp = client.post(
+                f"{_SLACK_API}/oauth.v2.access",
+                data={
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                },
+                auth=(client_id, client_secret),
+            )
+    except httpx.RequestError as exc:
+        raise ValueError(f"Slack OAuth network error: {exc}") from exc
 
     try:
         resp.raise_for_status()

@@ -82,7 +82,13 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     bot_token: str = slack_resp["access_token"]
-    workspace_id: str = slack_resp["team"]["id"]
+    team = slack_resp.get("team") or {}
+    workspace_id: str = team.get("id", "")
+    if not workspace_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Slack response missing workspace info. Please re-authorize.",
+        )
 
     # incoming-webhook scope provides the user-selected channel during install.
     webhook = slack_resp.get("incoming_webhook", {})

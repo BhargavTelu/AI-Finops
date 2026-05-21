@@ -21,7 +21,10 @@ class EncryptionService:
 
     def __init__(self, key_b64: str) -> None:
         # Key must be exactly 32 bytes (256 bits) for AES-256
-        key = base64.b64decode(key_b64)
+        try:
+            key = base64.b64decode(key_b64)
+        except Exception as exc:
+            raise ValueError(f"Encryption key must be valid base64: {exc}") from exc
         if len(key) != 32:
             raise ValueError("Encryption key must be 32 bytes (base64-encoded)")
         self._aes = AESGCM(key)

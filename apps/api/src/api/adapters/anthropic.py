@@ -178,5 +178,7 @@ class AnthropicAdapter:
         return {
             "x-api-key": key.decode(),
             "anthropic-version": _ANTHROPIC_VERSION,
+            # Required by Anthropic usage-report API (BUG-01 fix)
+            "anthropic-beta": "usage-report-2024-07-01",
             "Content-Type": "application/json",
         }
