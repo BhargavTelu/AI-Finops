@@ -382,3 +382,50 @@ class TestAggregationTagCoalescing:
         assert Decimal(upserted_rows[0]["total_cost_usd"]) == Decimal("8.00"), (
             f"Expected merged cost of 8.00, got {upserted_rows[0]['total_cost_usd']}"
         )
+
+
+# ── M1-U-AGG-005: Revoked integration excluded ─────────────────────────────────
+
+class TestAggregationRevokedExclusion:
+    """M1-U-AGG-005: aggregate_org passes only active integration IDs to usage_events filter."""
+
+    def test_revoked_integration_excluded_from_query_filter(self) -> None:
+        """
+        aggregate_org first loads active (non-revoked) integration IDs, then filters
+        usage_events with .in_("integration_id", active_ids). The in_() filter must
+        contain only the active integration's ID — not any revoked integration's ID.
+        """
+        from api.workers.aggregation import aggregate_org
+
+        db = _mock_db()
+        # Integrations query returns ONLY the active integration.
+        # The WHERE clause in aggregate_org excludes revoked ones (status != "revoked").
+        responses = [
+            MagicMock(data=[{"id": "int-active-only"}]),  # active integrations only
+            MagicMock(data=[]),                             # delete summaries
+            MagicMock(data=[]),                             # no events on first page
+        ]
+
+        def execute_side():
+            return responses.pop(0) if responses else MagicMock(data=[])
+
+        db.execute.side_effect = execute_side
+
+        in_filter_args: list = []
+
+        def track_in(col, ids):
+            if col == "integration_id":
+                in_filter_args.append((col, list(ids)))
+            return db
+
+        db.in_.side_effect = track_in
+
+        with patch("api.workers.aggregation._get_supabase", return_value=db):
+            aggregate_org(ORG_ID)
+
+        assert in_filter_args, "Expected .in_('integration_id', ...) filter to be called"
+        _, active_ids_used = in_filter_args[0]
+        assert active_ids_used == ["int-active-only"], (
+            f"Only active integration IDs should be passed to the usage_events filter. "
+            f"Got: {active_ids_used}"
+        )

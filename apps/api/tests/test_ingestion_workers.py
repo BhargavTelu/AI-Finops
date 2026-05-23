@@ -234,3 +234,143 @@ class TestIngestWindowTagRules:
         assert len(inserted_rows) == 1
         row = inserted_rows[0]
         assert row["feature_tag"] == "checkout"
+
+
+# ── M1-U-ING-005: Delete-before-insert ordering ───────────────────────────────
+
+class TestIngestWindowIdempotency:
+    def test_delete_called_before_insert(self) -> None:  # M1-U-ING-005
+        """
+        _ingest_window must delete existing rows before inserting new ones.
+        This ensures idempotency on task retry: running the same window twice
+        yields the same final state with no duplicates.
+        """
+        from api.adapters.base import NormalizedUsageEvent
+        from decimal import Decimal as D
+
+        db = _mock_db()
+        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 5, 2, tzinfo=timezone.utc)
+
+        fake_event = NormalizedUsageEvent(
+            provider="openai",
+            model="gpt-4o",
+            api_key_label="test-key",
+            input_tokens=100,
+            output_tokens=50,
+            cached_tokens=0,
+            cost_usd=D("0.01"),
+            request_count=1,
+            bucket_hour=datetime(2026, 5, 1, 0, tzinfo=timezone.utc),
+            raw_meta={},
+        )
+
+        call_order: list[str] = []
+
+        def track_delete(*args, **kwargs):
+            call_order.append("delete")
+            return db
+
+        def capture_insert(rows: list[dict]) -> MagicMock:
+            call_order.append("insert")
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.delete.side_effect = track_delete
+        db.insert.side_effect = capture_insert
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter([fake_event])
+        empty_tags = {
+            "feature_tag": None,
+            "team_tag": None,
+            "customer_tag": None,
+            "env_tag": None,
+        }
+
+        with (
+            patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
+            patch("api.workers.ingestion.compile_rules", return_value=[]),
+            patch("api.workers.ingestion.apply_rules", return_value=empty_tags),
+        ):
+            _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
+
+        assert "delete" in call_order, "Expected delete() to be called"
+        assert "insert" in call_order, "Expected insert() to be called"
+        delete_idx = call_order.index("delete")
+        insert_idx = call_order.index("insert")
+        assert delete_idx < insert_idx, (
+            f"delete() must precede insert() for idempotency. Actual order: {call_order}"
+        )
+
+
+# ── M1-U-ING-006: Batch insert size = _BATCH_SIZE ─────────────────────────────
+
+class TestIngestWindowBatchSize:
+    def test_batch_insert_in_chunks_of_batch_size(self) -> None:  # M1-U-ING-006
+        """
+        _ingest_window must split inserts into chunks of _BATCH_SIZE (500) rows.
+        For 1200 events this means 3 insert calls: 500 + 500 + 200.
+        """
+        from api.adapters.base import NormalizedUsageEvent
+        from decimal import Decimal as D
+        from api.workers.ingestion import _BATCH_SIZE
+
+        db = _mock_db()
+        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 5, 2, tzinfo=timezone.utc)
+
+        total = _BATCH_SIZE * 2 + 200  # 1200 if _BATCH_SIZE == 500
+        events = [
+            NormalizedUsageEvent(
+                provider="openai",
+                model="gpt-4o",
+                api_key_label="test-key",
+                input_tokens=100,
+                output_tokens=50,
+                cached_tokens=0,
+                cost_usd=D("0.01"),
+                request_count=1,
+                bucket_hour=datetime(2026, 5, 1, 0, tzinfo=timezone.utc),
+                raw_meta={},
+            )
+            for _ in range(total)
+        ]
+
+        insert_batch_sizes: list[int] = []
+
+        def capture_insert(rows: list[dict]) -> MagicMock:
+            insert_batch_sizes.append(len(rows))
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.insert.side_effect = capture_insert
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter(events)
+        empty_tags = {
+            "feature_tag": None,
+            "team_tag": None,
+            "customer_tag": None,
+            "env_tag": None,
+        }
+
+        with (
+            patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
+            patch("api.workers.ingestion.compile_rules", return_value=[]),
+            patch("api.workers.ingestion.apply_rules", return_value=empty_tags),
+        ):
+            count = _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
+
+        assert count == total
+        expected_batches = 3  # 500 + 500 + 200
+        assert len(insert_batch_sizes) == expected_batches, (
+            f"Expected {expected_batches} batches ({_BATCH_SIZE}+{_BATCH_SIZE}+200). "
+            f"Got {len(insert_batch_sizes)}: {insert_batch_sizes}"
+        )
+        assert max(insert_batch_sizes) <= _BATCH_SIZE, (
+            f"No batch should exceed _BATCH_SIZE={_BATCH_SIZE}. Got: {insert_batch_sizes}"
+        )
+        assert sum(insert_batch_sizes) == total

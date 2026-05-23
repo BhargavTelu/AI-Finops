@@ -13,7 +13,7 @@ from supabase import create_client
 
 from api.config import settings
 from api.deps import OrgDep
-from api.schemas.usage import DailyPoint, ExploreRow, ForecastResult, UsageSummary
+from api.schemas.usage import DailyPoint, DashboardSummary, ExploreRow, ForecastResult, PeriodSummary, UsageSummary
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -179,6 +179,128 @@ async def get_explore(
     ]
     rows.sort(key=lambda r: r.total_cost_usd, reverse=True)
     return rows
+
+
+@router.get("/dashboard")
+async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
+    """
+    All four dashboard time-window periods in a single DB query.
+    Covers: latest day, 7 days, 30 days, MTD — each with delta vs prior equal window.
+    Also returns MoM % change and full prior-month cost for the callout widget.
+    Reads from daily_cost_summaries only. Target p95 ≤ 800ms.
+    """
+    today = datetime.now(timezone.utc).date()
+    yesterday = today - timedelta(days=1)
+
+    # Fetch far enough back to cover 30d + prior 30d + current MTD + prior-month MTD.
+    # first_of_last_month ensures we always capture the full prior calendar month.
+    first_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    fetch_from = min(first_of_last_month, yesterday - timedelta(days=60))
+
+    db = _get_supabase()
+    result = (
+        db.table("daily_cost_summaries")
+        .select("day, total_cost_usd, total_requests, total_tokens")
+        .eq("org_id", org.org_id)
+        .gte("day", fetch_from.isoformat())
+        .lte("day", yesterday.isoformat())
+        .execute()
+    )
+
+    # Multiple tag-dimension rows can exist per day — aggregate them all in Python.
+    day_totals: dict[date, dict] = {}
+    for row in result.data:
+        d = date.fromisoformat(row["day"])
+        if d not in day_totals:
+            day_totals[d] = {"cost": Decimal("0"), "requests": 0, "tokens": 0}
+        day_totals[d]["cost"] += Decimal(str(row["total_cost_usd"]))
+        day_totals[d]["requests"] += row["total_requests"]
+        day_totals[d]["tokens"] += row["total_tokens"]
+
+    def sum_range(start: date, end: date) -> tuple[Decimal, int, int]:
+        """Inclusive [start, end]. Returns zeros for inverted or empty ranges."""
+        if start > end:
+            return Decimal("0"), 0, 0
+        cost, reqs, tokens = Decimal("0"), 0, 0
+        for d, v in day_totals.items():
+            if start <= d <= end:
+                cost += v["cost"]
+                reqs += v["requests"]
+                tokens += v["tokens"]
+        return cost, reqs, tokens
+
+    def _pct(current: Decimal, prev: Decimal) -> float | None:
+        if prev == 0:
+            return None
+        return round(float((current - prev) / prev * 100), 1)
+
+    def make_period(
+        start: date, end: date, prev_start: date, prev_end: date, label: str
+    ) -> PeriodSummary:
+        cost, reqs, tokens = sum_range(start, end)
+        prev_cost, _, _ = sum_range(prev_start, prev_end)
+        return PeriodSummary(
+            total_cost_usd=cost,
+            total_requests=reqs,
+            total_tokens=tokens,
+            period_start=start,
+            period_end=end,
+            period_label=label,
+            prev_period_cost_usd=prev_cost,
+            pct_change=_pct(cost, prev_cost),
+        )
+
+    # Latest complete day (yesterday) vs the day before
+    day_period = make_period(
+        yesterday, yesterday,
+        yesterday - timedelta(days=1), yesterday - timedelta(days=1),
+        "Latest day",
+    )
+
+    # Last 7 complete days vs the 7 days before that
+    w_end = yesterday
+    w_start = yesterday - timedelta(days=6)
+    week_period = make_period(
+        w_start, w_end,
+        w_start - timedelta(days=7), w_end - timedelta(days=7),
+        "7 days",
+    )
+
+    # Last 30 complete days vs the 30 days before that
+    m_end = yesterday
+    m_start = yesterday - timedelta(days=29)
+    month_period = make_period(
+        m_start, m_end,
+        m_start - timedelta(days=30), m_end - timedelta(days=30),
+        "30 days",
+    )
+
+    # Month-to-date: 1st of current month → yesterday
+    # Prior period: same number of days into last month (apples-to-apples MoM)
+    mtd_start = today.replace(day=1)
+    mtd_end = yesterday
+    last_month_last = mtd_start - timedelta(days=1)
+    last_month_first = last_month_last.replace(day=1)
+    # How many complete days are in the current MTD window
+    mtd_days = max(0, (mtd_end - mtd_start).days)
+    prev_mtd_end = last_month_first + timedelta(days=mtd_days)
+    mtd_period = make_period(
+        mtd_start, mtd_end,
+        last_month_first, prev_mtd_end,
+        "Month to date",
+    )
+
+    # Full prior calendar month cost (displayed in the MoM callout widget)
+    last_month_cost, _, _ = sum_range(last_month_first, last_month_last)
+
+    return DashboardSummary(
+        day=day_period,
+        week=week_period,
+        month=month_period,
+        mtd=mtd_period,
+        mom_pct_change=mtd_period.pct_change,
+        last_month_cost_usd=last_month_cost,
+    )
 
 
 @router.get("/forecast")

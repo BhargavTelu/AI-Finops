@@ -56,3 +56,11 @@ class TestEncryptDecrypt:
     def test_binary_round_trip(self) -> None:  # TC-ENC-07
         data = b"\x00\xff\x00"
         assert self.svc.decrypt(self.svc.encrypt(data)) == data
+
+    def test_wrong_key_raises_on_decrypt(self) -> None:  # M1-U-ENC-004
+        """Ciphertext produced by key-1 must be unreadable by key-2 (GCM auth tag mismatch)."""
+        key2 = base64.b64encode(b"\x22" * 32).decode()
+        svc2 = EncryptionService(key2)
+        blob = self.svc.encrypt(b"secret-payload")
+        with pytest.raises(Exception):  # InvalidTag or ValueError from Cryptography
+            svc2.decrypt(blob)

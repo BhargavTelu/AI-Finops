@@ -20,6 +20,26 @@ export interface UsageSummary {
   period_end: string;
 }
 
+export interface PeriodSummary {
+  total_cost_usd: string; // Decimal → string
+  total_requests: number;
+  total_tokens: number;
+  period_start: string;
+  period_end: string;
+  period_label: string;
+  prev_period_cost_usd: string; // Decimal → string
+  pct_change: number | null; // null when prev_period = 0
+}
+
+export interface DashboardSummary {
+  day: PeriodSummary;
+  week: PeriodSummary;
+  month: PeriodSummary;
+  mtd: PeriodSummary;
+  mom_pct_change: number | null;
+  last_month_cost_usd: string; // Decimal → string
+}
+
 export interface DailyPoint {
   day: string; // date → ISO string
   cost_usd: string; // Decimal → string

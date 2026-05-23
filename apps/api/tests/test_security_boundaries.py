@@ -22,10 +22,28 @@ BUDGET_ID_A = "bbbbbbbb-0000-0000-0000-000000000001"
 ANOMALY_ID_A = "cccccccc-0000-0000-0000-000000000001"
 NOW_ISO = datetime.now(timezone.utc).isoformat()
 
-# Default auth = Org A
-app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_a", org_id=ORG_A)
+# Default auth = Org A — set at import time and re-applied by the autouse fixture below.
+_ORG_A_OVERRIDE = lambda: OrgContext(user_id="user_a", org_id=ORG_A)  # noqa: E731
+app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _restore_auth_override():
+    """Re-apply the Org A override before each test and restore after.
+
+    test_route_gaps.py pops the override in its finally blocks, which would
+    leave subsequent tests in this module without any auth override (→ 401).
+    This fixture makes every test in this file independent of execution order.
+    """
+    saved = app.dependency_overrides.get(_require_org)
+    app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+    yield
+    if saved is not None:
+        app.dependency_overrides[_require_org] = saved
+    else:
+        app.dependency_overrides.pop(_require_org, None)
 
 
 def _mock_db(rows: list[dict] | None = None) -> MagicMock:
@@ -255,3 +273,51 @@ class TestBudgetExceededAlert:
         assert mock_alert.delay.call_count == 1
         call_args = mock_alert.delay.call_args[0]
         assert call_args[1] == 100  # pct=100
+
+
+# ── M1-I-SEC-001: Unauthenticated requests return 401 ─────────────────────────
+#
+# Use a dedicated mini-app (not the shared `app`) so we never touch the global
+# dependency_overrides dict and cannot corrupt other test files' state.
+
+from fastapi import FastAPI as _FastAPI
+from api.deps import OrgDep as _OrgDep
+
+_auth_guard_app = _FastAPI()
+
+
+@_auth_guard_app.get("/check")
+async def _check(org: _OrgDep) -> dict:
+    return {"org_id": org.org_id}
+
+
+_auth_guard_client = TestClient(_auth_guard_app, raise_server_exceptions=False)
+
+
+class TestUnauthenticatedEndpoints:
+    """M1-I-SEC-001: Routes protected by _require_org return 401 when no token is provided."""
+
+    def test_usage_dashboard_requires_auth(self) -> None:
+        """GET without a Bearer token must return 401 — the dependency enforces it."""
+        resp = _auth_guard_client.get("/check")
+        assert resp.status_code == 401, (
+            f"Expected 401 without auth, got {resp.status_code}"
+        )
+
+
+# ── M1-I-SEC-005: api_key min_length validation ────────────────────────────────
+
+class TestInputValidation:
+    """M1-I-SEC-005: api_key shorter than 10 chars rejected before any adapter call."""
+
+    def test_api_key_too_short_returns_422(self) -> None:
+        """IntegrationCreate.api_key has min_length=10. Keys shorter than 10 chars → 422."""
+        resp = client.post(
+            "/api/v1/integrations",
+            json={
+                "provider": "openai",
+                "display_name": "Test",
+                "api_key": "sk-short",  # 8 chars — below min_length=10
+            },
+        )
+        assert resp.status_code == 422

@@ -195,3 +195,16 @@ class TestDeleteIntegration:
         with patch("api.routers.integrations._get_supabase", return_value=db):
             resp = client.delete(f"/api/v1/integrations/{INT_ID}")
         assert resp.status_code == 404
+
+    def test_delete_enqueues_aggregate_org(self) -> None:  # M1-I-INT-011
+        """DELETE must enqueue aggregate_org.delay(org_id) so charts rebuild immediately."""
+        db = _mock_db([_integration_row()])
+        with (
+            patch("api.routers.integrations._get_supabase", return_value=db),
+            patch("api.routers.integrations.aggregate_org") as mock_agg,
+        ):
+            mock_agg.delay = MagicMock()
+            resp = client.delete(f"/api/v1/integrations/{INT_ID}")
+        assert resp.status_code == 204
+        mock_agg.delay.assert_called_once()
+        assert mock_agg.delay.call_args[0][0] == ORG_ID
