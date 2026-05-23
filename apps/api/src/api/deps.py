@@ -177,3 +177,50 @@ async def _require_org(
 
 # Shorthand for route signatures: `org: OrgDep`
 OrgDep = Annotated[OrgContext, Depends(_require_org)]
+
+
+async def _require_admin_org(org: OrgDep) -> OrgContext:
+    """
+    Extends _require_org with an admin role check.
+
+    Queries organization_members to verify the authenticated user holds the
+    'admin' role in their active org. Raises 403 for non-admins.
+
+    We check the DB rather than a JWT claim to avoid requiring a Clerk session
+    template change. The query is a single indexed primary-key lookup
+    (UNIQUE on org_id, user_id) so it adds one fast round-trip.
+    """
+    db = create_client(settings.supabase_url, settings.supabase_service_role_key)
+
+    # Resolve the Supabase user UUID from the Clerk sub claim (stored in users.clerk_id)
+    user_result = (
+        db.table("users")
+        .select("id")
+        .eq("clerk_id", org.user_id)
+        .limit(1)
+        .execute()
+    )
+    if not user_result.data:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
+
+    supabase_user_id: str = user_result.data[0]["id"]
+
+    member_result = (
+        db.table("organization_members")
+        .select("role")
+        .eq("org_id", org.org_id)
+        .eq("user_id", supabase_user_id)
+        .limit(1)
+        .execute()
+    )
+    if not member_result.data or member_result.data[0].get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+
+    return org
+
+
+# Shorthand for admin-only routes: `org: AdminOrgDep`
+AdminOrgDep = Annotated[OrgContext, Depends(_require_admin_org)]

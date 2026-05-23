@@ -267,3 +267,111 @@ class TestGetExplore:
 
         body = resp.json()
         assert body[0]["pct_of_total"] == 0.0
+
+    def test_model_filter_applied_to_db_query(self) -> None:
+        """model= param must be forwarded as an .eq() filter on the DB query."""
+        rows = [self._row("feature_tag", "payments", "4.00", 40, 20000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/explore?group_by=feature_tag&range=30d&model=gpt-4o")
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("model", "gpt-4o") in eq_calls
+
+    def test_feature_tag_filter_applied_to_db_query(self) -> None:
+        """feature_tag= param must be forwarded as an .eq() filter on the DB query."""
+        rows = [self._row("model", "gpt-4o", "7.00", 70, 35000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d&feature_tag=payments")
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("feature_tag", "payments") in eq_calls
+
+    def test_multiple_dimension_filters_applied_simultaneously(self) -> None:
+        """provider= and feature_tag= can be combined; both must reach the DB."""
+        rows = [self._row("model", "gpt-4o", "3.00", 30, 15000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get(
+                "/api/v1/usage/explore?group_by=model&range=30d&provider=openai&feature_tag=search"
+            )
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("provider", "openai") in eq_calls
+        assert ("feature_tag", "search") in eq_calls
+
+    def test_all_tag_dimension_filters_accepted(self) -> None:
+        """team_tag, customer_tag, env_tag filter params must not cause errors."""
+        rows = [self._row("model", "gpt-4o", "2.00", 20, 10000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get(
+                "/api/v1/usage/explore?group_by=model&range=30d"
+                "&team_tag=ml&customer_tag=acme&env_tag=prod"
+            )
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("team_tag", "ml") in eq_calls
+        assert ("customer_tag", "acme") in eq_calls
+        assert ("env_tag", "prod") in eq_calls
+
+    # TC-EX-101
+    def test_team_tag_filter_applied_individually(self) -> None:
+        """team_tag= alone is forwarded as a single .eq() call without side effects."""
+        rows = [self._row("model", "gpt-4o", "2.00", 20, 10000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d&team_tag=ml")
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("team_tag", "ml") in eq_calls
+        # No other dimension filters should have been applied
+        dimension_cols = {"provider", "model", "feature_tag", "customer_tag", "env_tag"}
+        assert not any(c[0] in dimension_cols for c in eq_calls)
+
+    # TC-EX-102
+    def test_customer_tag_filter_applied_individually(self) -> None:
+        """customer_tag= alone is forwarded without injecting other filter calls."""
+        rows = [self._row("model", "gpt-4o", "3.00", 30, 15000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d&customer_tag=acme")
+
+        assert resp.status_code == 200
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("customer_tag", "acme") in eq_calls
+        dimension_cols = {"provider", "model", "feature_tag", "team_tag", "env_tag"}
+        assert not any(c[0] in dimension_cols for c in eq_calls)
+
+    # TC-EX-103
+    def test_no_filters_adds_no_dimension_eq_calls(self) -> None:
+        """When no dimension filter params are given, only org_id scoping hits the DB."""
+        db = _mock_db([])
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            client.get("/api/v1/usage/explore?group_by=model&range=30d")
+
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        dimension_cols = {"provider", "model", "feature_tag", "team_tag", "customer_tag", "env_tag"}
+        spurious = [c for c in eq_calls if c[0] in dimension_cols]
+        assert spurious == [], f"Unexpected dimension filter calls: {spurious}"
+
+    # TC-EX-104
+    def test_filter_on_same_column_as_group_by(self) -> None:
+        """Filtering and grouping on the same dimension (e.g. model) must both work."""
+        rows = [self._row("model", "gpt-4o", "5.00", 50, 25000)]
+        db = _mock_db(rows)
+        with patch("api.routers.usage._get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/explore?group_by=model&range=30d&model=gpt-4o")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert body[0]["group_key"] == "gpt-4o"
+        eq_calls = [call.args for call in db.eq.call_args_list]
+        assert ("model", "gpt-4o") in eq_calls

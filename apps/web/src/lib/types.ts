@@ -114,6 +114,23 @@ export interface SlackStatus {
   installed_at?: string | null;
 }
 
+export interface UsageEventRead {
+  id: string;
+  provider: string;
+  model: string;
+  api_key_label: string | null;
+  feature_tag: string | null;
+  team_tag: string | null;
+  customer_tag: string | null;
+  env_tag: string | null;
+  cost_usd: string; // Decimal → string
+  request_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  bucket_hour: string; // ISO datetime
+  manual_override: boolean;
+}
+
 export type AnomalySeverity = "low" | "medium" | "high";
 export type AnomalyStatus = "open" | "acked" | "dismissed";
 

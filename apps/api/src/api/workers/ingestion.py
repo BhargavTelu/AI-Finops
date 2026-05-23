@@ -24,6 +24,73 @@ log = structlog.get_logger()
 _BACKFILL_DAYS = 30
 _BATCH_SIZE = 500
 
+
+# ── Manual override helpers ────────────────────────────────────────────────────
+
+def _norm_bucket_hour(ts: str) -> str:
+    """Normalise a timestamptz string (DB or ISO) to a canonical UTC isoformat."""
+    dt = datetime.fromisoformat(ts.replace(" ", "T"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def _snapshot_overrides(
+    db, org_id: str, integration_id: str, start: datetime, end: datetime
+) -> dict[tuple[str, str, str], dict]:
+    """
+    Before delete-before-insert, fetch all manually-pinned rows for this window.
+    Returns a dict keyed by (model, api_key_label, normalised_bucket_hour) so
+    they can be restored after the fresh insert.
+    """
+    result = (
+        db.table("usage_events")
+        .select(
+            "model, api_key_label, bucket_hour,"
+            " feature_tag, team_tag, customer_tag, env_tag,"
+            " manual_override_by, manual_override_at"
+        )
+        .eq("org_id", org_id)
+        .eq("integration_id", integration_id)
+        .eq("manual_override", True)
+        .gte("bucket_hour", start.isoformat())
+        .lt("bucket_hour", end.isoformat())
+        .execute()
+    )
+    snapshot: dict[tuple[str, str, str], dict] = {}
+    for row in result.data:
+        key = (row["model"], row.get("api_key_label") or "", _norm_bucket_hour(row["bucket_hour"]))
+        snapshot[key] = {
+            "feature_tag": row.get("feature_tag"),
+            "team_tag": row.get("team_tag"),
+            "customer_tag": row.get("customer_tag"),
+            "env_tag": row.get("env_tag"),
+            "manual_override": True,
+            "manual_override_by": row.get("manual_override_by"),
+            "manual_override_at": row.get("manual_override_at"),
+        }
+    return snapshot
+
+
+def _restore_overrides(
+    db, org_id: str, integration_id: str, rows: list[dict], snapshot: dict
+) -> None:
+    """Patch back pinned tag values for any re-inserted row that had a manual override."""
+    for row in rows:
+        key = (row["model"], row.get("api_key_label") or "", _norm_bucket_hour(row["bucket_hour"]))
+        if key not in snapshot:
+            continue
+        (
+            db.table("usage_events")
+            .update(snapshot[key])
+            .eq("org_id", org_id)
+            .eq("integration_id", integration_id)
+            .eq("model", row["model"])
+            .eq("api_key_label", row.get("api_key_label") or "")
+            .eq("bucket_hour", row["bucket_hour"])
+            .execute()
+        )
+
 # Map provider slug → adapter instance
 _ADAPTERS: dict[str, Any] = {
     "openai": OpenAIAdapter(),
@@ -74,6 +141,9 @@ def _ingest_window(
     )
     compiled = compile_rules(rules_result.data)
 
+    # Snapshot pinned overrides before the delete so they survive re-ingestion
+    override_snapshot = _snapshot_overrides(db, org_id, integration_id, start, end)
+
     # Remove existing rows for this integration+window before inserting
     db.table("usage_events").delete().eq("integration_id", integration_id).gte(
         "bucket_hour", start.isoformat()
@@ -103,6 +173,10 @@ def _ingest_window(
 
     for chunk in _chunks(rows, _BATCH_SIZE):
         db.table("usage_events").insert(chunk).execute()
+
+    # Restore any admin-pinned tag assignments wiped by the delete
+    if override_snapshot:
+        _restore_overrides(db, org_id, integration_id, rows, override_snapshot)
 
     return len(rows)
 

@@ -12,8 +12,17 @@ from fastapi.responses import StreamingResponse
 from supabase import create_client
 
 from api.config import settings
-from api.deps import OrgDep
-from api.schemas.usage import DailyPoint, DashboardSummary, ExploreRow, ForecastResult, PeriodSummary, UsageSummary
+from api.deps import AdminOrgDep, OrgDep
+from api.schemas.usage import (
+    DailyPoint,
+    DashboardSummary,
+    ExploreRow,
+    ForecastResult,
+    PeriodSummary,
+    TagOverridePatch,
+    UsageEventRead,
+    UsageSummary,
+)
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -128,11 +137,18 @@ async def get_explore(
     range: str = Query(default="30d", pattern=r"^\d+d$"),
     group_by: str = Query(default="model"),
     provider: str | None = Query(default=None),
+    model: str | None = Query(default=None),
+    feature_tag: str | None = Query(default=None),
+    team_tag: str | None = Query(default=None),
+    customer_tag: str | None = Query(default=None),
+    env_tag: str | None = Query(default=None),
 ) -> list[ExploreRow]:
     """
     Pivot data for Cost Explorer (TanStack Table).
     Groups daily_cost_summaries by a single dimension and returns aggregated totals
     with percentage-of-total. Sorted by cost descending.
+
+    Any of the six dimension params can be used as filters simultaneously.
     """
     if group_by not in _EXPLORE_DIMENSIONS:
         raise HTTPException(
@@ -150,8 +166,19 @@ async def get_explore(
         .gte("day", period_start.isoformat())
         .lte("day", period_end.isoformat())
     )
-    if provider:
-        q = q.eq("provider", provider)
+
+    # Apply any active dimension filters
+    _filters = {
+        "provider": provider,
+        "model": model,
+        "feature_tag": feature_tag,
+        "team_tag": team_tag,
+        "customer_tag": customer_tag,
+        "env_tag": env_tag,
+    }
+    for col, val in _filters.items():
+        if val is not None:
+            q = q.eq(col, val)
 
     result = q.execute()
 
@@ -313,3 +340,108 @@ async def get_forecast(org: OrgDep) -> ForecastResult:
 async def export_csv(org: OrgDep) -> StreamingResponse:
     """Stream a CSV export of the Cost Explorer result set."""
     raise NotImplementedError
+
+
+# ── Usage event admin endpoints ────────────────────────────────────────────────
+
+@router.get("/events")
+async def list_usage_events(
+    org: AdminOrgDep,
+    limit: int = Query(default=200, ge=1, le=1000),
+) -> list[UsageEventRead]:
+    """
+    Return the most recent usage_events rows for this org (admin-only).
+    Used by the tag override UI to show individual events before patching tags.
+    Reads usage_events directly (not aggregated summaries) — do not use on the
+    hot dashboard path.
+    """
+    db = _get_supabase()
+    result = (
+        db.table("usage_events")
+        .select(
+            "id, provider, model, api_key_label,"
+            " feature_tag, team_tag, customer_tag, env_tag,"
+            " cost_usd, request_count, input_tokens, output_tokens,"
+            " bucket_hour, manual_override"
+        )
+        .eq("org_id", org.org_id)
+        .order("bucket_hour", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return [UsageEventRead(**row) for row in result.data]
+
+
+@router.patch("/events/{event_id}/tags")
+async def override_event_tags(
+    event_id: str,
+    body: TagOverridePatch,
+    org: AdminOrgDep,
+) -> UsageEventRead:
+    """
+    Manually pin tag values on a single usage_events row (admin-only).
+
+    The patched tags survive re-ingestion: the ingestion worker snapshots
+    manual_override=true rows before delete-before-insert and restores them
+    afterward. Re-runs aggregate_org so daily_cost_summaries reflect the change.
+    """
+    from datetime import timezone
+
+    db = _get_supabase()
+
+    # Ownership check — 404 if the event doesn't belong to this org
+    existing = (
+        db.table("usage_events")
+        .select("id")
+        .eq("id", event_id)
+        .eq("org_id", org.org_id)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Usage event not found")
+
+    now = datetime.now(timezone.utc).isoformat()
+    patch: dict = {
+        "manual_override": True,
+        "manual_override_at": now,
+        # manual_override_by stores the Clerk user_id (sub claim); resolved to
+        # Supabase UUID at display time to avoid a round-trip here.
+        "manual_override_by": None,  # updated below if user lookup succeeds
+    }
+    # Use model_fields_set so explicit null values (tag clearing) are applied,
+    # while omitted fields leave the existing DB value untouched.
+    if "feature_tag" in body.model_fields_set:
+        patch["feature_tag"] = body.feature_tag
+    if "team_tag" in body.model_fields_set:
+        patch["team_tag"] = body.team_tag
+    if "customer_tag" in body.model_fields_set:
+        patch["customer_tag"] = body.customer_tag
+    if "env_tag" in body.model_fields_set:
+        patch["env_tag"] = body.env_tag
+
+    # Best-effort: resolve Clerk sub → Supabase user UUID for the audit column
+    user_lookup = (
+        db.table("users")
+        .select("id")
+        .eq("clerk_id", org.user_id)
+        .limit(1)
+        .execute()
+    )
+    if user_lookup.data:
+        patch["manual_override_by"] = user_lookup.data[0]["id"]
+
+    result = (
+        db.table("usage_events")
+        .update(patch)
+        .eq("id", event_id)
+        .eq("org_id", org.org_id)
+        .execute()
+    )
+
+    # Trigger re-aggregation so daily_cost_summaries reflect the new tags
+    from api.workers.aggregation import aggregate_org  # local import avoids circular dep
+
+    aggregate_org.delay(org.org_id)
+
+    return UsageEventRead(**result.data[0])

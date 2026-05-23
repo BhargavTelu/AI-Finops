@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class UsageSummary(BaseModel):
@@ -56,3 +56,39 @@ class ForecastResult(BaseModel):
     confidence_low: Decimal
     confidence_high: Decimal
     as_of: datetime
+
+
+class TagOverridePatch(BaseModel):
+    """Body for PATCH /usage/events/{id}/tags. At least one field must be set."""
+
+    feature_tag: str | None = None
+    team_tag: str | None = None
+    customer_tag: str | None = None
+    env_tag: str | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "TagOverridePatch":
+        # model_fields_set contains fields explicitly provided in the request body,
+        # including those set to null (to clear a tag). An empty body has no fields set.
+        if not self.model_fields_set:
+            raise ValueError("At least one tag field must be provided")
+        return self
+
+
+class UsageEventRead(BaseModel):
+    """Projection of usage_events for the admin browser."""
+
+    id: str
+    provider: str
+    model: str
+    api_key_label: str | None
+    feature_tag: str | None
+    team_tag: str | None
+    customer_tag: str | None
+    env_tag: str | None
+    cost_usd: str  # NUMERIC → string
+    request_count: int
+    input_tokens: int
+    output_tokens: int
+    bucket_hour: datetime
+    manual_override: bool

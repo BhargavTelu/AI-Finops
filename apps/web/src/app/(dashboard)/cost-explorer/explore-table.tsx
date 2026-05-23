@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   createColumnHelper,
   flexRender,
@@ -45,6 +46,8 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | false }) {
 }
 
 export function ExploreTable({ rows, groupBy }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [sorting, setSorting] = useState<SortingState>([
     { id: "total_cost_usd", desc: true },
   ]);
@@ -151,15 +154,32 @@ export function ExploreTable({ rows, groupBy }: Props) {
           ))}
         </thead>
         <tbody className="divide-y">
-          {table.getRowModel().rows.map((row) => (
-            <tr key={row.id} className="hover:bg-muted/20">
-              {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4 py-3">
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {table.getRowModel().rows.map((row) => {
+            const groupKey = row.original.group_key;
+            // Untagged rows have no value to filter on — clicking does nothing
+            const drillable = groupKey !== "";
+            return (
+              <tr
+                key={row.id}
+                className={drillable ? "cursor-pointer hover:bg-muted/30" : "hover:bg-muted/20"}
+                onClick={
+                  drillable
+                    ? () => {
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.set(groupBy, groupKey);
+                        router.push(`/cost-explorer?${params.toString()}`);
+                      }
+                    : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <td key={cell.id} className="px-4 py-3">
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
         <tfoot className="border-t bg-muted/40 font-medium">
           <tr>

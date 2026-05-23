@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart3, Settings, AlertTriangle, Lightbulb, Wallet } from "lucide-react";
+import { LayoutDashboard, BarChart3, Settings, AlertTriangle, Lightbulb, Wallet, List } from "lucide-react";
 import { motion } from "framer-motion";
 import type { Route } from "next";
 
@@ -28,6 +28,7 @@ const NAV_SECTIONS = [
     label: "Config",
     links: [
       { href: "/settings" as Route<string>, label: "Settings", icon: Settings },
+      { href: "/usage-events" as Route<string>, label: "Usage Events", icon: List },
     ],
   },
 ];

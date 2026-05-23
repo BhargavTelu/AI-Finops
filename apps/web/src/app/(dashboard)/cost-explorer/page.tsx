@@ -16,22 +16,35 @@ const VALID_GROUP_BY = new Set([
 
 const VALID_RANGE = new Set(["7d", "30d", "90d"]);
 
+// Dimension filter params accepted by GET /usage/explore
+const FILTER_DIMS = ["provider", "model", "feature_tag", "team_tag", "customer_tag", "env_tag"] as const;
+type FilterDim = (typeof FILTER_DIMS)[number];
+type RawParams = { group_by?: string; range?: string } & Partial<Record<FilterDim, string>>;
+
 export default async function CostExplorerPage({
   searchParams,
 }: {
-  searchParams: Promise<{ group_by?: string; range?: string; provider?: string }>;
+  searchParams: Promise<RawParams>;
 }) {
   const params = await searchParams;
   const groupBy = VALID_GROUP_BY.has(params.group_by ?? "") ? (params.group_by ?? "model") : "model";
   const range = VALID_RANGE.has(params.range ?? "") ? (params.range ?? "30d") : "30d";
-  const provider = params.provider ?? "";
+
+  // Collect active dimension filters; strip empty strings
+  const activeFilters: Record<string, string> = {};
+  for (const dim of FILTER_DIMS) {
+    const val = params[dim];
+    if (val) activeFilters[dim] = val;
+  }
 
   const { getToken } = await auth();
   const token = await getToken();
   const api = createApiClient(token!);
 
   const qs = new URLSearchParams({ range, group_by: groupBy });
-  if (provider) qs.set("provider", provider);
+  for (const [dim, val] of Object.entries(activeFilters)) {
+    qs.set(dim, val);
+  }
 
   const rows = await api
     .get<ExploreRow[]>(`/usage/explore?${qs.toString()}`)
@@ -46,7 +59,7 @@ export default async function CostExplorerPage({
         </p>
       </div>
 
-      <ExploreControls groupBy={groupBy} range={range} provider={provider} />
+      <ExploreControls groupBy={groupBy} range={range} activeFilters={activeFilters} />
 
       {rows.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">

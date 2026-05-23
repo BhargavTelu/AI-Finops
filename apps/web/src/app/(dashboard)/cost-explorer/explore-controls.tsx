@@ -17,16 +17,26 @@ const RANGE_OPTIONS = [
   { value: "90d", label: "Last 90 days" },
 ] as const;
 
+// Dimensions that can carry an active filter badge
+const FILTER_DIMENSIONS: Record<string, string> = {
+  provider: "Provider",
+  model: "Model",
+  feature_tag: "Feature",
+  team_tag: "Team",
+  customer_tag: "Customer",
+  env_tag: "Env",
+};
+
 interface Props {
   groupBy: string;
   range: string;
-  provider: string;
+  activeFilters: Record<string, string>;
 }
 
 const selectClass =
   "rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring";
 
-export function ExploreControls({ groupBy, range, provider }: Props) {
+export function ExploreControls({ groupBy, range, activeFilters }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -39,6 +49,10 @@ export function ExploreControls({ groupBy, range, provider }: Props) {
     }
     router.push(`/cost-explorer?${params.toString()}`);
   }
+
+  const activeBadges = Object.entries(FILTER_DIMENSIONS).filter(
+    ([dim]) => activeFilters[dim],
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -72,19 +86,22 @@ export function ExploreControls({ groupBy, range, provider }: Props) {
         </select>
       </label>
 
-      {provider && (
-        <div className="flex items-center gap-1.5 rounded-full border bg-accent px-3 py-1 text-sm">
-          <span className="text-muted-foreground">Provider:</span>
-          <span className="font-medium">{provider}</span>
+      {activeBadges.map(([dim, label]) => (
+        <div
+          key={dim}
+          className="flex items-center gap-1.5 rounded-full border bg-accent px-3 py-1 text-sm"
+        >
+          <span className="text-muted-foreground">{label}:</span>
+          <span className="font-medium">{activeFilters[dim]}</span>
           <button
-            onClick={() => update("provider", "")}
+            onClick={() => update(dim, "")}
             className="ml-1 text-muted-foreground hover:text-foreground"
-            aria-label="Remove provider filter"
+            aria-label={`Remove ${label} filter`}
           >
             ×
           </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }
