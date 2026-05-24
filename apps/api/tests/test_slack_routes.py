@@ -15,9 +15,23 @@ from api.main import app
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 NOW_ISO = datetime.now(timezone.utc).isoformat()
 
-app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)
+_ORG_OVERRIDE = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)  # noqa: E731
+app.dependency_overrides[_require_org] = _ORG_OVERRIDE
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _restore_auth_override():
+    """Re-apply the auth override before each test.
+
+    test_route_gaps.py pops the dependency override in its finally blocks,
+    leaving subsequent tests without auth (→ 401). This fixture ensures
+    every test in this file runs with the correct override regardless of
+    execution order.
+    """
+    app.dependency_overrides[_require_org] = _ORG_OVERRIDE
+    yield
 
 
 # ── DB mock helpers ─────────────────────────────────────────────────────────────
@@ -38,12 +52,13 @@ def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     return db
 
 
-def _slack_row() -> dict:
+def _slack_row(alerts_muted: bool = False) -> dict:
     return {
         "workspace_id": "T01234567",
         "channel_id": "C01234567",
         "channel_name": "#alerts",
         "created_at": NOW_ISO,
+        "alerts_muted": alerts_muted,
     }
 
 
@@ -68,6 +83,20 @@ class TestSlackStatus:
         assert data["workspace_id"] == "T01234567"
         assert data["channel_name"] == "#alerts"
         assert data["channel_id"] == "C01234567"
+
+    def test_connected_returns_alerts_muted_false(self) -> None:  # TC-M3-C01
+        db = _mock_db([_slack_row(alerts_muted=False)])
+        with patch("api.routers.slack._get_supabase", return_value=db):
+            resp = client.get("/api/v1/slack/status")
+        assert resp.status_code == 200
+        assert resp.json()["alerts_muted"] is False
+
+    def test_connected_returns_alerts_muted_true(self) -> None:  # TC-M3-C02
+        db = _mock_db([_slack_row(alerts_muted=True)])
+        with patch("api.routers.slack._get_supabase", return_value=db):
+            resp = client.get("/api/v1/slack/status")
+        assert resp.status_code == 200
+        assert resp.json()["alerts_muted"] is True
 
 
 # ── POST /slack/oauth/callback ──────────────────────────────────────────────────

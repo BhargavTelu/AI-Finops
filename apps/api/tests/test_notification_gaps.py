@@ -65,7 +65,7 @@ class TestDigestIdempotencyRace:
         with (
             patch("api.workers.notifications._get_supabase") as mock_get_db,
             patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-test-token", "C1234567")),
+                  return_value=("xoxb-test-token", "C1234567", False)),
             patch("api.workers.notifications.post_message", side_effect=mock_post),
             patch("api.workers.notifications._fetch_digest_data", return_value={
                 "yesterday_usd": Decimal("10.00"),
@@ -143,7 +143,7 @@ class TestDigestIdempotencyRace:
         with (
             patch("api.workers.notifications._get_supabase") as mock_get_db,
             patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-test", "C1234")),
+                  return_value=("xoxb-test", "C1234", False)),
             patch("api.workers.notifications.post_message",
                   side_effect=ValueError("Slack API error")),
             patch("api.workers.notifications._fetch_digest_data", return_value={
@@ -254,7 +254,7 @@ class TestBudgetAlertRetryExhaustion:
                   return_value=Decimal("850.00")),
             patch("api.workers.notifications.resend.Emails.send", return_value={}),
             patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-token", "C1234")),
+                  return_value=("xoxb-token", "C1234", False)),
             patch("api.workers.notifications.post_message", side_effect=track_slack),
             patch("api.workers.notifications.settings") as ms,
         ):
@@ -331,7 +331,7 @@ class TestBudgetAlertRetryExhaustion:
             patch("api.workers.notifications.resend.Emails.send",
                   side_effect=count_email),
             patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-token", "C1234")),
+                  return_value=("xoxb-token", "C1234", False)),
             patch("api.workers.notifications.post_message",
                   side_effect=Exception("Slack API down")),
             patch("api.workers.notifications.settings") as ms,

@@ -64,10 +64,11 @@ def _budget_row() -> dict:
     }
 
 
-def _slack_row() -> dict:
+def _slack_row(alerts_muted: bool = False) -> dict:
     return {
         "bot_token_enc": "\\x" + "ab" * 28,
         "channel_id": "C01234567",
+        "alerts_muted": alerts_muted,
     }
 
 
@@ -153,9 +154,10 @@ class TestGetSlackChannel:
         with patch("api.workers.notifications.EncryptionService", return_value=mock_cipher):
             result = _get_slack_channel(db, ORG_ID)
         assert result is not None
-        token, channel_id = result
+        token, channel_id, alerts_muted = result
         assert token == "xoxb-real-token"
         assert channel_id == "C01234567"
+        assert alerts_muted is False
 
     def test_returns_none_on_decrypt_failure(self) -> None:
         db = _mock_db()
@@ -163,6 +165,17 @@ class TestGetSlackChannel:
         with patch("api.workers.notifications.EncryptionService", side_effect=ValueError("bad key")):
             result = _get_slack_channel(db, ORG_ID)
         assert result is None
+
+    def test_returns_alerts_muted_true_when_row_is_muted(self) -> None:  # TC-M3-C04
+        db = _mock_db()
+        db.execute.return_value = MagicMock(data=[_slack_row(alerts_muted=True)])
+        mock_cipher = MagicMock()
+        mock_cipher.decrypt.return_value = b"xoxb-real-token"
+        with patch("api.workers.notifications.EncryptionService", return_value=mock_cipher):
+            result = _get_slack_channel(db, ORG_ID)
+        assert result is not None
+        _, _, alerts_muted = result
+        assert alerts_muted is True
 
 
 # ── send_anomaly_alert ──────────────────────────────────────────────────────────
@@ -304,3 +317,47 @@ class TestSendBudgetAlertSlack:
         ):
             # apply() must complete without raising — Slack failure is best-effort.
             send_budget_alert.apply(args=[BUDGET_ID, 84, ORG_ID])
+
+
+# ── TC-M3-C05: daily digest not suppressed when alerts are muted ────────────────
+
+
+class TestDigestNotSuppressedWhenMuted:
+    """
+    TC-M3-C05: send_slack_digest must post even when alerts_muted=True.
+
+    The implementation explicitly discards the third tuple element:
+        bot_token, channel_id, _ = slack  # digest is not an alert — never suppressed
+    This test confirms that discard is honoured.
+    """
+
+    def test_digest_posts_when_alerts_muted(self) -> None:
+        from api.workers.notifications import send_slack_digest
+
+        db = _mock_db()
+        # First DB call: already-sent-today check → not sent
+        db.execute.return_value = MagicMock(data=[])
+
+        with (
+            patch("api.workers.notifications._get_supabase", return_value=db),
+            # Return a muted tuple — third element True
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-token", "C01234567", True),
+            ),
+            patch(
+                "api.workers.notifications._fetch_digest_data",
+                return_value={
+                    "yesterday_usd": Decimal("50.00"),
+                    "avg_7d_usd": Decimal("45.00"),
+                    "mom_pct": 10.0,
+                    "top_drivers": [],
+                    "open_anomaly_count": 0,
+                },
+            ),
+            patch("api.workers.notifications.post_message") as mock_post,
+        ):
+            send_slack_digest.apply(args=[ORG_ID])
+
+        # Digest must still be posted despite alerts_muted=True
+        mock_post.assert_called_once()

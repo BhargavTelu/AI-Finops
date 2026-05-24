@@ -43,6 +43,7 @@ def _anomaly_row(
     anomaly_id: str = ANOMALY_ID,
     status: str = "open",
     severity: str = "high",
+    explanation: str | None = None,
 ) -> dict:
     return {
         "id": anomaly_id,
@@ -56,6 +57,7 @@ def _anomaly_row(
         "severity": severity,
         "status": status,
         "context": None,
+        "explanation": explanation,
     }
 
 
@@ -83,6 +85,27 @@ class TestListAnomalies:
         data = resp.json()
         assert len(data) == 2
         assert all(a["status"] == "open" for a in data)
+
+    def test_list_includes_explanation_when_populated(self) -> None:  # TC-M3-D04
+        text = "Traffic spike from new chat feature rollout."
+        rows = [_anomaly_row(explanation=text)]
+        db = _mock_db(rows)
+        with patch("api.routers.anomalies._get_supabase", return_value=db):
+            resp = client.get("/api/v1/anomalies")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "explanation" in data[0]
+        assert data[0]["explanation"] == text
+
+    def test_list_includes_explanation_null_when_absent(self) -> None:  # TC-M3-D05
+        rows = [_anomaly_row()]  # explanation defaults to None
+        db = _mock_db(rows)
+        with patch("api.routers.anomalies._get_supabase", return_value=db):
+            resp = client.get("/api/v1/anomalies")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "explanation" in data[0]
+        assert data[0]["explanation"] is None
 
 
 # ── PATCH /anomalies/{id} ──────────────────────────────────────────────────────

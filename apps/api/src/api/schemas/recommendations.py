@@ -15,7 +15,9 @@ class RecommendationRead(BaseModel):
     confidence: Decimal | None
     evidence: dict | None
     status: Literal["new", "applied", "dismissed"]
+    scope_value: str | None
     generated_at: datetime
+    resolved_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

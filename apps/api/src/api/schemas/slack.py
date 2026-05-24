@@ -14,3 +14,8 @@ class SlackStatusResponse(BaseModel):
     channel_name: str | None = None
     channel_id: str | None = None
     installed_at: datetime | None = None
+    alerts_muted: bool = False
+
+
+class SlackSettingsUpdate(BaseModel):
+    alerts_muted: bool

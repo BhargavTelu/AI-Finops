@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
 import { createApiClient } from "@/lib/api-client";
@@ -133,6 +133,7 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
           <table className="w-full text-sm">
             <thead className="border-b bg-muted/40">
               <tr>
+                <th className="w-8 px-2 py-3" />
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Scope</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Spike</th>
@@ -172,59 +173,92 @@ interface RowProps {
 }
 
 function AnomalyRow({ anomaly, showActions, isLoading, onUpdate }: RowProps) {
+  const [expanded, setExpanded] = useState(false);
   const scopeLabel = anomaly.scope_value ?? anomaly.scope_kind;
   const contextTags = buildContextTags(anomaly.context);
+  const hasExplanation = Boolean(anomaly.explanation);
+  const colSpan = showActions ? 8 : 7;
 
   return (
-    <tr className="hover:bg-muted/20">
-      <td className="px-4 py-4 text-muted-foreground whitespace-nowrap">
-        {fmtDate(anomaly.detected_at)}
-      </td>
-      <td className="px-4 py-4">
-        <div className="font-medium">{scopeLabel}</div>
-        {contextTags && (
-          <div className="mt-0.5 text-xs text-muted-foreground">{contextTags}</div>
-        )}
-      </td>
-      <td className="px-4 py-4 text-right tabular-nums font-medium text-red-600 dark:text-red-400">
-        +{anomaly.spike_pct}%
-      </td>
-      <td className="px-4 py-4 text-right tabular-nums text-muted-foreground">
-        {fmtCost(anomaly.baseline_usd)}/day
-      </td>
-      <td className="px-4 py-4 text-right tabular-nums font-medium">
-        {fmtCost(anomaly.actual_usd)}
-      </td>
-      <td className="px-4 py-4">
-        <SeverityBadge severity={anomaly.severity} />
-      </td>
-      {showActions && (
-        <td className="px-4 py-4">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1.5 text-xs"
-              disabled={isLoading}
-              onClick={() => onUpdate(anomaly.id, "acked")}
+    <>
+      <tr className={cn("hover:bg-muted/20", expanded && "bg-muted/10")}>
+        {/* Expand toggle — only shown when an explanation exists */}
+        <td className="px-2 py-4 text-center">
+          {hasExplanation && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={expanded ? "Collapse explanation" : "Expand explanation"}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Ack
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-              disabled={isLoading}
-              onClick={() => onUpdate(anomaly.id, "dismissed")}
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              Dismiss
-            </Button>
-          </div>
+              {expanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </button>
+          )}
         </td>
+        <td className="px-4 py-4 text-muted-foreground whitespace-nowrap">
+          {fmtDate(anomaly.detected_at)}
+        </td>
+        <td className="px-4 py-4">
+          <div className="font-medium">{scopeLabel}</div>
+          {contextTags && (
+            <div className="mt-0.5 text-xs text-muted-foreground">{contextTags}</div>
+          )}
+        </td>
+        <td className="px-4 py-4 text-right tabular-nums font-medium text-red-600 dark:text-red-400">
+          +{anomaly.spike_pct}%
+        </td>
+        <td className="px-4 py-4 text-right tabular-nums text-muted-foreground">
+          {fmtCost(anomaly.baseline_usd)}/day
+        </td>
+        <td className="px-4 py-4 text-right tabular-nums font-medium">
+          {fmtCost(anomaly.actual_usd)}
+        </td>
+        <td className="px-4 py-4">
+          <SeverityBadge severity={anomaly.severity} />
+        </td>
+        {showActions && (
+          <td className="px-4 py-4">
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 gap-1.5 text-xs"
+                disabled={isLoading}
+                onClick={() => onUpdate(anomaly.id, "acked")}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Ack
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                disabled={isLoading}
+                onClick={() => onUpdate(anomaly.id, "dismissed")}
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Dismiss
+              </Button>
+            </div>
+          </td>
+        )}
+      </tr>
+
+      {/* Collapsible explanation row */}
+      {expanded && anomaly.explanation && (
+        <tr className="bg-muted/5">
+          <td />
+          <td colSpan={colSpan - 1} className="px-4 pb-4 pt-1">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              {anomaly.explanation}
+            </p>
+          </td>
+        </tr>
       )}
-    </tr>
+    </>
   );
 }
 

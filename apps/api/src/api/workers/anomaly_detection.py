@@ -15,6 +15,7 @@ from supabase import create_client
 
 from api.config import settings
 from api.services.anomaly import detect_anomalies
+from api.workers.anomaly_explainer import explain_anomaly
 from api.workers.notifications import send_anomaly_alert
 
 log = structlog.get_logger()
@@ -154,10 +155,9 @@ def detect_org(org_id: str) -> None:
         inserted += 1
         already_open.add(dedup_key)
 
-        # Group C implements the alert body — enqueueing here so the wire is
-        # complete even while send_anomaly_alert is still a stub.
         if result_obj.severity in ("medium", "high"):
             send_anomaly_alert.delay(anomaly_id)
+            explain_anomaly.delay(anomaly_id)
 
         log.info(
             "anomaly_inserted",

@@ -84,6 +84,59 @@ def _run_detect_org(spike_cost: float) -> MagicMock:
     return mock_alert
 
 
+def _run_detect_org_with_explain(spike_cost: float) -> tuple[MagicMock, MagicMock]:
+    """
+    Run detect_org with both send_anomaly_alert and explain_anomaly patched.
+    Returns (mock_send_anomaly_alert, mock_explain_anomaly).
+    """
+    db = _mock_db()
+    rows = _summary_rows(spike_cost)
+
+    exec_history = MagicMock()
+    exec_history.data = rows
+    exec_dedup = MagicMock()
+    exec_dedup.data = []
+    exec_insert = MagicMock()
+    exec_insert.data = []
+
+    db.execute.side_effect = [exec_history, exec_dedup, exec_insert]
+
+    mock_alert = MagicMock()
+    mock_alert.delay = MagicMock()
+    mock_explain = MagicMock()
+    mock_explain.delay = MagicMock()
+
+    with (
+        patch("api.workers.anomaly_detection._get_supabase", return_value=db),
+        patch("api.workers.anomaly_detection.send_anomaly_alert", mock_alert),
+        patch("api.workers.anomaly_detection.explain_anomaly", mock_explain),
+    ):
+        from api.workers.anomaly_detection import detect_org
+        detect_org(ORG_ID)
+
+    return mock_alert, mock_explain
+
+
+class TestExplainAnomalyDispatch:
+    """
+    TC-M3-D01, D02, D03: explain_anomaly.delay dispatched for medium/high severity;
+    NOT dispatched for low severity. Uses the same spike-cost thresholds as
+    TestSeverityAlerts to keep the z-score semantics consistent.
+    """
+
+    def test_explain_dispatched_for_medium_severity(self) -> None:  # TC-M3-D01
+        _, mock_explain = _run_detect_org_with_explain(100.035)
+        mock_explain.delay.assert_called_once()
+
+    def test_explain_dispatched_for_high_severity(self) -> None:  # TC-M3-D02
+        _, mock_explain = _run_detect_org_with_explain(100_000.0)
+        mock_explain.delay.assert_called_once()
+
+    def test_explain_not_dispatched_for_low_severity(self) -> None:  # TC-M3-D03
+        _, mock_explain = _run_detect_org_with_explain(100.025)
+        mock_explain.delay.assert_not_called()
+
+
 class TestSeverityAlerts:
     def test_low_severity_no_slack_alert(self) -> None:  # TC-DET-10
         """

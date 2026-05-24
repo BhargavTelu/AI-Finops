@@ -58,15 +58,15 @@ def _get_org_admin_email(db, org_id: str) -> str | None:
     return user.data[0]["email"] if user.data else None
 
 
-def _get_slack_channel(db, org_id: str) -> tuple[str, str] | None:
+def _get_slack_channel(db, org_id: str) -> tuple[str, str, bool] | None:
     """
-    Return (bot_token, channel_id) for the org's Slack integration.
+    Return (bot_token, channel_id, alerts_muted) for the org's Slack integration.
     Returns None if no Slack integration is connected.
     Decrypts the bot token using EncryptionService.
     """
     result = (
         db.table("slack_integrations")
-        .select("bot_token_enc, channel_id")
+        .select("bot_token_enc, channel_id, alerts_muted")
         .eq("org_id", org_id)
         .limit(1)
         .execute()
@@ -85,7 +85,7 @@ def _get_slack_channel(db, org_id: str) -> tuple[str, str] | None:
         log.error("slack_token_decrypt_failed", org_id=org_id, error=str(exc))
         return None
 
-    return bot_token, row["channel_id"]
+    return bot_token, row["channel_id"], bool(row.get("alerts_muted", False))
 
 
 def _scope_label(scope_type: str, scope_value: str | None) -> str:
@@ -434,7 +434,7 @@ def send_slack_digest(self, org_id: str) -> None:  # type: ignore[misc]
     if slack is None:
         return
 
-    bot_token, channel_id = slack
+    bot_token, channel_id, _ = slack  # digest is not an alert — never suppressed by mute
     data = _fetch_digest_data(db, org_id, yesterday)
     blocks = _digest_slack_blocks(
         digest_date=yesterday,
@@ -505,7 +505,11 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
         log.debug("anomaly_alert_no_slack", org_id=org_id, anomaly_id=anomaly_id)
         return
 
-    bot_token, channel_id = slack
+    bot_token, channel_id, alerts_muted = slack
+    if alerts_muted:
+        log.info("anomaly_alert_muted", org_id=org_id, anomaly_id=anomaly_id)
+        return
+
     blocks = _anomaly_slack_blocks(anomaly)
     severity = anomaly.get("severity", "low")
     fallback = (
@@ -613,7 +617,11 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
     if slack is None:
         return
 
-    bot_token, channel_id = slack
+    bot_token, channel_id, alerts_muted = slack
+    if alerts_muted:
+        log.info("budget_slack_alert_muted", org_id=org_id, budget_id=budget_id)
+        return
+
     blocks = _budget_slack_blocks(scope_label, monthly_limit, mtd_spend, pct, is_exceeded)
     fallback = f"Budget {'exceeded' if is_exceeded else 'warning'}: {scope_label} at {pct}% of ${monthly_limit:,.2f}/mo"
 

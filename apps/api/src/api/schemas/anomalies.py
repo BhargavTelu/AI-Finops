@@ -17,6 +17,7 @@ class AnomalyRead(BaseModel):
     severity: Literal["low", "medium", "high"]
     status: Literal["open", "acked", "dismissed"]
     context: dict | None
+    explanation: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -112,6 +112,7 @@ export interface SlackStatus {
   channel_name?: string | null;
   channel_id?: string | null;
   installed_at?: string | null;
+  alerts_muted?: boolean;
 }
 
 export interface UsageEventRead {
@@ -131,6 +132,24 @@ export interface UsageEventRead {
   manual_override: boolean;
 }
 
+export type RecommendationType = "model_swap" | "caching" | "batch" | "other";
+export type RecommendationStatus = "new" | "applied" | "dismissed";
+
+export interface RecommendationRead {
+  id: string;
+  org_id: string;
+  type: RecommendationType;
+  title: string;
+  description: string;
+  projected_savings_usd: string | null; // Decimal → string
+  confidence: string | null;            // Decimal → string (0.00–1.00)
+  evidence: Record<string, unknown> | null;
+  status: RecommendationStatus;
+  scope_value: string | null;
+  generated_at: string; // ISO datetime
+  resolved_at: string | null;
+}
+
 export type AnomalySeverity = "low" | "medium" | "high";
 export type AnomalyStatus = "open" | "acked" | "dismissed";
 
@@ -146,4 +165,5 @@ export interface AnomalyRead {
   severity: AnomalySeverity;
   status: AnomalyStatus;
   context: Record<string, unknown> | null;
+  explanation: string | null;
 }

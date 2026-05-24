@@ -1,9 +1,10 @@
 """
 Slack OAuth routes.
 
-GET  /slack/status           — check whether Slack is connected for the org
-POST /slack/oauth/callback   — exchange authorization code for bot token
-POST /slack/disconnect       — revoke token and remove integration
+GET   /slack/status           — check whether Slack is connected for the org
+POST  /slack/oauth/callback   — exchange authorization code for bot token
+PATCH /slack/settings         — update mute preferences
+POST  /slack/disconnect       — revoke token and remove integration
 """
 
 import structlog
@@ -12,7 +13,7 @@ from supabase import create_client
 
 from api.config import settings
 from api.deps import OrgDep
-from api.schemas.slack import SlackOAuthCallbackBody, SlackStatusResponse
+from api.schemas.slack import SlackOAuthCallbackBody, SlackSettingsUpdate, SlackStatusResponse
 from api.services.encryption import EncryptionService
 from api.services.slack_client import exchange_code, revoke_token
 
@@ -33,7 +34,7 @@ async def slack_status(org: OrgDep) -> SlackStatusResponse:
     db = _get_supabase()
     result = (
         db.table("slack_integrations")
-        .select("workspace_id, channel_id, channel_name, created_at")
+        .select("workspace_id, channel_id, channel_name, created_at, alerts_muted")
         .eq("org_id", org.org_id)
         .limit(1)
         .execute()
@@ -49,6 +50,7 @@ async def slack_status(org: OrgDep) -> SlackStatusResponse:
         channel_name=row["channel_name"],
         channel_id=row["channel_id"],
         installed_at=row["created_at"],
+        alerts_muted=bool(row.get("alerts_muted", False)),
     )
 
 
@@ -145,6 +147,40 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
         workspace_id=workspace_id,
         channel_name=channel_name,
         channel_id=channel_id,
+    )
+
+
+# ── PATCH /slack/settings ─────────────────────────────────────────────────────
+
+@router.patch("/settings")
+async def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusResponse:
+    """Update mutable Slack notification preferences (currently: alerts_muted)."""
+    db = _get_supabase()
+
+    result = (
+        db.table("slack_integrations")
+        .select("workspace_id, channel_id, channel_name, created_at")
+        .eq("org_id", org.org_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="No Slack integration found")
+
+    db.table("slack_integrations").update(
+        {"alerts_muted": body.alerts_muted}
+    ).eq("org_id", org.org_id).execute()
+
+    row = result.data[0]
+    log.info("slack_settings_updated", org_id=org.org_id, alerts_muted=body.alerts_muted)
+
+    return SlackStatusResponse(
+        connected=True,
+        workspace_id=row["workspace_id"],
+        channel_name=row["channel_name"],
+        channel_id=row["channel_id"],
+        installed_at=row["created_at"],
+        alerts_muted=body.alerts_muted,
     )
 
 

@@ -235,7 +235,7 @@ class TestSlackTokenDecryptionLstrip:
         db.eq.return_value = db
         db.limit.return_value = db
         db.execute.return_value = MagicMock(
-            data=[{"bot_token_enc": raw_hex, "channel_id": "C1234"}]
+            data=[{"bot_token_enc": raw_hex, "channel_id": "C1234", "alerts_muted": False}]
         )
 
         with patch("api.workers.notifications.settings") as ms:
@@ -243,6 +243,7 @@ class TestSlackTokenDecryptionLstrip:
             result = _get_slack_channel(db, "org-123")
 
         assert result is not None
-        bot_token, channel_id = result
+        bot_token, channel_id, alerts_muted = result
         assert bot_token == original_token.decode()
         assert channel_id == "C1234"
+        assert alerts_muted is False

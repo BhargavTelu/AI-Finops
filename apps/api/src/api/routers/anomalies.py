@@ -25,7 +25,7 @@ async def list_anomalies(
         db.table("anomalies")
         .select(
             "id, org_id, detected_at, scope_kind, scope_value, "
-            "baseline_usd, actual_usd, spike_pct, severity, status, context"
+            "baseline_usd, actual_usd, spike_pct, severity, status, context, explanation"
         )
         .eq("org_id", org.org_id)
         .eq("status", status)

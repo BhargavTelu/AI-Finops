@@ -15,6 +15,8 @@ celery_app = Celery(
         "api.workers.anomaly_detection",
         "api.workers.budget_checks",
         "api.workers.notifications",
+        "api.workers.recommendations",
+        "api.workers.anomaly_explainer",
     ],
 )
 
@@ -62,5 +64,10 @@ celery_app.conf.beat_schedule = {
     "check-budgets": {
         "task": "api.workers.budget_checks.check_all_orgs",
         "schedule": crontab(hour=2, minute=0),
+    },
+    # Nightly recommendations (after budget checks at 02:00)
+    "generate-recommendations": {
+        "task": "api.workers.recommendations.generate_all_org_recommendations",
+        "schedule": crontab(hour=2, minute=30),
     },
 }

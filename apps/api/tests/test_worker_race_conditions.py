@@ -84,44 +84,47 @@ class TestAnomalyDetectionConcurrentRace:
         barrier = threading.Barrier(2)
         errors: list[Exception] = []
 
+        def track_insert(data):
+            with count_lock:
+                insert_count[0] += 1
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        def make_thread_db():
+            # Each detect_org call gets its own DB mock with its own responses list,
+            # so the two concurrent threads don't interfere with each other's data.
+            db = _mock_db()
+            responses = [
+                MagicMock(data=history),  # daily_cost_summaries
+                MagicMock(data=[]),        # open anomalies for today → empty (race!)
+            ]
+
+            def execute_side():
+                return responses.pop(0) if responses else MagicMock(data=[])
+
+            db.execute.side_effect = execute_side
+            db.insert.side_effect = track_insert
+            return db
+
         def run_task():
             try:
-                db = _mock_db()
-                # Both tasks see: history rows, then empty dedup state
-                responses = [
-                    MagicMock(data=history),  # daily_cost_summaries
-                    MagicMock(data=[]),        # open anomalies for today → empty (race!)
-                ]
-
-                def execute_side():
-                    return responses.pop(0) if responses else MagicMock(data=[])
-
-                db.execute.side_effect = execute_side
-
-                def track_insert(data):
-                    with count_lock:
-                        insert_count[0] += 1
-                    m = MagicMock()
-                    m.execute.return_value = MagicMock(data=[])
-                    return m
-
-                db.insert.side_effect = track_insert
-
                 barrier.wait()
-                with (
-                    patch("api.workers.anomaly_detection._get_supabase", return_value=db),
-                    patch("api.workers.anomaly_detection.send_anomaly_alert"),
-                ):
-                    detect_org(ORG_ID)
+                detect_org(ORG_ID)
             except Exception as exc:
                 errors.append(exc)
 
-        t1 = threading.Thread(target=run_task)
-        t2 = threading.Thread(target=run_task)
-        t1.start()
-        t2.start()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
+        with (
+            patch("api.workers.anomaly_detection._get_supabase", side_effect=make_thread_db),
+            patch("api.workers.anomaly_detection.send_anomaly_alert"),
+            patch("api.workers.anomaly_detection.explain_anomaly"),
+        ):
+            t1 = threading.Thread(target=run_task)
+            t2 = threading.Thread(target=run_task)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
 
         assert errors == [], f"detect_org raised exceptions: {errors}"
         assert insert_count[0] >= 2, (
@@ -187,6 +190,7 @@ class TestAnomalyDetectionDedupGuard:
         with (
             patch("api.workers.anomaly_detection._get_supabase", return_value=db),
             patch("api.workers.anomaly_detection.send_anomaly_alert") as mock_alert,
+            patch("api.workers.anomaly_detection.explain_anomaly"),
         ):
             detect_org(ORG_ID)
 

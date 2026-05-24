@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { createApiClient } from "@/lib/api-client";
 import { PageMotion } from "@/components/motion-wrapper";
 import type { SlackStatus } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 interface Props {
   status: SlackStatus;
@@ -20,6 +21,7 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
   const [status, setStatus] = useState<SlackStatus>(initialStatus);
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState("");
+  const [mutePending, setMutePending] = useState(false);
 
   async function handleDisconnect() {
     setDisconnecting(true);
@@ -35,6 +37,26 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
       setDisconnecting(false);
     }
   }
+
+  async function handleMuteToggle() {
+    const newMuted = !status.alerts_muted;
+    setMutePending(true);
+    // Optimistic update
+    setStatus((prev) => ({ ...prev, alerts_muted: newMuted }));
+    try {
+      const token = await getToken();
+      await createApiClient(token!).patch<SlackStatus>("/slack/settings", {
+        alerts_muted: newMuted,
+      });
+    } catch {
+      // Revert on failure
+      setStatus((prev) => ({ ...prev, alerts_muted: !newMuted }));
+    } finally {
+      setMutePending(false);
+    }
+  }
+
+  const isMuted = status.alerts_muted ?? false;
 
   return (
     <PageMotion>
@@ -61,51 +83,85 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
 
         {status.connected ? (
           /* ── Connected state ─────────────────────────────────────────────── */
-          <div className="rounded-lg border bg-card p-6">
-            <div className="mb-4 flex items-center gap-2">
-              <span className="inline-flex h-2 w-2 rounded-full bg-green-500" />
-              <h2 className="text-base font-medium">Connected</h2>
+          <div className="rounded-lg border bg-card p-6 space-y-6">
+            <div>
+              <div className="mb-4 flex items-center gap-2">
+                <span className="inline-flex h-2 w-2 rounded-full bg-green-500" />
+                <h2 className="text-base font-medium">Connected</h2>
+              </div>
+
+              <dl className="mb-6 space-y-2 text-sm">
+                {status.workspace_id && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-muted-foreground">Workspace</dt>
+                    <dd className="font-medium">{status.workspace_id}</dd>
+                  </div>
+                )}
+                {status.channel_name && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-muted-foreground">Channel</dt>
+                    <dd className="font-medium">{status.channel_name}</dd>
+                  </div>
+                )}
+                {status.installed_at && (
+                  <div className="flex gap-2">
+                    <dt className="w-28 shrink-0 text-muted-foreground">Connected</dt>
+                    <dd className="text-muted-foreground">
+                      {new Date(status.installed_at).toLocaleDateString()}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+
+              <div className="flex items-center gap-3">
+                {oauthUrl && (
+                  <a
+                    href={oauthUrl}
+                    className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium transition-colors hover:bg-accent"
+                  >
+                    Reconnect to a different channel
+                  </a>
+                )}
+                <button
+                  onClick={handleDisconnect}
+                  disabled={disconnecting}
+                  className="inline-flex h-9 items-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-opacity disabled:opacity-50"
+                >
+                  {disconnecting ? "Disconnecting…" : "Disconnect"}
+                </button>
+              </div>
             </div>
 
-            <dl className="mb-6 space-y-2 text-sm">
-              {status.workspace_id && (
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-muted-foreground">Workspace</dt>
-                  <dd className="font-medium">{status.workspace_id}</dd>
+            {/* ── Mute alerts toggle ─────────────────────────────────────── */}
+            <div className="border-t pt-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">Mute alert notifications</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Pauses anomaly and budget alerts. The daily digest is unaffected.
+                  </p>
                 </div>
-              )}
-              {status.channel_name && (
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-muted-foreground">Channel</dt>
-                  <dd className="font-medium">{status.channel_name}</dd>
-                </div>
-              )}
-              {status.installed_at && (
-                <div className="flex gap-2">
-                  <dt className="w-28 shrink-0 text-muted-foreground">Connected</dt>
-                  <dd className="text-muted-foreground">
-                    {new Date(status.installed_at).toLocaleDateString()}
-                  </dd>
-                </div>
-              )}
-            </dl>
-
-            <div className="flex items-center gap-3">
-              {oauthUrl && (
-                <a
-                  href={oauthUrl}
-                  className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium transition-colors hover:bg-accent"
+                {/* Tailwind-only toggle — no @radix-ui/react-switch dependency */}
+                <button
+                  role="switch"
+                  aria-checked={isMuted}
+                  disabled={mutePending}
+                  onClick={handleMuteToggle}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    "disabled:cursor-not-allowed disabled:opacity-50",
+                    isMuted ? "bg-primary" : "bg-input"
+                  )}
                 >
-                  Reconnect to a different channel
-                </a>
-              )}
-              <button
-                onClick={handleDisconnect}
-                disabled={disconnecting}
-                className="inline-flex h-9 items-center rounded-md bg-destructive px-4 text-sm font-medium text-destructive-foreground transition-opacity disabled:opacity-50"
-              >
-                {disconnecting ? "Disconnecting…" : "Disconnect"}
-              </button>
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-sm ring-0 transition-transform",
+                      isMuted ? "translate-x-5" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
             </div>
           </div>
         ) : (
