@@ -278,7 +278,7 @@ async def stripe_webhook(
     Updates the billing table on checkout.session.completed,
     customer.subscription.updated, and customer.subscription.deleted.
     """
-    raise NotImplementedError
+    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
 
 
 @router.post("/clerk")

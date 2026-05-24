@@ -91,3 +91,43 @@ class TestSendBudgetAlertEmail:
             send_budget_alert.apply(args=[BUDGET_ID, 82, ORG_ID])
 
         mock_resend.Emails.send.assert_not_called()
+
+
+# ── TC-NOT-22: Slack failure does not block email ─────────────────────────────
+
+class TestBudgetAlertSlackNonFatal:
+    """TC-NOT-22 (HIGH) — post_message exception caught; email already sent; task returns normally."""
+
+    def test_slack_failure_does_not_block_email(self) -> None:
+        """TC-NOT-22 — Slack raises; email was already sent; task completes without re-raise."""
+        db = _mock_db()
+        db.execute.side_effect = [
+            MagicMock(data=[_budget_row()]),                     # budget fetch
+            MagicMock(data=[{"user_id": "u1"}]),                 # admin member lookup
+            MagicMock(data=[{"email": "cfo@company.com"}]),      # admin email lookup
+        ]
+        mock_resend = MagicMock()
+
+        with (
+            patch("api.workers.notifications._get_supabase", return_value=db),
+            patch("api.workers.notifications.resend", mock_resend),
+            patch(_SCOPE_SPEND_PATCH, return_value=Decimal("820")),
+            patch("api.workers.notifications.settings") as mock_settings,
+            # Slack is connected but post_message raises an exception
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-fake-token", "C123456", False),
+            ),
+            patch(
+                "api.workers.notifications.post_message",
+                side_effect=Exception("Slack API rate limit"),
+            ),
+        ):
+            mock_settings.resend_api_key = "re_test_key"
+            mock_settings.from_email = "noreply@test.com"
+            mock_settings.encryption_key = ""
+            # Must NOT raise — Slack failure is non-fatal per the docstring
+            send_budget_alert.apply(args=[BUDGET_ID, 82, ORG_ID])
+
+        # Email was sent despite Slack failure
+        mock_resend.Emails.send.assert_called_once()

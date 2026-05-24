@@ -429,3 +429,144 @@ class TestAggregationRevokedExclusion:
             f"Only active integration IDs should be passed to the usage_events filter. "
             f"Got: {active_ids_used}"
         )
+
+# ── TC-FAN-01 & TC-FAN-02: aggregate_all_orgs fan-out ──────────────────────────
+
+class TestAggregateAllOrgsFanOut:
+    """TC-FAN-01 and TC-FAN-02 — aggregate_all_orgs dispatches to unique org_ids."""
+
+    def test_dispatches_once_per_unique_org(self) -> None:
+        """TC-FAN-01 — 3 integrations across 2 orgs → aggregate_org.delay called twice."""
+        from api.workers.aggregation import aggregate_all_orgs
+
+        rows = [
+            {"org_id": "org-aaa"},
+            {"org_id": "org-bbb"},
+            {"org_id": "org-aaa"},  # duplicate — same org, different integration
+        ]
+        db = _mock_db()
+        db.execute.return_value = MagicMock(data=rows)
+
+        with (
+            patch("api.workers.aggregation._get_supabase", return_value=db),
+            patch("api.workers.aggregation.aggregate_org") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            aggregate_all_orgs()
+
+        assert mock_task.delay.call_count == 2, (
+            f"Expected aggregate_org.delay called exactly 2 times (one per unique org), "
+            f"got {mock_task.delay.call_count}"
+        )
+        called_org_ids = {call.args[0] for call in mock_task.delay.call_args_list}
+        assert called_org_ids == {"org-aaa", "org-bbb"}
+
+    def test_empty_integrations_does_not_dispatch(self) -> None:
+        """TC-FAN-02 — no active integrations → aggregate_org.delay never called."""
+        from api.workers.aggregation import aggregate_all_orgs
+
+        db = _mock_db()
+        db.execute.return_value = MagicMock(data=[])
+
+        with (
+            patch("api.workers.aggregation._get_supabase", return_value=db),
+            patch("api.workers.aggregation.aggregate_org") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            aggregate_all_orgs()
+
+        mock_task.delay.assert_not_called()
+
+
+# ── TC-AGG-10: Pagination with 2 pages ──────────────────────────────────────────
+
+class TestAggregationPaginationTwoPages:
+    """TC-AGG-10 — aggregate_org paginates and collects all rows across 2 pages."""
+
+    def test_two_page_pagination_aggregates_all_rows(self) -> None:
+        """
+        Mock DB to return 1000 rows on first page and 500 on second.
+        All 1500 unique models should appear in the upserted summaries.
+        """
+        from api.workers.aggregation import aggregate_org, _PAGE_SIZE
+
+        page1 = [_event_row(f"model-p1-{i}", "1.00") for i in range(_PAGE_SIZE)]
+        page2 = [_event_row(f"model-p2-{i}", "0.50") for i in range(500)]
+
+        db = _mock_db()
+        setup_responses = [
+            MagicMock(data=[{"id": "int-active"}]),
+            MagicMock(data=[]),
+        ]
+        page_index = [0]
+        pages = [page1, page2]
+
+        def execute_side():
+            if setup_responses:
+                return setup_responses.pop(0)
+            idx = page_index[0]
+            page_index[0] += 1
+            if idx < len(pages):
+                return MagicMock(data=pages[idx])
+            return MagicMock(data=[])
+
+        db.execute.side_effect = execute_side
+
+        upserted_rows: list[dict] = []
+
+        def capture_upsert(rows, on_conflict=None):
+            upserted_rows.extend(rows)
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.upsert.side_effect = capture_upsert
+
+        with patch("api.workers.aggregation._get_supabase", return_value=db):
+            aggregate_org(ORG_ID)
+
+        unique_models = {r["model"] for r in upserted_rows}
+        assert len(unique_models) == _PAGE_SIZE + 500, (
+            f"Expected {_PAGE_SIZE + 500} unique models aggregated across 2 pages, "
+            f"got {len(unique_models)}"
+        )
+
+
+# ── TC-AGG-11: Revoked integration excluded from usage_events filter ──────────
+
+class TestAggregationRevokedIntegrationExcluded:
+    """TC-AGG-11 — revoked integrations must not appear in the IN_ filter."""
+
+    def test_revoked_integration_ids_excluded_from_filter(self) -> None:
+        from api.workers.aggregation import aggregate_org
+
+        active_only_rows = [{"id": "int-active"}]
+
+        db = _mock_db()
+        responses = [
+            MagicMock(data=active_only_rows),
+            MagicMock(data=[]),
+            MagicMock(data=[]),
+        ]
+
+        def execute_side():
+            return responses.pop(0) if responses else MagicMock(data=[])
+
+        db.execute.side_effect = execute_side
+
+        captured_in_filters: list = []
+
+        def track_in(col, ids):
+            if col == "integration_id":
+                captured_in_filters.append(list(ids))
+            return db
+
+        db.in_.side_effect = track_in
+
+        with patch("api.workers.aggregation._get_supabase", return_value=db):
+            aggregate_org(ORG_ID)
+
+        assert len(captured_in_filters) == 1, "Expected exactly one in_() filter on integration_id"
+        assert captured_in_filters[0] == ["int-active"], (
+            f"Expected only ['int-active'] in filter, got {captured_in_filters[0]}"
+        )

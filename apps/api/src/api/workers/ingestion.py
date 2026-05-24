@@ -59,6 +59,9 @@ def _snapshot_overrides(
     )
     snapshot: dict[tuple[str, str, str], dict] = {}
     for row in result.data:
+        # 'model' is NOT NULL in the schema; skip malformed rows defensively.
+        if not row.get("model") or not row.get("bucket_hour"):
+            continue
         key = (row["model"], row.get("api_key_label") or "", _norm_bucket_hour(row["bucket_hour"]))
         snapshot[key] = {
             "feature_tag": row.get("feature_tag"),

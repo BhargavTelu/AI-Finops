@@ -258,3 +258,110 @@ class TestUnhandledEvent:
         assert resp.json() == {"received": True}
         db.upsert.assert_not_called()
         db.insert.assert_not_called()
+
+
+# ── TC-WH-21: Unhandled event logs at DEBUG ───────────────────────────────────
+
+class TestUnhandledEventLogging:
+    """TC-WH-21 — Clerk webhook logs clerk_webhook_unhandled_event at DEBUG for unknown events."""
+
+    def test_unhandled_event_logs_debug_message(self) -> None:
+        """TC-WH-21 — Unhandled event type: 200 returned, debug log emitted."""
+        db = MagicMock()
+        db.table.return_value = db
+
+        with (
+            patch("api.routers.webhooks._service_db", return_value=db),
+            patch("api.routers.webhooks.log") as mock_log,
+        ):
+            resp = _post_webhook({"type": "user.updated", "data": {}})
+
+        assert resp.status_code == 200
+        assert resp.json() == {"received": True}
+        mock_log.debug.assert_called_once_with(
+            "clerk_webhook_unhandled_event",
+            event_type="user.updated",
+        )
+
+
+# ── TC-WH-22: _write_clerk_metadata httpx failure is non-fatal ───────────────
+
+class TestWriteClerkMetadataHttpxFailure:
+    """TC-WH-22 — httpx.ConnectError in _write_clerk_metadata is caught; webhook still returns 200."""
+
+    def test_httpx_connect_error_is_non_fatal(self) -> None:
+        """TC-WH-22 — ConnectError logged as warning, webhook handler returns 200."""
+        import httpx
+
+        db = MagicMock()
+        db.table.return_value = db
+        db.upsert.return_value = db
+        db.execute.return_value = MagicMock(
+            data=[{"id": "aaaaaaaa-0000-0000-0000-000000000001"}]
+        )
+
+        payload = {
+            "type": "user.created",
+            "data": {
+                "id": "user_clerk_999",
+                "primary_email_address_id": "email_1",
+                "email_addresses": [{"id": "email_1", "email_address": "fail@example.com"}],
+                "first_name": "Fail",
+                "last_name": "Test",
+            },
+        }
+
+        with (
+            patch("api.routers.webhooks._service_db", return_value=db),
+            patch(
+                "api.routers.webhooks.httpx.AsyncClient",
+                side_effect=httpx.ConnectError("Connection refused"),
+            ),
+        ):
+            resp = _post_webhook(payload)
+
+        # Webhook must return 200 even though metadata write failed
+        assert resp.status_code == 200
+        assert resp.json() == {"received": True}
+
+
+# ── TC-WH-24: Membership race condition — PostgREST error dict returns 500 ────
+
+class TestMembershipErrorDictGuard:
+    """TC-WH-24 — PostgREST error dict ({"code": "PGRST116"}) triggers 500 for Svix retry."""
+
+    def _make_db_with_error_dict(self) -> MagicMock:
+        """
+        Simulate .single().execute() returning a PostgREST error dict (no "id" key)
+        instead of a proper row dict. This is the edge case that BUG-02 documented.
+        The guard at webhooks.py line 243 checks both isinstance and "id" in data.
+        """
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.eq.return_value = db
+        db.upsert.return_value = db
+        db.single.return_value = db
+        # First .execute() for users.single() returns a PostgREST error dict (no "id")
+        db.execute.return_value = MagicMock(data={"code": "PGRST116", "message": "No rows found"})
+        return db
+
+    def _membership_payload(self) -> dict:
+        return {
+            "type": "organizationMembership.created",
+            "data": {
+                "organization": {"id": "org_clerk_err"},
+                "public_user_data": {"user_id": "user_clerk_err"},
+                "role": "org:member",
+            },
+        }
+
+    def test_pgrst116_error_dict_returns_500(self) -> None:
+        """TC-WH-24 — PostgREST error dict lacking "id" key causes 500 (triggers Svix retry)."""
+        db = self._make_db_with_error_dict()
+        with patch("api.routers.webhooks._service_db", return_value=db):
+            resp = _post_webhook(self._membership_payload())
+        assert resp.status_code == 500, (
+            f"Expected 500 for PostgREST error dict, got {resp.status_code}. "
+            "The 'id' not in data guard must detect PGRST116 error dicts and trigger Svix retry."
+        )

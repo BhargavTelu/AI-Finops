@@ -5,8 +5,14 @@ Matches usage event api_key_labels against org tag rules and returns tag assignm
 Rule priority: lower number = higher priority. First match per tag type wins.
 """
 
+import concurrent.futures
 import re
 from dataclasses import dataclass
+
+# Shared thread pool for regex evaluation; bounded to limit resource usage.
+# Regex patterns with catastrophic backtracking are cancelled after this timeout.
+_REGEX_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="re_match")
+_REGEX_TIMEOUT_SECS = 1.0
 
 
 @dataclass(frozen=True)
@@ -62,7 +68,12 @@ def _matches(rule: CompiledRule, label: str) -> bool:
         return rule.match_pattern in label
     if rule.match_type == "regex":
         try:
-            return bool(re.search(rule.match_pattern, label))
+            future = _REGEX_EXECUTOR.submit(re.search, rule.match_pattern, label)
+            try:
+                return bool(future.result(timeout=_REGEX_TIMEOUT_SECS))
+            except concurrent.futures.TimeoutError:
+                # Pattern is catastrophically backtracking — treat as non-match.
+                return False
         except re.error:
             return False
     return False

@@ -346,3 +346,53 @@ class TestSendSlackDigest:
 
         # After max_retries=2, Celery eager mode captures the exception without raising.
         assert result.failed()
+
+
+# ── TC-FAN-05: send_daily_digests fan-out ──────────────────────────────────────
+
+class TestSendDailyDigestsFanOut:
+    """TC-FAN-05 — send_daily_digests enqueues send_slack_digest once per connected org."""
+
+    def test_dispatches_once_per_slack_connected_org(self) -> None:
+        """
+        Mock DB to return 2 Slack-connected orgs.
+        send_daily_digests() must call send_slack_digest.delay() exactly twice.
+        """
+        rows = [
+            {"org_id": ORG_ID},
+            {"org_id": ORG_ID_2},
+        ]
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.execute.return_value = MagicMock(data=rows)
+
+        with (
+            patch("api.workers.notifications._get_supabase", return_value=db),
+            patch("api.workers.notifications.send_slack_digest") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            send_daily_digests()
+
+        assert mock_task.delay.call_count == 2, (
+            f"Expected send_slack_digest.delay called 2 times (once per org), "
+            f"got {mock_task.delay.call_count}"
+        )
+        called_org_ids = {call.args[0] for call in mock_task.delay.call_args_list}
+        assert called_org_ids == {ORG_ID, ORG_ID_2}
+
+    def test_no_slack_orgs_does_not_dispatch(self) -> None:
+        """No Slack-connected orgs → send_slack_digest.delay never called."""
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.execute.return_value = MagicMock(data=[])
+
+        with (
+            patch("api.workers.notifications._get_supabase", return_value=db),
+            patch("api.workers.notifications.send_slack_digest") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            send_daily_digests()
+
+        mock_task.delay.assert_not_called()

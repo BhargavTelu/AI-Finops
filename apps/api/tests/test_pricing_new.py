@@ -68,3 +68,59 @@ class TestPricingYaml:
             f"cached_per_mtok ({rates['cached_per_mtok']}) should be < "
             f"input_per_mtok ({rates['input_per_mtok']})"
         )
+
+
+# ── TC-PRI-10 + TC-PRI-11: pricing.yaml ↔ recommendations sync ───────────────
+
+class TestPricingYamlRecommendationsSync:
+    """
+    TC-PRI-10 / TC-PRI-11 (HIGH) — Enforce sync between pricing.yaml and the
+    hardcoded price maps in services/recommendations.py.
+
+    If pricing.yaml is updated but _INPUT_PRICE_PER_MTOK / _CACHE_SAVINGS_PER_MTOK
+    are not, these tests catch the drift (BUG-04 prevention).
+    """
+
+    def _yaml_prices(self) -> dict[str, dict]:
+        """Build {model: {input_per_mtok, cached_per_mtok}} from all providers in the YAML."""
+        data = _load_pricing()
+        prices: dict[str, dict] = {}
+        for provider_data in data["providers"].values():
+            for model, rates in provider_data["models"].items():
+                prices[model] = rates
+        return prices
+
+    def test_input_price_map_matches_yaml(self) -> None:  # TC-PRI-10
+        """TC-PRI-10 — _INPUT_PRICE_PER_MTOK values match input_per_mtok in pricing.yaml."""
+        from api.services.recommendations import _INPUT_PRICE_PER_MTOK
+
+        yaml_prices = self._yaml_prices()
+
+        for model, rec_price in _INPUT_PRICE_PER_MTOK.items():
+            assert model in yaml_prices, (
+                f"Model '{model}' is in _INPUT_PRICE_PER_MTOK but missing from pricing.yaml. "
+                "Add it to pricing.yaml or remove it from the recommendations map."
+            )
+            yaml_input = Decimal(str(yaml_prices[model]["input_per_mtok"]))
+            assert rec_price == yaml_input, (
+                f"_INPUT_PRICE_PER_MTOK['{model}'] = {rec_price} but pricing.yaml has "
+                f"input_per_mtok = {yaml_input}. Update both maps together (BUG-04)."
+            )
+
+    def test_cache_savings_map_matches_yaml(self) -> None:  # TC-PRI-11
+        """TC-PRI-11 — _CACHE_SAVINGS_PER_MTOK equals (input - cached) from pricing.yaml."""
+        from api.services.recommendations import _CACHE_SAVINGS_PER_MTOK
+
+        yaml_prices = self._yaml_prices()
+
+        for model, rec_savings in _CACHE_SAVINGS_PER_MTOK.items():
+            assert model in yaml_prices, (
+                f"Model '{model}' is in _CACHE_SAVINGS_PER_MTOK but missing from pricing.yaml."
+            )
+            rates = yaml_prices[model]
+            yaml_savings = Decimal(str(rates["input_per_mtok"])) - Decimal(str(rates["cached_per_mtok"]))
+            assert rec_savings == yaml_savings, (
+                f"_CACHE_SAVINGS_PER_MTOK['{model}'] = {rec_savings} but "
+                f"pricing.yaml implies {yaml_savings} (input - cached). "
+                "Update both maps together (BUG-04)."
+            )

@@ -735,3 +735,36 @@ class TestWorkerInsertionAndAggregation:
 
         # Only one insert despite two identical recs
         assert db.insert.call_count == 1
+
+
+# ── TC-REC-20: input_compression type not yet implemented ─────────────────────
+
+class TestInputCompressionNotImplemented:
+    """
+    TC-REC-20 — FR-19 spec gap tracker: input_compression recommendation type
+    is NOT returned by generate_recommendations (not yet implemented).
+
+    When implemented: update this test to assert input_compression IS returned
+    when avg_tokens > 2000 for an eligible model.
+    """
+
+    def test_input_compression_type_not_returned(self) -> None:
+        """TC-REC-20 — generate_recommendations never returns type='input_compression'."""
+        # Stats that would trigger input_compression if it were implemented:
+        # avg_tokens = 3_000_000 / 500 = 6000 > 2000 threshold, high cost
+        heavy_stats = [
+            ModelStats(
+                provider="anthropic",
+                model="claude-opus-4-5",
+                feature_tag=None,
+                total_cost_usd=Decimal("300.00"),
+                total_requests=500,
+                total_tokens=3_000_000,
+            )
+        ]
+        recs = generate_recommendations(heavy_stats)
+        types_returned = {r.type for r in recs}
+        assert "input_compression" not in types_returned, (
+            "input_compression rule was unexpectedly implemented. "
+            "Update this test to assert it IS returned (see FR-19, BUG-08)."
+        )

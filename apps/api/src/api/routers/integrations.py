@@ -190,4 +190,4 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
 @router.post("/{integration_id}/test")
 async def test_integration(integration_id: str, org: OrgDep) -> dict:
     """Revalidate the stored key and trigger a fresh backfill job."""
-    raise NotImplementedError
+    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")

@@ -321,3 +321,91 @@ class TestInputValidation:
             },
         )
         assert resp.status_code == 422
+
+
+# ── TC-SEC-09: GET /anomalies — org isolation (list) ──────────────────────────
+
+class TestOrgIsolationAnomaliesList:
+    """TC-SEC-09 (CRITICAL) — Org B cannot see Org A's anomalies via GET /anomalies."""
+
+    def test_org_b_sees_empty_anomalies_list(self) -> None:
+        """TC-SEC-09 — DB filtered by Org B's org_id returns empty; 200 [] returned."""
+        # Switch to Org B context for this test
+        app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
+        try:
+            # DB mock returns empty (Org B has no anomalies, and org_id filter prevents
+            # leaking Org A's anomaly IDs)
+            db = _mock_db([])
+            with patch("api.routers.anomalies._get_supabase", return_value=db):
+                resp = client.get("/api/v1/anomalies")
+        finally:
+            app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+
+        assert resp.status_code == 200
+        assert resp.json() == [], (
+            "Org B must receive an empty list — not Org A's anomalies."
+        )
+
+
+# ── TC-SEC-10: GET /recommendations — org isolation (list) ────────────────────
+
+class TestOrgIsolationRecommendationsList:
+    """TC-SEC-10 (CRITICAL) — Org B cannot see Org A's recommendations."""
+
+    def test_org_b_sees_empty_recommendations_list(self) -> None:
+        """TC-SEC-10 — DB filtered by Org B's org_id returns empty; 200 [] returned."""
+        app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
+        try:
+            db = _mock_db([])
+            with patch("api.routers.recommendations._get_supabase", return_value=db):
+                resp = client.get("/api/v1/recommendations")
+        finally:
+            app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+
+        assert resp.status_code == 200
+        assert resp.json() == [], (
+            "Org B must receive an empty list — not Org A's recommendations."
+        )
+
+
+# ── TC-SEC-11: GET /usage/summary — org isolation ─────────────────────────────
+
+class TestOrgIsolationUsageSummary:
+    """TC-SEC-11 (HIGH) — Org B sees zero spend, not Org A's data."""
+
+    def test_org_b_sees_zero_usage_summary(self) -> None:
+        """TC-SEC-11 — Org B's usage/summary returns zeros when DB filtered by Org B's org_id."""
+        app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
+        try:
+            db = _mock_db([])  # no rows for Org B
+            with patch("api.routers.usage._get_supabase", return_value=db):
+                resp = client.get("/api/v1/usage/summary?range=30d")
+        finally:
+            app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert float(data["total_cost_usd"]) == 0.0, (
+            "Org B must see zero total cost, not Org A's spend data."
+        )
+
+
+# ── TC-SEC-12: GET /slack/status — org isolation ──────────────────────────────
+
+class TestOrgIsolationSlackStatus:
+    """TC-SEC-12 (HIGH) — Org B sees {connected: false}, not Org A's Slack workspace_id."""
+
+    def test_org_b_sees_slack_disconnected(self) -> None:
+        """TC-SEC-12 — DB filtered by Org B's org_id returns empty; {connected: false}."""
+        app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
+        try:
+            db = _mock_db([])  # Org B has no Slack integration
+            with patch("api.routers.slack._get_supabase", return_value=db):
+                resp = client.get("/api/v1/slack/status")
+        finally:
+            app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+
+        assert resp.status_code == 200
+        assert resp.json()["connected"] is False, (
+            "Org B must see connected=false — not Org A's Slack workspace_id."
+        )

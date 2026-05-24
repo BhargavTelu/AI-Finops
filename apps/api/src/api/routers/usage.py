@@ -333,13 +333,13 @@ async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
 @router.get("/forecast")
 async def get_forecast(org: OrgDep) -> ForecastResult:
     """Month-end spend forecast via linear regression on daily_cost_summaries."""
-    raise NotImplementedError
+    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
 
 
 @router.get("/export.csv")
 async def export_csv(org: OrgDep) -> StreamingResponse:
     """Stream a CSV export of the Cost Explorer result set."""
-    raise NotImplementedError
+    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
 
 
 # ── Usage event admin endpoints ────────────────────────────────────────────────

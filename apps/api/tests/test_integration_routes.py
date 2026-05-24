@@ -208,3 +208,7 @@ class TestDeleteIntegration:
         assert resp.status_code == 204
         mock_agg.delay.assert_called_once()
         assert mock_agg.delay.call_args[0][0] == ORG_ID
+
+
+# TC-INT-13 note: duplicate display_name returning 409 is already covered by
+# TestCreateIntegration.test_duplicate_name_returns_409 (TC-INT-09) above.

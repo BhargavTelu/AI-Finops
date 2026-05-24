@@ -1,0 +1,153 @@
+"""
+Stub route regression tests — Section A and TC-WH-20.
+
+These routes are not yet implemented (M4) and return 501 Not Implemented.
+BUG-06 / BUG-07 fixed: NotImplementedError → HTTPException(501) so the
+frontend can handle the status code gracefully instead of receiving a generic 500.
+
+When a route is implemented, update the assertion from 501 → the correct code.
+
+TC-STUB-01  POST /integrations/:id/test
+TC-STUB-02  GET  /usage/forecast
+TC-STUB-03  GET  /usage/export.csv
+TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
+TC-STUB-05  POST /webhooks/stripe
+TC-STUB-06  GET/GET/POST /reports, /reports/:id/download, /reports/generate
+TC-WH-20    POST /webhooks/stripe — duplicate stub behavior check
+"""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+from fastapi.testclient import TestClient
+
+from api.deps import OrgContext, _require_org
+from api.main import app
+
+ORG_ID = "00000000-0000-0000-0000-000000000099"
+
+app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_stub", org_id=ORG_ID)
+
+client = TestClient(app, raise_server_exceptions=False)
+
+
+# ── TC-STUB-01: POST /integrations/:id/test ────────────────────────────────────
+
+class TestIntegrationTestStub:
+    """TC-STUB-01 — POST /integrations/:id/test returns 501 Not Implemented."""
+
+    def test_stub_returns_500(self) -> None:
+        resp = client.post("/api/v1/integrations/some-id/test")
+        assert resp.status_code == 501, (
+            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
+            "When M4 implements this route: assert 200 with {\"status\": \"ok\"}."
+        )
+
+
+# ── TC-STUB-02: GET /usage/forecast ───────────────────────────────────────────
+
+class TestUsageForecastStub:
+    """TC-STUB-02 — GET /usage/forecast returns 501 Not Implemented."""
+
+    def test_stub_returns_500(self) -> None:
+        resp = client.get("/api/v1/usage/forecast")
+        assert resp.status_code == 501, (
+            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
+            "When M4 implements (FR-24): assert 200 with ForecastResult schema."
+        )
+
+
+# ── TC-STUB-03: GET /usage/export.csv ─────────────────────────────────────────
+
+class TestUsageExportCsvStub:
+    """TC-STUB-03 — GET /usage/export.csv returns 501 Not Implemented."""
+
+    def test_stub_returns_500(self) -> None:
+        resp = client.get("/api/v1/usage/export.csv")
+        assert resp.status_code == 501, (
+            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
+            "When M4 implements (FR-23): assert 200 with Content-Type: text/csv."
+        )
+
+
+# ── TC-STUB-04: Billing routes × 3 ───────────────────────────────────────────
+
+class TestBillingStubs:
+    """
+    TC-STUB-04 — GET /billing, POST /billing/checkout, GET /billing/portal.
+    All raise NotImplementedError → 500. Critical M4 monetization gate.
+    """
+
+    def test_get_billing_returns_500(self) -> None:
+        resp = client.get("/api/v1/billing")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements (FR-21): assert 200 with plan/status."
+        )
+
+    def test_post_billing_checkout_returns_500(self) -> None:
+        resp = client.post("/api/v1/billing/checkout")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements: assert 200 with Stripe redirect URL."
+        )
+
+    def test_get_billing_portal_returns_500(self) -> None:
+        resp = client.get("/api/v1/billing/portal")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements: assert 200 with portal URL."
+        )
+
+
+# ── TC-STUB-05 + TC-WH-20: POST /webhooks/stripe ─────────────────────────────
+
+class TestStripeWebhookStub:
+    """
+    TC-STUB-05 / TC-WH-20 — POST /webhooks/stripe returns 501 Not Implemented.
+    CRITICAL: Stripe retries on non-2xx. A 500 causes indefinite retries.
+    When M4 implements: return 200 {"received": true} after valid signature.
+    An invalid stripe-signature must return 400.
+    """
+
+    def test_stripe_webhook_stub_returns_500(self) -> None:
+        resp = client.post(
+            "/api/webhooks/stripe",
+            headers={"stripe-signature": "t=123,v1=fakesig"},
+            content=b'{"type": "checkout.session.completed"}',
+        )
+        assert resp.status_code == 501, (
+            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
+            "CRITICAL: This stub must not reach production. "
+            "When M4 implements: assert 200 {\"received\": true} for valid sig."
+        )
+
+
+# ── TC-STUB-06: Reports routes × 3 ───────────────────────────────────────────
+
+class TestReportStubs:
+    """
+    TC-STUB-06 — GET /reports, GET /reports/:id/download, POST /reports/generate.
+    All raise NotImplementedError → 500.
+    """
+
+    def test_get_reports_returns_500(self) -> None:
+        resp = client.get("/api/v1/reports")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements (FR-22): assert 200 with list."
+        )
+
+    def test_get_report_download_returns_500(self) -> None:
+        resp = client.get("/api/v1/reports/some-id/download")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements: assert 302 or 200 with signed R2 URL."
+        )
+
+    def test_post_reports_generate_returns_500(self) -> None:
+        resp = client.post("/api/v1/reports/generate")
+        assert resp.status_code == 501, (
+            f"Expected 501, got {resp.status_code}. "
+            "When M4 implements: assert 202 accepted."
+        )

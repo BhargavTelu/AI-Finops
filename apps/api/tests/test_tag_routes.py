@@ -260,3 +260,84 @@ class TestPreviewTagRule:
             )
         assert resp.status_code == 200
         assert len(resp.json()) == 1
+
+
+# ── TC-TAG-10 to TC-TAG-14: PATCH /tags/:id and PATCH /tag-rules/:id ──────────
+
+class TestUpdateTag:
+    """TC-TAG-10 and TC-TAG-11 — PATCH /tags/:id."""
+
+    def test_patch_tag_success_returns_200(self) -> None:
+        """TC-TAG-10 — PATCH existing tag updates name and color."""
+        updated = _tag_row("tag-001", "feature", "new-name", "#ff0000")
+        db = _mock_db([updated])
+        with patch("api.routers.tags._get_supabase", return_value=db):
+            resp = client.patch(
+                "/api/v1/tags/tag-001",
+                json={"type": "feature", "name": "new-name", "color": "#ff0000"},
+            )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+        body = resp.json()
+        assert body["name"] == "new-name"
+        assert body["color"] == "#ff0000"
+
+    def test_patch_nonexistent_tag_returns_404(self) -> None:
+        """TC-TAG-11 — PATCH tag that doesn't exist → 404."""
+        db = _mock_db([])  # empty → not found
+        with patch("api.routers.tags._get_supabase", return_value=db):
+            resp = client.patch(
+                "/api/v1/tags/nonexistent",
+                json={"type": "feature", "name": "x"},
+            )
+        assert resp.status_code == 404
+
+
+class TestUpdateTagRule:
+    """TC-TAG-12, TC-TAG-13, TC-TAG-14 — PATCH /tag-rules/:id."""
+
+    def test_patch_tag_rule_success_returns_200(self) -> None:
+        """TC-TAG-12 — PATCH existing tag rule updates match_pattern and priority."""
+        updated = _rule_row("rule-001", "tag-001", "regex", r"^api-", 75)
+        db = _mock_db([updated])
+        with patch("api.routers.tags._get_supabase", return_value=db):
+            resp = client.patch(
+                "/api/v1/tag-rules/rule-001",
+                json={
+                    "tag_id": "tag-001",
+                    "match_type": "regex",
+                    "match_pattern": r"^api-",
+                    "priority": 75,
+                },
+            )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
+        body = resp.json()
+        assert body["match_pattern"] == r"^api-"
+        assert body["priority"] == 75
+
+    def test_patch_nonexistent_tag_rule_returns_404(self) -> None:
+        """TC-TAG-13 — PATCH tag rule that doesn't exist → 404."""
+        db = _mock_db([])
+        with patch("api.routers.tags._get_supabase", return_value=db):
+            resp = client.patch(
+                "/api/v1/tag-rules/nonexistent",
+                json={"tag_id": "t1", "match_type": "exact", "match_pattern": "x"},
+            )
+        assert resp.status_code == 404
+
+    def test_patch_tag_rule_cross_org_returns_404(self) -> None:
+        """
+        TC-TAG-14 — Org B attempts to PATCH a tag rule belonging to Org A.
+        The DB query filters by org_id so returns empty → 404.
+        No info leak: 404 not 403.
+        """
+        # The dependency override is Org A's ID (ORG_ID), so the DB filter
+        # would include org_id=ORG_ID. Mock returns empty (rule belongs to Org B).
+        db = _mock_db([])
+        with patch("api.routers.tags._get_supabase", return_value=db):
+            resp = client.patch(
+                "/api/v1/tag-rules/rule-belongs-to-other-org",
+                json={"tag_id": "t1", "match_type": "exact", "match_pattern": "x"},
+            )
+        assert resp.status_code == 404, (
+            f"Expected 404 (no info leak), got {resp.status_code}"
+        )

@@ -197,3 +197,162 @@ class TestDetectAllOrgs:
             detect_all_orgs()
 
         mock_task.delay.assert_not_called()
+
+
+# ── TC-ANO-20: detect_org context field population ───────────────────────────
+
+class TestDetectOrgContextField:
+    """TC-ANO-20 — detect_org inserts anomaly row with populated context dict."""
+
+    def _make_history_rows(self, org_id: str) -> list[dict]:
+        """Generate 15 days of baseline ($10/day) + 1 day spike ($100)."""
+        from datetime import date, timedelta, timezone
+        from decimal import Decimal
+        today = __import__("datetime").datetime.now(timezone.utc).date()
+        rows = []
+        for i in range(15, 0, -1):
+            day = (today - timedelta(days=i)).isoformat()
+            cost = "100.00" if i == 1 else "10.00"  # spike on most recent day
+            rows.append({
+                "day": day,
+                "model": "gpt-4o",
+                "feature_tag": "chat",
+                "team_tag": "ml",
+                "customer_tag": "",
+                "total_cost_usd": cost,
+            })
+        return rows
+
+    def test_inserted_anomaly_has_context_with_tags(self) -> None:
+        """
+        TC-ANO-20 — context dict must contain model, feature_tag, and team_tag
+        so the anomaly explainer can generate specific narratives.
+        """
+        from unittest.mock import MagicMock, patch
+
+        org_id = "00000000-0000-0000-0000-000000000001"
+        history_rows = self._make_history_rows(org_id)
+
+        inserted_rows: list[dict] = []
+
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.eq.return_value = db
+        db.gte.return_value = db
+        db.lt.return_value = db
+        db.insert.return_value = db
+        db.order.return_value = db
+        db.limit.return_value = db
+
+        call_count = [0]
+
+        def execute_side():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return MagicMock(data=history_rows)
+            if call_count[0] == 2:
+                return MagicMock(data=[])  # no existing anomalies today
+            return MagicMock(data=[])
+
+        db.execute.side_effect = execute_side
+
+        def capture_insert(row):
+            inserted_rows.append(row)
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.insert.side_effect = capture_insert
+
+        with (
+            patch("api.workers.anomaly_detection._get_supabase", return_value=db),
+            patch("api.workers.anomaly_detection.send_anomaly_alert") as mock_alert,
+            patch("api.workers.anomaly_detection.explain_anomaly") as mock_explain,
+        ):
+            mock_alert.delay = MagicMock()
+            mock_explain.delay = MagicMock()
+            from api.workers.anomaly_detection import detect_org
+            detect_org(org_id)
+
+        assert len(inserted_rows) >= 1, "Expected at least one anomaly to be inserted"
+        context = inserted_rows[0].get("context", {})
+        assert context.get("model") == "gpt-4o", f"context.model missing, got {context}"
+        assert context.get("feature_tag") == "chat", f"context.feature_tag missing, got {context}"
+        assert context.get("team_tag") == "ml", f"context.team_tag missing, got {context}"
+
+
+# ── TC-ANO-21: detect_org scope_value field ──────────────────────────────────
+
+class TestDetectOrgScopeValue:
+    """TC-ANO-21 — detect_org sets scope_kind='model' and scope_value=model name."""
+
+    def test_inserted_anomaly_has_correct_scope_fields(self) -> None:
+        """
+        TC-ANO-21 — anomaly row must have scope_kind='model' and scope_value='gpt-4o'.
+        These fields drive the GET /anomalies filter queries.
+        """
+        from datetime import date, timedelta, timezone
+        from unittest.mock import MagicMock, patch
+
+        org_id = "00000000-0000-0000-0000-000000000002"
+        today = __import__("datetime").datetime.now(timezone.utc).date()
+        rows = []
+        for i in range(15, 0, -1):
+            day = (today - timedelta(days=i)).isoformat()
+            cost = "80.00" if i == 1 else "5.00"
+            rows.append({
+                "day": day,
+                "model": "gpt-4o",
+                "feature_tag": "",
+                "team_tag": "",
+                "customer_tag": "",
+                "total_cost_usd": cost,
+            })
+
+        inserted_rows: list[dict] = []
+
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.eq.return_value = db
+        db.gte.return_value = db
+        db.lt.return_value = db
+        db.insert.return_value = db
+        db.order.return_value = db
+        db.limit.return_value = db
+
+        call_count = [0]
+
+        def execute_side():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return MagicMock(data=rows)
+            if call_count[0] == 2:
+                return MagicMock(data=[])
+            return MagicMock(data=[])
+
+        db.execute.side_effect = execute_side
+
+        def capture_insert(row):
+            inserted_rows.append(row)
+            m = MagicMock()
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.insert.side_effect = capture_insert
+
+        with (
+            patch("api.workers.anomaly_detection._get_supabase", return_value=db),
+            patch("api.workers.anomaly_detection.send_anomaly_alert") as mock_alert,
+            patch("api.workers.anomaly_detection.explain_anomaly") as mock_explain,
+        ):
+            mock_alert.delay = MagicMock()
+            mock_explain.delay = MagicMock()
+            from api.workers.anomaly_detection import detect_org
+            detect_org(org_id)
+
+        assert len(inserted_rows) >= 1, "Expected at least one anomaly to be inserted"
+        row = inserted_rows[0]
+        assert row.get("scope_kind") == "model", f"Expected scope_kind='model', got {row.get('scope_kind')}"
+        assert row.get("scope_value") == "gpt-4o", f"Expected scope_value='gpt-4o', got {row.get('scope_value')}"

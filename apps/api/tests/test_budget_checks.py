@@ -251,3 +251,55 @@ class TestCheckOrg:
         """Budget with alert_at_pct=60 fires at 60% spend."""
         _, mock_alert = self._run(_budget_row(monthly_limit=1000.0, alert_at_pct=60), Decimal("600"))
         mock_alert.delay.assert_called_once_with(BUDGET_ID, 60, ORG_ID)
+
+
+# ── TC-FAN-03 & TC-FAN-04: check_all_orgs fan-out ────────────────────────────
+
+class TestCheckAllOrgsFanOut:
+    """TC-FAN-03 and TC-FAN-04 — check_all_orgs dispatches to unique org_ids."""
+
+    def test_dispatches_once_per_unique_org(self) -> None:
+        """TC-FAN-03 — budgets from 3 distinct org_ids → check_org.delay called 3 times."""
+        from api.workers.budget_checks import check_all_orgs
+
+        rows = [
+            {"org_id": "org-111"},
+            {"org_id": "org-222"},
+            {"org_id": "org-333"},
+        ]
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.execute.return_value = MagicMock(data=rows)
+
+        with (
+            patch("api.workers.budget_checks._get_supabase", return_value=db),
+            patch("api.workers.budget_checks.check_org") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            check_all_orgs()
+
+        assert mock_task.delay.call_count == 3, (
+            f"Expected check_org.delay called 3 times (one per unique org), "
+            f"got {mock_task.delay.call_count}"
+        )
+        called_ids = {call.args[0] for call in mock_task.delay.call_args_list}
+        assert called_ids == {"org-111", "org-222", "org-333"}
+
+    def test_no_budgets_does_not_dispatch(self) -> None:
+        """TC-FAN-04 — no budgets in DB → check_org.delay never called."""
+        from api.workers.budget_checks import check_all_orgs
+
+        db = MagicMock()
+        db.table.return_value = db
+        db.select.return_value = db
+        db.execute.return_value = MagicMock(data=[])
+
+        with (
+            patch("api.workers.budget_checks._get_supabase", return_value=db),
+            patch("api.workers.budget_checks.check_org") as mock_task,
+        ):
+            mock_task.delay = MagicMock()
+            check_all_orgs()
+
+        mock_task.delay.assert_not_called()
