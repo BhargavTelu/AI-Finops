@@ -1,4 +1,4 @@
-# Project Spec — AI FinOps Platform
+# Project Spec — SpendOps AI
 
 ## What
 

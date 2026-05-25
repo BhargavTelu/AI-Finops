@@ -1,5 +1,5 @@
 {
-  "name": "@ai-finops/web",
+  "name": "@spendops-ai/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "echo 'No frontend tests in MVP — visual review instead' && exit 0"
   },
   "dependencies": {
-    "@ai-finops/types": "workspace:*",
+    "@spendops-ai/types": "workspace:*",
     "@clerk/nextjs": "^6.0.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.0",

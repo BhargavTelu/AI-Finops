@@ -1,4 +1,4 @@
-# Test Plan — AI FinOps Platform (M0–M3 Pre-M4 Audit)
+# Test Plan — SpendOps AI (M0–M3 Pre-M4 Audit)
 
 **Prepared:** 2026-05-24
 **Scope:** Full audit of M0 through M3. This document covers the complete test surface:

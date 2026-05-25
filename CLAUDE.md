@@ -4,7 +4,7 @@ Read this first. Then read the doc linked under §Documentation that's relevant 
 
 ## Project
 
-**AI FinOps Platform** — SaaS that gives AI startups per-feature/team/customer cost attribution, anomaly alerts, and savings recommendations for LLM API spend (OpenAI, Anthropic, Gemini).
+**SpendOps AI** — SaaS that gives AI startups per-feature/team/customer cost attribution, anomaly alerts, and savings recommendations for LLM API spend (OpenAI, Anthropic, Gemini).
 
 **ICP:** CTO at AI-native SaaS, $1M–$50M ARR, $5K–$80K/mo LLM spend.
 **Wedge:** Finance-first (CFO PDF, per-customer attribution) at mid-market pricing ($299–$1,500/mo).

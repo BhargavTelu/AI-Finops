@@ -1,7 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, BarChart3, Settings, AlertTriangle, Lightbulb, Wallet, List } from "lucide-react";
 import { motion } from "framer-motion";
 import type { Route } from "next";
@@ -35,6 +36,17 @@ const NAV_SECTIONS = [
 
 export function NavLinks() {
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Pre-warm the RSC payload cache for every route on mount so loading
+  // skeletons appear instantly instead of after a network delay.
+  useEffect(() => {
+    for (const section of NAV_SECTIONS) {
+      for (const { href } of section.links) {
+        router.prefetch(href);
+      }
+    }
+  }, [router]);
 
   return (
     <nav className="flex flex-col gap-4">

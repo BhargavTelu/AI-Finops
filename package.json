@@ -1,14 +1,14 @@
 {
-  "name": "ai-finops",
+  "name": "spendops-ai",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@9.1.0",
   "scripts": {
-    "dev": "pnpm --filter @ai-finops/web dev",
-    "build": "pnpm --filter @ai-finops/web build",
-    "lint": "pnpm --filter @ai-finops/web lint",
-    "typecheck": "pnpm --filter @ai-finops/web typecheck",
-    "test": "pnpm --filter @ai-finops/web test"
+    "dev": "pnpm --filter @spendops-ai/web dev",
+    "build": "pnpm --filter @spendops-ai/web build",
+    "lint": "pnpm --filter @spendops-ai/web lint",
+    "typecheck": "pnpm --filter @spendops-ai/web typecheck",
+    "test": "pnpm --filter @spendops-ai/web test"
   },
   "devDependencies": {}
 }

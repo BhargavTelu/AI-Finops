@@ -7,7 +7,7 @@ packages = ["src/api"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 [project]
-name = "ai-finops-api"
+name = "spendops-ai-api"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,4 +1,4 @@
-# AI FinOps Platform — Comprehensive Test Plan (M0–M3 Audit)
+# SpendOps AI — Comprehensive Test Plan (M0–M3 Audit)
 **Date:** 2026-05-21 | **Auditor:** QA / Senior Engineer | **Baseline:** 221 tests, 74% coverage
 
 ---

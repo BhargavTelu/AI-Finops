@@ -23,7 +23,7 @@ export default async function DashboardLayout({
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
             <Zap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
           </div>
-          <span className="text-sm font-semibold tracking-tight">AI FinOps</span>
+          <span className="text-sm font-semibold tracking-tight">SpendOps AI</span>
         </div>
 
         {/* Nav */}

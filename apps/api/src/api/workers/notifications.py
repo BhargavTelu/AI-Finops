@@ -132,7 +132,7 @@ def _warning_email_html(scope_label: str, limit_usd: Decimal, spend_usd: Decimal
     </tr>
   </table>
   <p style="margin:24px 0 0;font-size:13px;color:#888">
-    Review your spend in the AI FinOps dashboard. If this is unexpected, check for anomalies.
+    Review your spend in the SpendOps AI dashboard. If this is unexpected, check for anomalies.
   </p>
 </div>
 """
@@ -167,7 +167,7 @@ def _exceeded_email_html(scope_label: str, limit_usd: Decimal, spend_usd: Decima
     </tr>
   </table>
   <p style="margin:24px 0 0;font-size:13px;color:#888">
-    Review your spend in the AI FinOps dashboard and consider increasing your limit or
+    Review your spend in the SpendOps AI dashboard and consider increasing your limit or
     reducing usage.
   </p>
 </div>

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the AI FinOps Platform.
+All notable changes to SpendOps AI.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 

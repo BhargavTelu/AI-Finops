@@ -1,4 +1,4 @@
-# Implementation Guide — AI FinOps Platform
+# Implementation Guide — SpendOps AI
 
 Companion to `project_spec.md` (what + scope) and `architecture.md` (how).
 This file is the **build checklist**: per milestone, the tasks to complete and the

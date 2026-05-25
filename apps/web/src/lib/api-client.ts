@@ -13,9 +13,11 @@ async function request<T>(
   token: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { body, ...init } = options;
+  const { body, method, ...init } = options;
+  const isGet = !method || method === "GET";
 
   const response = await fetch(`${API_URL}/api/v1${path}`, {
+    method,
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -23,6 +25,11 @@ async function request<T>(
       ...init.headers,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    // Clerk auth() marks routes as dynamic, which makes Next.js default every
+    // fetch to no-store. Explicitly opt GET responses into the Data Cache so
+    // re-visiting a tab skips the FastAPI + Supabase round-trip for 2 minutes.
+    // Mutations stay uncached to guarantee fresh data after writes.
+    ...(isGet ? { next: { revalidate: 120 } } : { cache: "no-store" as const }),
   });
 
   if (!response.ok) {

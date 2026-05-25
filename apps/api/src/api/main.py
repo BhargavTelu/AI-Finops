@@ -35,7 +35,7 @@ def create_app() -> FastAPI:
         )
 
     app = FastAPI(
-        title="AI FinOps API",
+        title="SpendOps AI API",
         version="0.1.0",
         # Disable interactive docs in production — no dev tool exposure
         docs_url="/docs" if settings.env != "production" else None,

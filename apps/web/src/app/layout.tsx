@@ -8,7 +8,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI FinOps Platform",
+  title: "SpendOps AI",
   description:
     "LLM cost attribution, anomaly alerts, and savings recommendations for AI startups.",
 };

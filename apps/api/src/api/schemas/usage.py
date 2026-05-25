@@ -86,7 +86,7 @@ class UsageEventRead(BaseModel):
     team_tag: str | None
     customer_tag: str | None
     env_tag: str | None
-    cost_usd: str  # NUMERIC → string
+    cost_usd: Decimal  # PostgREST returns NUMERIC as float; Decimal accepts both
     request_count: int
     input_tokens: int
     output_tokens: int

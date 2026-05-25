@@ -1,4 +1,4 @@
-# Architecture — AI FinOps Platform
+# Architecture — SpendOps AI
 
 Companion to `project_spec.md`. How we build it.
 

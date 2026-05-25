@@ -6,7 +6,7 @@ from celery.schedules import crontab
 from api.config import settings
 
 celery_app = Celery(
-    "ai-finops",
+    "spendops-ai",
     broker=settings.redis_url,
     backend=settings.redis_url,
     include=[

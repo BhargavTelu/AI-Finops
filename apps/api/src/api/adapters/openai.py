@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Iterator
 
@@ -54,8 +54,19 @@ class OpenAIAdapter:
         Enriches with /v1/organization/usage/completions for token breakdown.
         bucket_hour is floored to the UTC hour of each bucket's start_time.
         """
-        start_ts = int(start.timestamp())
-        end_ts = int(end.timestamp())
+        # OpenAI costs API compares dates, not timestamps. A sub-day window
+        # where start and end fall on the same calendar date returns 400
+        # "end_date must come after start_date". Floor to day boundaries so
+        # we always request complete day buckets (delete-before-insert is idempotent).
+        start_day = start.replace(hour=0, minute=0, second=0, microsecond=0)
+        if start_day.tzinfo is None:
+            start_day = start_day.replace(tzinfo=timezone.utc)
+        end_day = (end + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        if end_day.tzinfo is None:
+            end_day = end_day.replace(tzinfo=timezone.utc)
+
+        start_ts = int(start_day.timestamp())
+        end_ts = int(end_day.timestamp())
 
         # Pass 1: build token lookup keyed by (start_time_unix, model)
         token_lookup: dict[tuple[int, str], dict[str, int]] = {}

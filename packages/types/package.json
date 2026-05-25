@@ -1,5 +1,5 @@
 {
-  "name": "@ai-finops/types",
+  "name": "@spendops-ai/types",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
