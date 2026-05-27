@@ -95,6 +95,8 @@ Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 - [Setup](docs/setup.md) — Clerk JWT template + Supabase JWT secret (completed for M0; re-read before deploying to a new environment)
 - [Changelog](docs/changelog.md) — Version history
 - [Project Status](docs/project_status.md) — Current milestone, what's done, what's next
+- [UI Redesign Brief](docs/ai_finops_ui_redesign_general_prompt.md) — Design philosophy, color/type/spacing system, per-page requirements
+- [UI Redesign Implementation Plan](docs/ui_redesign_implementation_plan.md) — Milestone roadmap, component specs, file change map for full UI overhaul
 - Update files in the `docs/` folder after major milestones and major additions to the project.
 - Use the `/update-docs-and-commit` slash command when making git commits.
 
