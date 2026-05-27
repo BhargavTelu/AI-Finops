@@ -59,8 +59,12 @@ export default async function DashboardLayout({
           />
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 overflow-auto scrollbar-thin p-6">{children}</main>
+        {/* Page content — max-w-7xl keeps wide monitors comfortable */}
+        <main className="flex-1 overflow-auto scrollbar-thin">
+          <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+            {children}
+          </div>
+        </main>
       </div>
     </div>
   );

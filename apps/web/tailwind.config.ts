@@ -45,22 +45,72 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // ── Semantic status colors ──────────────────────────────────────
+        // success: savings, positive trends, healthy/active status
         success: {
           DEFAULT: "hsl(var(--success))",
           foreground: "hsl(var(--success-foreground))",
+          subtle: "hsl(var(--success-subtle))",
         },
+        // warning: budget alerts, approaching limits, caution
         warning: {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
+          subtle: "hsl(var(--warning-subtle))",
+        },
+        // critical: overages, urgent anomalies (badge/alert semantic)
+        critical: {
+          DEFAULT: "hsl(var(--critical))",
+          foreground: "hsl(var(--critical-foreground))",
+          subtle: "hsl(var(--critical-subtle))",
+        },
+        // info: syncing, informational, neutral status
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+          subtle: "hsl(var(--info-subtle))",
         },
       },
+
+      // ── Typography ──────────────────────────────────────────────────
+      // Override mono stack with tabular numerics for financial data.
+      // Pair with the .text-mono utility for font-variant-numeric: tabular-nums.
+      fontFamily: {
+        mono: [
+          "ui-monospace",
+          "Cascadia Code",
+          "Source Code Pro",
+          "Menlo",
+          "Consolas",
+          "DejaVu Sans Mono",
+          "monospace",
+        ],
+      },
+
+      // ── Border radius ───────────────────────────────────────────────
+      // Based on --radius: 0.5rem (8px):
+      //   rounded-sm  = 4px  — badges, micro elements
+      //   rounded-md  = 6px  — form inputs
+      //   rounded-lg  = 8px  — buttons (base radius = var(--radius))
+      //   rounded-xl  = 12px — cards
+      //   rounded-2xl = 16px — avoid (too rounded for financial SaaS)
       borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 2px)",
+        lg: "var(--radius)",
         xl: "calc(var(--radius) + 4px)",
         "2xl": "calc(var(--radius) + 8px)",
       },
+
+      // ── Elevation ───────────────────────────────────────────────────
+      // Use shadow-card for default card depth, shadow-card-hover on hover.
+      // Both adapt to dark mode via CSS custom properties.
+      boxShadow: {
+        card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
+      },
+
+      // ── Keyframes ───────────────────────────────────────────────────
       keyframes: {
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(8px)" },
@@ -80,8 +130,8 @@ const config: Config = {
         },
       },
       animation: {
-        "fade-in": "fade-in 0.3s ease-out forwards",
-        "slide-in-right": "slide-in-from-right 0.25s ease-out forwards",
+        "fade-in": "fade-in 0.2s ease-out forwards",
+        "slide-in-right": "slide-in-from-right 0.2s ease-out forwards",
         "counter-up": "counter-up 0.4s ease-out forwards",
         shimmer: "shimmer 2s linear infinite",
       },

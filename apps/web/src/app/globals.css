@@ -4,57 +4,84 @@
 
 @layer base {
   :root {
-    /* Blue-primary fintech palette — light mode */
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    /* ── Core palette ─────────────────────────────────────────────── */
+    --background: 210 20% 98%;       /* near-white page surface */
+    --foreground: 222 47% 11%;       /* near-black primary text */
 
-    --card: 0 0% 100%;
+    --card: 0 0% 100%;               /* white card surface */
     --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Blue-600 primary */
+    /* Blue-600 — single primary action color (buttons, links, CTAs) */
     --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 214 32% 91%;
     --secondary-foreground: 222 47% 11%;
 
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 214 32% 91%;            /* secondary backgrounds, hover states */
+    --muted-foreground: 215 16% 47%; /* secondary text, labels */
 
     --accent: 214 32% 91%;
     --accent-foreground: 222 47% 11%;
 
+    /* Form error / destructive action color */
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 88%;
+    --border: 214 32% 88%;           /* subtle dividers, card outlines */
     --input: 214 32% 88%;
-    --ring: 221 83% 53%;
+    --ring: 221 83% 53%;             /* focus ring matches primary */
 
-    /* Semantic status colors */
-    --success: 142 71% 45%;
+    /* ── Semantic status colors ────────────────────────────────────── */
+
+    /* Success — savings, positive trends, healthy/active status */
+    --success: 142 71% 45%;          /* emerald-600 */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
+    --success-subtle: 142 76% 95%;   /* emerald-50: badge/alert backgrounds */
 
-    --radius: 0.625rem;
+    /* Warning — budget alerts, approaching limits, caution states */
+    --warning: 38 92% 50%;           /* amber-500 */
+    --warning-foreground: 222 47% 11%; /* dark text — amber is bright, needs contrast */
+    --warning-subtle: 48 100% 94%;   /* amber-50 */
+
+    /* Critical — overages, urgent alerts (badge/alert semantic) */
+    --critical: 0 84% 60%;           /* red-500, same family as destructive */
+    --critical-foreground: 0 0% 100%;
+    --critical-subtle: 0 86% 96%;    /* red-50 */
+
+    /* Info — syncing, loading, neutral informational state */
+    --info: 211 100% 50%;            /* sky-500 */
+    --info-foreground: 0 0% 100%;
+    --info-subtle: 211 100% 95%;     /* sky-50 */
+
+    /* ── Geometry ──────────────────────────────────────────────────── */
+    /* 8px base radius: buttons=rounded-lg(8px), inputs=rounded-md(6px), cards=rounded-xl(12px) */
+    --radius: 0.5rem;
+
+    /* ── Elevation ─────────────────────────────────────────────────── */
+    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+    --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.10), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+
+    /* ── Transitions ────────────────────────────────────────────────── */
+    --transition-fast: 150ms ease-in-out;   /* hover color shifts */
+    --transition-base: 200ms ease-in-out;   /* card/panel interactions */
   }
 
   .dark {
-    /* Deep navy dark mode — professional, low eyestrain */
+    /* Deep navy — professional, low eyestrain for long analysis sessions */
     --background: 222 47% 6%;
     --foreground: 210 40% 96%;
 
     --card: 222 47% 9%;
     --card-foreground: 210 40% 96%;
 
-    --popover: 222 47% 9%;
+    --popover: 222 47% 11%;
     --popover-foreground: 210 40% 96%;
 
-    /* Blue-500 primary in dark */
+    /* Blue-500 — slightly lighter for readability on dark backgrounds */
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 6%;
 
@@ -67,17 +94,34 @@
     --accent: 217 32% 17%;
     --accent-foreground: 210 40% 96%;
 
-    --destructive: 0 63% 50%;
+    --destructive: 0 63% 55%;
     --destructive-foreground: 210 40% 96%;
 
-    --border: 217 32% 17%;
-    --input: 217 32% 17%;
+    --border: 217 32% 22%;           /* slightly lighter than muted — keeps dividers visible */
+    --input: 217 32% 20%;
     --ring: 217 91% 60%;
 
-    --success: 142 71% 45%;
+    /* ── Semantic status colors (dark mode) ─────────────────────────── */
+
+    --success: 142 71% 50%;          /* brighter emerald for dark bg contrast */
     --success-foreground: 222 47% 6%;
+    --success-subtle: 142 71% 11%;   /* dark tinted emerald background */
+
     --warning: 38 92% 50%;
     --warning-foreground: 222 47% 6%;
+    --warning-subtle: 38 92% 11%;    /* dark tinted amber background */
+
+    --critical: 0 63% 55%;
+    --critical-foreground: 210 40% 96%;
+    --critical-subtle: 0 63% 12%;    /* dark tinted red background */
+
+    --info: 211 100% 65%;            /* lighter sky-blue for dark bg */
+    --info-foreground: 222 47% 6%;
+    --info-subtle: 211 100% 12%;     /* dark tinted blue background */
+
+    /* ── Elevation (dark mode — stronger opacity for visible depth) ── */
+    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.30), 0 1px 2px -1px rgba(0, 0, 0, 0.20);
+    --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.40), 0 2px 4px -2px rgba(0, 0, 0, 0.25);
   }
 }
 
@@ -93,8 +137,18 @@
   }
 }
 
-/* Scrollbar styling for sidebar + main */
 @layer utilities {
+  /*
+   * Monospace + tabular numerals — apply to all financial data values.
+   * Use on: $ amounts, token counts, API call counts, percentages in tables.
+   * Example: <span className="text-mono">$12,847.00</span>
+   */
+  .text-mono {
+    font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Thin scrollbar — sidebar, cost explorer table, overflow containers */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: hsl(var(--border)) transparent;

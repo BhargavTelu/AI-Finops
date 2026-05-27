@@ -65,7 +65,7 @@ export function NavLinks() {
                   className={cn(
                     "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors duration-150",
                     isActive
-                      ? "text-foreground"
+                      ? "font-medium text-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   )}
                 >

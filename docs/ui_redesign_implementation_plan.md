@@ -1,11 +1,113 @@
 # UI/UX Redesign Implementation Plan
 ## SpendOps AI — Analyst-Grade SaaS Platform
 
-**Document version:** 1.0
+**Document version:** 1.2
 **Based on brief:** `docs/ai_finops_ui_redesign_general_prompt.md`
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
+**Last updated:** 2026-05-27
+
+---
+
+## Implementation Status
+
+| Milestone | Status | Completed |
+|-----------|--------|-----------|
+| **M-DS** Design System Foundation | ✅ COMPLETE | 2026-05-27 |
+| **M-CL** Component Library | ✅ COMPLETE | 2026-05-27 |
+| **M-P1** Dashboard Redesign | ⏳ NOT STARTED | — |
+| **M-P2** Cost Explorer Redesign | ⏳ NOT STARTED | — |
+| **M-P3** API Key Management Redesign | ⏳ NOT STARTED | — |
+| **M-P4** Settings Redesign | ⏳ NOT STARTED | — |
+| **M-P5** Alerts & Anomalies Redesign | ⏳ NOT STARTED | — |
+| **M-P6** Recommendations Redesign | ⏳ NOT STARTED | — |
+| **M-P7** Budgets Redesign | ⏳ NOT STARTED | — |
+| **M-QA** Polish & QA Pass | ⏳ NOT STARTED | — |
+
+---
+
+## M-DS Completion Notes
+
+**Completed 2026-05-27. All tokens live in production build.**
+
+Changes shipped:
+- `apps/web/src/app/globals.css` — added `--info`, `--critical`, `--*-subtle` tokens for all status types; fixed dark mode `--border` visibility (`17%` → `22%` lightness); changed `--radius` from `0.625rem` to `0.5rem` (8px base); added `--shadow-card`, `--shadow-card-hover`, `--transition-fast`, `--transition-base` CSS custom properties; added `.text-mono` utility (monospace + tabular-nums)
+- `apps/web/tailwind.config.ts` — added `info`, `critical` color tokens with `.subtle` sub-keys; added `fontFamily.mono` stack override; added `boxShadow.card` and `boxShadow.card-hover` mapped to CSS custom properties; corrected border radius comments for 8px base
+
+Token reference (for page milestone work):
+- Financial values: `className="text-mono"` — monospace + tabular-nums
+- Success badges: `bg-success-subtle text-success`
+- Warning badges: `bg-warning-subtle text-warning`
+- Critical alerts: `bg-critical-subtle text-critical`
+- Info/syncing: `bg-info-subtle text-info`
+- Card shadow: `shadow-card` (resting), `shadow-card-hover` (hover)
+- Transitions: `transition-colors duration-150` (fast), `duration-200` (base)
+
+---
+
+## M-CL Completion Notes
+
+**Completed 2026-05-27. All shared components live in production build.**
+
+**shadcn components installed** (added to `src/components/ui/`):
+`badge` · `alert` · `tooltip` · `tabs` · `separator` · `toast` · `toaster` · `dropdown-menu` · `switch` · `textarea` · `progress` · `popover` · `avatar` · `calendar`
+
+Note: `calendar` was installed after the initial M-CL pass (missed in original). Used `react-day-picker` v10 — required fixing the generated `calendar.tsx` to use `month_grid` instead of deprecated `table` classname. All 14 shadcn components now present.
+
+**Existing components updated:**
+- `button.tsx` — base class changed to `rounded-lg` (8px); `transition-colors duration-150` explicit; `sm`/`lg` size variants corrected to `rounded-md`/`rounded-lg`
+- `dialog.tsx` — overlay changed to `bg-black/50 backdrop-blur-sm` (was `/80`); content changed to `max-w-md rounded-xl shadow-card` (was `max-w-lg rounded-lg shadow-lg`); close button uses `rounded-md` and `duration-150`; footer uses `gap-2` instead of `space-x-2`
+
+**New shared components built:**
+
+| File | Purpose |
+|------|---------|
+| `src/components/ui/status-badge.tsx` | Color + icon + text badge for 7 status types (active/inactive/error/syncing/warning/critical/info) |
+| `src/components/empty-state.tsx` | Centered empty state with icon, title, description, optional CTA button/link |
+| `src/components/error-state.tsx` | Error state with retry button; uses `bg-critical-subtle` icon container |
+| `src/components/page-header.tsx` | Consistent H1 + description + right-aligned actions slot for every page |
+| `src/components/confirm-dialog.tsx` | Reusable confirmation dialog for all destructive actions (delete/revoke/remove) |
+| `src/components/data-table-skeleton.tsx` | Table-shaped loading skeleton (configurable rows/columns) |
+
+**Layout changes:**
+- `nav-links.tsx` — active links now use `font-medium` for stronger visual distinction
+- `(dashboard)/layout.tsx` — main content wrapped in `max-w-7xl mx-auto px-6 py-8 lg:px-10` for comfortable wide-screen layout
+- `app/layout.tsx` — `<Toaster />` added to root so `useToast()` works globally on all pages
+
+**Usage patterns for page milestone work:**
+
+```tsx
+// Status badge
+import { StatusBadge } from "@/components/ui/status-badge"
+<StatusBadge status="active" />
+<StatusBadge status="error" label="Auth failed" />
+
+// Empty state
+import { EmptyState } from "@/components/empty-state"
+<EmptyState icon={KeyRound} title="No API keys" description="..." action={{ label: "Add key", href: "/settings/integrations" }} />
+
+// Error state
+import { ErrorState } from "@/components/error-state"
+<ErrorState description="Failed to load data." onRetry={() => refetch()} />
+
+// Page header
+import { PageHeader } from "@/components/page-header"
+<PageHeader title="Dashboard" description="LLM spend overview" actions={<Button>Export</Button>} />
+
+// Confirm dialog
+import { ConfirmDialog } from "@/components/confirm-dialog"
+<ConfirmDialog open={open} onClose={close} onConfirm={handleDelete} title="Delete budget" description="..." variant="destructive" confirmLabel="Delete" />
+
+// Table skeleton
+import { DataTableSkeleton } from "@/components/data-table-skeleton"
+if (isLoading) return <DataTableSkeleton rows={5} columns={6} />
+
+// Toast
+import { useToast } from "@/hooks/use-toast"
+const { toast } = useToast()
+toast({ title: "Saved", description: "Settings updated." })
+```
 
 ---
 
@@ -29,28 +131,21 @@
 
 ---
 
-## Current-State Snapshot (Pre-Redesign)
+## Current-State Snapshot
 
-### What exists
-- shadcn/ui base with 6 components: Button, Dialog, Input, Label, Select, Skeleton
-- CSS variable tokens (HSL-based), light + dark mode, fintech-blue primary
-- Framer Motion: PageMotion, StaggerGrid, StaggerItem, SlideIn helpers
-- Tremor AreaChart + BarChart for dashboard
-- Recharts for sparklines + provider donut
-- lucide-react icons throughout
-- TanStack Table in Cost Explorer
-- Inter font via `next/font/google`
+### Foundation (M-DS + M-CL complete as of 2026-05-27)
+- **19 shadcn/ui components** installed: Button, Dialog, Input, Label, Select, Skeleton + Badge, Alert, Tooltip, Tabs, Separator, Toast, Toaster, Dropdown Menu, Switch, Textarea, Progress, Popover, Avatar
+- **6 new shared components**: StatusBadge, EmptyState, ErrorState, PageHeader, ConfirmDialog, DataTableSkeleton
+- **Full design token system**: HSL CSS variables for all status types (success/warning/critical/info) with subtle tint variants; `--radius: 0.5rem`; `shadow-card`/`shadow-card-hover`; `.text-mono` utility
+- **Layout**: `max-w-7xl` content wrapper, responsive padding (`px-6 lg:px-10`), Toaster in root
+- Framer Motion helpers, Tremor + Recharts charts, lucide-react icons, TanStack Table — all unchanged
 
-### Known gaps vs design brief
-- Only 6 shadcn components — Badge, Alert, Tooltip, Tabs, Separator, Toast, Dropdown missing
-- No standardized empty state pattern or reusable component
-- No unified error state pattern
-- Loading state is per-page (not systemized)
-- Hover/focus states inconsistent across interactive elements
-- No confirmation dialog pattern for destructive actions
-- Table number alignment and monospace formatting not enforced
-- Responsive layout not fully verified below 1024px
-- Status color usage not fully consistent across pages
+### Remaining gaps (to be addressed in page milestones M-P1 through M-P7)
+- Page-level layouts not yet redesigned (dashboard, cost explorer, integrations, settings, etc.)
+- Table number alignment and `.text-mono` not yet applied to existing tables
+- Empty/error/loading states not yet wired into existing pages
+- PageHeader not yet used on any existing page
+- Responsive layout not verified below 1024px on any existing page
 
 ---
 
