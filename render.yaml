@@ -1,0 +1,115 @@
+services:
+  # ── FastAPI Web Service ──────────────────────────────────────────────────
+  - type: web
+    name: spendops-api
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install -e .
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT --workers 2
+    envVars:
+      - key: ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # Non-secret values committed here; secrets set in Render dashboard (sync: false)
+      - key: CORS_ORIGINS
+        value: '["https://dev.spendopsai.com"]'
+      - key: SLACK_REDIRECT_URI
+        value: https://dev.spendopsai.com/settings/slack/callback
+      - key: FROM_EMAIL
+        value: noreply@spendopsai.com
+      # Secrets — fill these in Render Dashboard → Environment after first deploy
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: CLERK_ISSUER
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # ── Celery Worker ────────────────────────────────────────────────────────
+  - type: worker
+    name: spendops-celery-worker
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install -e .
+    startCommand: celery -A api.workers.celery_app worker --loglevel=info --concurrency=4
+    envVars:
+      - key: ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_ISSUER
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        value: noreply@spendopsai.com
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+  # ── Celery Beat (scheduler) ──────────────────────────────────────────────
+  - type: worker
+    name: spendops-celery-beat
+    runtime: python
+    rootDir: apps/api
+    buildCommand: pip install -e .
+    startCommand: celery -A api.workers.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    envVars:
+      - key: ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false

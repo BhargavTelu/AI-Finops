@@ -2,7 +2,13 @@
 // Attaches Clerk session token automatically.
 // All methods throw on non-2xx responses (Problem+JSON format).
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// Server components use API_INTERNAL_URL to call FastAPI directly (server-to-server,
+// no CORS restrictions). Client components use an empty base URL so requests go to
+// the same origin and are proxied by the Next.js rewrite in next.config.mjs.
+const API_URL =
+  typeof window === "undefined"
+    ? (process.env.API_INTERNAL_URL ?? "http://localhost:8000")
+    : "";
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
