@@ -14,9 +14,18 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { CalendarDays, BarChart2, TrendingUp, Receipt } from "lucide-react";
+import {
+  CalendarDays,
+  BarChart2,
+  TrendingUp,
+  Receipt,
+  Bell,
+  ChevronRight,
+} from "lucide-react";
+import Link from "next/link";
 
-import type { DashboardSummary, ExploreRow, PeriodSummary } from "@/lib/types";
+import type { AnomalyRead, DashboardSummary, ExploreRow, PeriodSummary } from "@/lib/types";
+import { EmptyState } from "@/components/empty-state";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -29,8 +38,18 @@ function fmtCost(raw: string | number): string {
   return `$${n.toFixed(2)}`;
 }
 
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 // ---------------------------------------------------------------------------
-// SparklineChart — tiny Recharts line, no axes, no grid
+// SparklineChart — tiny Recharts line used inside KPI cards
 // ---------------------------------------------------------------------------
 
 function SparklineChart({ data, up }: { data: number[]; up: boolean | null }) {
@@ -54,27 +73,26 @@ function SparklineChart({ data, up }: { data: number[]; up: boolean | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// DeltaBadge — ±% badge below the cost value
+// DeltaBadge — color-coded ±% pill under each KPI number
 // ---------------------------------------------------------------------------
 
 function DeltaBadge({ pct }: { pct: number | null }) {
   if (pct === null) {
-    return <span className="text-xs text-muted-foreground">— no prior data</span>;
+    return <span className="text-xs text-muted-foreground">No prior data</span>;
   }
   const up = pct > 0;
   const neutral = pct === 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
         neutral
-          ? "text-muted-foreground"
+          ? "bg-muted text-muted-foreground"
           : up
-            ? "text-red-600 dark:text-red-400"
-            : "text-emerald-600 dark:text-emerald-400"
+            ? "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
+            : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400"
       }`}
     >
-      {neutral ? "=" : up ? "↑" : "↓"}
-      {Math.abs(pct).toFixed(1)}% vs prior
+      {neutral ? "=" : up ? "↑" : "↓"}&nbsp;{Math.abs(pct).toFixed(1)}% vs prior
     </span>
   );
 }
@@ -106,7 +124,7 @@ const CARD_DEFS: CardDef[] = [
   {
     key: "day",
     icon: CalendarDays,
-    defaultIconColor: "text-slate-600 dark:text-slate-400",
+    defaultIconColor: "text-slate-500 dark:text-slate-400",
     defaultIconBg: "bg-slate-100 dark:bg-slate-800",
     sparklineKey: "day",
   },
@@ -133,7 +151,6 @@ const CARD_DEFS: CardDef[] = [
   },
 ];
 
-// Budget-status icon styling overrides (applied to MTD card only)
 const BUDGET_ICON: Record<
   "healthy" | "warning" | "over",
   { iconColor: string; iconBg: string }
@@ -170,7 +187,7 @@ function SingleStatCard({
   const up = period.pct_change === null ? null : period.pct_change > 0;
 
   return (
-    <div className="flex flex-col rounded-xl border border-border/60 bg-card p-5">
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card p-6 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -185,19 +202,22 @@ function SingleStatCard({
               />
             )}
           </div>
-          <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">
+          {/* Primary KPI number — large, bold, monospace */}
+          <p className="mt-3 text-3xl font-bold tracking-tight text-mono">
             {fmtCost(period.total_cost_usd)}
           </p>
-          <div className="mt-1">
+          <div className="mt-2">
             <DeltaBadge pct={period.pct_change} />
           </div>
         </div>
-        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${iconBg}`}>
-          <Icon className={`h-4 w-4 ${iconColor}`} strokeWidth={2} />
+        <div
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconBg}`}
+        >
+          <Icon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.75} />
         </div>
       </div>
-      {/* Sparkline — only renders when there are ≥2 data points */}
-      <div className="mt-3">
+      {/* Sparkline — only renders when ≥2 data points exist */}
+      <div className="mt-4">
         <SparklineChart data={sparkline} up={up} />
       </div>
     </div>
@@ -230,7 +250,7 @@ export function DashboardStatCards({ periods, sparklines, budgetStatus }: StatCa
 }
 
 // ---------------------------------------------------------------------------
-// ProviderDonut — Recharts PieChart for spend-by-provider
+// ProviderDonut — Recharts PieChart for spend-by-provider breakdown
 // ---------------------------------------------------------------------------
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -251,21 +271,21 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
 
   if (chartData.length === 0) {
     return (
-      <div className="flex h-[200px] items-center justify-center rounded-lg border border-dashed border-border">
+      <div className="flex h-[180px] items-center justify-center rounded-lg border border-dashed border-border">
         <p className="text-sm text-muted-foreground">No provider data yet.</p>
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer width="100%" height={200}>
+    <ResponsiveContainer width="100%" height={190}>
       <PieChart>
         <Pie
           data={chartData}
           cx="50%"
-          cy="50%"
+          cy="45%"
           innerRadius={52}
-          outerRadius={78}
+          outerRadius={76}
           paddingAngle={3}
           dataKey="value"
           isAnimationActive={false}
@@ -279,14 +299,12 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
         </Pie>
         <Tooltip
           formatter={(value: number) => [`$${value.toFixed(2)}`, "Cost"]}
-          contentStyle={{ fontSize: "12px" }}
+          contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
         />
         <Legend
           iconSize={8}
           iconType="circle"
-          formatter={(name: string) =>
-            name.charAt(0).toUpperCase() + name.slice(1)
-          }
+          formatter={(name: string) => name.charAt(0).toUpperCase() + name.slice(1)}
           wrapperStyle={{ fontSize: "12px" }}
         />
       </PieChart>
@@ -295,78 +313,171 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// DashboardCharts — existing 30d area chart + top-10 bar chart (unchanged)
+// SpendTrendChart — 30d / 7d / 90d area chart (just the chart, card in page.tsx)
 // ---------------------------------------------------------------------------
 
 // Pivot row shape expected by Tremor: { date: string, [model]: number }
 export type ChartRow = Record<string, string | number>;
+
+const costFormatter = (value: number) =>
+  value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : `$${value.toFixed(2)}`;
+
+interface SpendTrendProps {
+  chartData: ChartRow[];
+  models: string[];
+}
+
+export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
+  if (chartData.length === 0) {
+    return (
+      <div className="flex h-60 items-center justify-center rounded-lg border border-dashed border-border">
+        <p className="text-sm text-muted-foreground">No data for this period.</p>
+      </div>
+    );
+  }
+  return (
+    <AreaChart
+      data={chartData}
+      index="date"
+      categories={models}
+      valueFormatter={costFormatter}
+      className="h-64"
+      showLegend={models.length > 1}
+      showGridLines
+      curveType="monotone"
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TopModelsChart — top-10 horizontal bar chart (just the chart)
+// ---------------------------------------------------------------------------
 
 interface BarRow {
   model: string;
   cost: number;
 }
 
-interface Props {
-  chartData: ChartRow[];
-  models: string[];
+interface TopModelsProps {
   barData: BarRow[];
 }
 
-const costFormatter = (value: number) =>
-  value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : `$${value.toFixed(4)}`;
-
 const costBarFormatter = (value: number) => `$${value.toFixed(2)}`;
 
-export function DashboardCharts({ chartData, models, barData }: Props) {
+export function TopModelsChart({ barData }: TopModelsProps) {
+  if (barData.length === 0) {
+    return (
+      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border">
+        <p className="text-sm text-muted-foreground">No model data for this period.</p>
+      </div>
+    );
+  }
   return (
-    <div className="space-y-4">
-      {/* 30-day cost trend */}
-      <div className="rounded-xl border border-border/60 bg-card p-5">
-        <div className="mb-4">
-          <h2 className="text-sm font-medium">Cost trend</h2>
-          <p className="text-xs text-muted-foreground">Daily spend by model over 30 days</p>
+    <BarChart
+      data={barData}
+      index="model"
+      categories={["cost"]}
+      valueFormatter={costBarFormatter}
+      layout="vertical"
+      style={{ height: `${Math.max(180, barData.length * 44)}px` }}
+      showLegend={false}
+      yAxisWidth={180}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RecentAlertsWidget — last 5 open anomalies with severity color coding
+// ---------------------------------------------------------------------------
+
+interface AlertsProps {
+  anomalies: AnomalyRead[];
+}
+
+const SEVERITY_CONFIG: Record<
+  AnomalyRead["severity"],
+  { borderColor: string; dotColor: string }
+> = {
+  high: {
+    borderColor: "border-l-red-500",
+    dotColor: "bg-red-500",
+  },
+  medium: {
+    borderColor: "border-l-amber-500",
+    dotColor: "bg-amber-500",
+  },
+  low: {
+    borderColor: "border-l-sky-500",
+    dotColor: "bg-sky-500",
+  },
+};
+
+export function RecentAlertsWidget({ anomalies }: AlertsProps) {
+  const openAlerts = anomalies.filter((a) => a.status === "open").slice(0, 5);
+
+  return (
+    <div className="flex flex-col rounded-xl border border-border/60 bg-card p-6 shadow-card">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Recent alerts</h2>
+          <p className="text-xs text-muted-foreground">Open anomalies and budget warnings</p>
         </div>
-        {chartData.length === 0 ? (
-          <div className="flex h-60 items-center justify-center rounded-lg border border-dashed border-border">
-            <p className="text-sm text-muted-foreground">No data for this period.</p>
-          </div>
-        ) : (
-          <AreaChart
-            data={chartData}
-            index="date"
-            categories={models}
-            valueFormatter={costFormatter}
-            className="h-64"
-            showLegend={models.length > 1}
-            showGridLines
-            curveType="monotone"
-          />
+        {openAlerts.length > 0 && (
+          <span className="rounded-full bg-critical-subtle px-2 py-0.5 text-xs font-medium text-critical">
+            {openAlerts.length} open
+          </span>
         )}
       </div>
 
-      {/* Cost by model */}
-      <div className="rounded-xl border border-border/60 bg-card p-5">
-        <div className="mb-4">
-          <h2 className="text-sm font-medium">Cost by model</h2>
-          <p className="text-xs text-muted-foreground">Top 10 models by total spend</p>
-        </div>
-        {barData.length === 0 ? (
-          <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-border">
-            <p className="text-sm text-muted-foreground">No data for this period.</p>
-          </div>
-        ) : (
-          <BarChart
-            data={barData}
-            index="model"
-            categories={["cost"]}
-            valueFormatter={costBarFormatter}
-            layout="vertical"
-            style={{ height: `${Math.max(180, barData.length * 44)}px` }}
-            showLegend={false}
-            yAxisWidth={180}
+      {openAlerts.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center">
+          <EmptyState
+            icon={Bell}
+            title="All clear"
+            description="No open alerts right now."
+            className="py-4"
           />
-        )}
-      </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex-1 space-y-2">
+            {openAlerts.map((alert) => {
+              const cfg = SEVERITY_CONFIG[alert.severity];
+              const spike = alert.spike_pct.toFixed(0);
+              const baseline = parseFloat(alert.baseline_usd).toFixed(2);
+              const actual = parseFloat(alert.actual_usd).toFixed(2);
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex items-start gap-3 rounded-lg border-l-4 bg-muted/30 px-3 py-2.5 ${cfg.borderColor}`}
+                >
+                  <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${cfg.dotColor}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-foreground capitalize">
+                      {alert.scope_kind.replace("_", " ")}
+                      {alert.scope_value ? ` · ${alert.scope_value}` : ""}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {alert.explanation ??
+                        `↑ ${spike}% vs baseline ($${baseline} → $${actual})`}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {timeAgo(alert.detected_at)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <Link
+            href="/anomalies"
+            className="mt-4 flex items-center gap-1 text-xs font-medium text-primary transition-colors duration-150 hover:text-primary/80"
+          >
+            View all alerts
+            <ChevronRight className="h-3 w-3" />
+          </Link>
+        </>
+      )}
     </div>
   );
 }

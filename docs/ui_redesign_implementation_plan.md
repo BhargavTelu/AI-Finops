@@ -16,8 +16,8 @@
 |-----------|--------|-----------|
 | **M-DS** Design System Foundation | ✅ COMPLETE | 2026-05-27 |
 | **M-CL** Component Library | ✅ COMPLETE | 2026-05-27 |
-| **M-P1** Dashboard Redesign | ⏳ NOT STARTED | — |
-| **M-P2** Cost Explorer Redesign | ⏳ NOT STARTED | — |
+| **M-P1** Dashboard Redesign | ✅ COMPLETE | 2026-05-27 |
+| **M-P2** Cost Explorer Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P3** API Key Management Redesign | ⏳ NOT STARTED | — |
 | **M-P4** Settings Redesign | ⏳ NOT STARTED | — |
 | **M-P5** Alerts & Anomalies Redesign | ⏳ NOT STARTED | — |
@@ -146,6 +146,29 @@ toast({ title: "Saved", description: "Settings updated." })
 - Empty/error/loading states not yet wired into existing pages
 - PageHeader not yet used on any existing page
 - Responsive layout not verified below 1024px on any existing page
+
+---
+
+## M-P1 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/dashboard/period-selector.tsx` — **NEW** client component; segmented Tabs control (7d / 30d / 90d) that drives URL param `range`, triggering server re-fetch of timeseries + provider data
+- `apps/web/src/components/dashboard-charts.tsx` — **Full redesign**: KPI numbers upgraded to `text-3xl font-bold text-mono`; `DeltaBadge` uses pill style (green/red rounded badge); sparklines preserved; `ProviderDonut` shows legend+tooltip; **NEW** `SpendTrendChart` and `TopModelsChart` (standalone chart components, cards rendered in page.tsx); **NEW** `RecentAlertsWidget` shows last 5 open anomalies with left-border color coding (severity: high=red, medium=amber, low=sky) + "View all alerts" link + EmptyState when clear
+- `apps/web/src/app/(dashboard)/dashboard/page.tsx` — **Full redesign**: uses `PageHeader` + `PeriodSelector` in actions slot; fetches anomalies from `/anomalies`; layout is now 3-section: 4-card KPI grid → 2/3+1/3 (trend+donut) → 1/2+1/2 (models+alerts); `EmptyState` component used for no-data state; `shadow-card` / `shadow-card-hover` on all cards
+
+---
+
+## M-P2 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/cost-explorer/export-button.tsx` — **NEW** client component; CSV export of current filtered/grouped data with proper quoting; button disabled when rows=0
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-controls.tsx` — **Redesigned**: `SlidersHorizontal` icon prefix; native selects styled with consistent `h-9 rounded-md` height; active dimension filter badges use `X` icon buttons; "Reset filters" button with active count badge only shown when filters are active
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` — **Redesigned**: all numeric columns right-aligned (`text-right`); cost/requests/tokens use `text-mono`; lucide sort icons (`ArrowUp`/`ArrowDown`/`ArrowUpDown`) replace text arrows; row hover `hover:bg-muted/40`; grand total footer uses `font-semibold`; table border changed to `rounded-xl border-border/60`; `scrollbar-thin` utility applied
+- `apps/web/src/app/(dashboard)/cost-explorer/page.tsx` — **Redesigned**: `PageHeader` with `ExportButton` in actions; `PageMotion` wrapper; summary bar between controls and table (row count + range + grand total); `EmptyState` differentiated between "no data" vs "no filter results"; uses `EmptyState` component properly
 
 ---
 

@@ -10,6 +10,7 @@ import {
   useReactTable,
   type SortingState,
 } from "@tanstack/react-table";
+import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 
 import type { ExploreRow } from "@/lib/types";
 
@@ -22,8 +23,8 @@ const DIMENSION_LABELS: Record<string, string> = {
   env_tag: "Env Tag",
 };
 
-function fmtCost(raw: string): string {
-  const n = parseFloat(raw);
+function fmtCost(raw: string | number): string {
+  const n = typeof raw === "string" ? parseFloat(raw) : raw;
   if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(6)}`;
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -41,8 +42,13 @@ interface Props {
 }
 
 function SortIcon({ direction }: { direction: "asc" | "desc" | false }) {
-  if (!direction) return <span className="ml-1 opacity-30">↕</span>;
-  return <span className="ml-1">{direction === "asc" ? "↑" : "↓"}</span>;
+  if (!direction)
+    return <ArrowUpDown className="ml-1.5 h-3.5 w-3.5 opacity-40" />;
+  return direction === "asc" ? (
+    <ArrowUp className="ml-1.5 h-3.5 w-3.5 text-primary" />
+  ) : (
+    <ArrowDown className="ml-1.5 h-3.5 w-3.5 text-primary" />
+  );
 }
 
 export function ExploreTable({ rows, groupBy }: Props) {
@@ -66,7 +72,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
         return val === "" ? (
           <span className="italic text-muted-foreground">(untagged)</span>
         ) : (
-          val
+          <span className="font-medium">{val}</span>
         );
       },
       sortingFn: "alphanumeric",
@@ -74,37 +80,52 @@ export function ExploreTable({ rows, groupBy }: Props) {
     columnHelper.accessor("total_cost_usd", {
       header: "Cost",
       cell: (info) => (
-        <span className="tabular-nums">{fmtCost(info.getValue())}</span>
+        <span className="text-mono">{fmtCost(info.getValue())}</span>
       ),
-      // Sort numerically despite string storage
       sortingFn: (a, b) =>
         parseFloat(a.original.total_cost_usd) - parseFloat(b.original.total_cost_usd),
     }),
     columnHelper.accessor("total_requests", {
       header: "Requests",
       cell: (info) => (
-        <span className="tabular-nums">{fmtNumber(info.getValue())}</span>
+        <span className="text-mono">{fmtNumber(info.getValue())}</span>
       ),
     }),
     columnHelper.accessor("total_tokens", {
       header: "Tokens",
       cell: (info) => (
-        <span className="tabular-nums">{fmtNumber(info.getValue())}</span>
+        <span className="text-mono">{fmtNumber(info.getValue())}</span>
       ),
     }),
+    columnHelper.accessor(
+      (row) =>
+        row.total_tokens > 0
+          ? (parseFloat(row.total_cost_usd) / row.total_tokens) * 1000
+          : 0,
+      {
+        id: "avg_per_1k",
+        header: "Avg/1K tkns",
+        cell: (info) => {
+          const avg = info.getValue();
+          if (avg === 0)
+            return <span className="text-mono text-muted-foreground">—</span>;
+          return <span className="text-mono">${avg.toFixed(4)}</span>;
+        },
+      },
+    ),
     columnHelper.accessor("pct_of_total", {
       header: "% of Total",
       cell: (info) => {
         const pct = info.getValue();
         return (
-          <div className="flex items-center gap-2">
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-muted">
+          <div className="flex items-center gap-2.5">
+            <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-primary"
+                className="h-full rounded-full bg-primary/70"
                 style={{ width: `${Math.min(pct, 100)}%` }}
               />
             </div>
-            <span className="tabular-nums text-sm">{pct.toFixed(1)}%</span>
+            <span className="text-mono text-sm">{pct.toFixed(1)}%</span>
           </div>
         );
       },
@@ -120,48 +141,51 @@ export function ExploreTable({ rows, groupBy }: Props) {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
-        No spend data for this period. Connect an integration or wait for the next sync.
-      </div>
-    );
-  }
-
   return (
-    <div className="overflow-x-auto rounded-lg border">
+    <div className="overflow-x-auto rounded-xl border border-border/60 scrollbar-thin">
       <table className="w-full text-sm">
-        <thead className="border-b bg-muted/40">
+        <thead className="border-b border-border/60 bg-muted/30">
           {table.getHeaderGroups().map((hg) => (
             <tr key={hg.id}>
-              {hg.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="px-4 py-3 text-left font-medium text-muted-foreground"
-                >
-                  {header.isPlaceholder ? null : (
-                    <button
-                      className="flex items-center hover:text-foreground"
-                      onClick={header.column.getToggleSortingHandler()}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      <SortIcon direction={header.column.getIsSorted()} />
-                    </button>
-                  )}
-                </th>
-              ))}
+              {hg.headers.map((header, idx) => {
+                const isNumeric = idx > 0;
+                return (
+                  <th
+                    key={header.id}
+                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                      isNumeric ? "text-right" : "text-left"
+                    }`}
+                  >
+                    {header.isPlaceholder ? null : (
+                      <button
+                        className={`flex items-center gap-0 transition-colors duration-150 hover:text-foreground ${
+                          isNumeric ? "ml-auto" : ""
+                        }`}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        <SortIcon direction={header.column.getIsSorted()} />
+                      </button>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           ))}
         </thead>
-        <tbody className="divide-y">
+
+        <tbody className="divide-y divide-border/40">
           {table.getRowModel().rows.map((row) => {
             const groupKey = row.original.group_key;
-            // Untagged rows have no value to filter on — clicking does nothing
             const drillable = groupKey !== "";
             return (
               <tr
                 key={row.id}
-                className={drillable ? "cursor-pointer hover:bg-muted/30" : "hover:bg-muted/20"}
+                className={`transition-colors duration-150 ${
+                  drillable
+                    ? "cursor-pointer hover:bg-muted/40"
+                    : "hover:bg-muted/20"
+                }`}
                 onClick={
                   drillable
                     ? () => {
@@ -172,21 +196,49 @@ export function ExploreTable({ rows, groupBy }: Props) {
                     : undefined
                 }
               >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
+                {row.getVisibleCells().map((cell, idx) => {
+                  const isNumeric = idx > 0 && idx < 5; // Cost, Requests, Tokens, Avg/1K
+                  const isPct = idx === 5;
+                  return (
+                    <td
+                      key={cell.id}
+                      className={`px-4 py-3 ${
+                        isNumeric ? "text-right" : isPct ? "" : "text-left"
+                      }`}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  );
+                })}
               </tr>
             );
           })}
         </tbody>
-        <tfoot className="border-t bg-muted/40 font-medium">
+
+        {/* Grand total footer */}
+        <tfoot className="border-t border-border/60 bg-muted/30">
           <tr>
-            <td className="px-4 py-3 text-muted-foreground">Total</td>
-            <td className="px-4 py-3 tabular-nums">{fmtCost(grandTotalCost.toString())}</td>
-            <td className="px-4 py-3 tabular-nums">{fmtNumber(grandTotalRequests)}</td>
-            <td className="px-4 py-3 tabular-nums">{fmtNumber(grandTotalTokens)}</td>
+            <td className="px-4 py-3 text-sm font-semibold text-foreground">
+              Grand Total
+            </td>
+            <td className="px-4 py-3 text-right">
+              <span className="text-mono font-semibold">{fmtCost(grandTotalCost.toString())}</span>
+            </td>
+            <td className="px-4 py-3 text-right">
+              <span className="text-mono font-semibold">{fmtNumber(grandTotalRequests)}</span>
+            </td>
+            <td className="px-4 py-3 text-right">
+              <span className="text-mono font-semibold">{fmtNumber(grandTotalTokens)}</span>
+            </td>
+            <td className="px-4 py-3 text-right">
+              {grandTotalTokens > 0 ? (
+                <span className="text-mono font-semibold">
+                  ${((grandTotalCost / grandTotalTokens) * 1000).toFixed(4)}
+                </span>
+              ) : (
+                <span className="text-mono text-muted-foreground">—</span>
+              )}
+            </td>
             <td className="px-4 py-3" />
           </tr>
         </tfoot>

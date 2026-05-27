@@ -1,16 +1,34 @@
-import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { TrendingUp, ArrowRight } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 import { createApiClient } from "@/lib/api-client";
 import {
-  DashboardCharts,
   DashboardStatCards,
   ProviderDonut,
+  SpendTrendChart,
+  TopModelsChart,
+  RecentAlertsWidget,
   type ChartRow,
 } from "@/components/dashboard-charts";
 import { PageMotion } from "@/components/motion-wrapper";
-import type { BudgetRead, DailyPoint, DashboardSummary, ExploreRow } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { PeriodSelector } from "./period-selector";
+import type {
+  AnomalyRead,
+  BudgetRead,
+  DailyPoint,
+  DashboardSummary,
+  ExploreRow,
+} from "@/lib/types";
+
+const VALID_RANGE = new Set(["7d", "30d", "90d"]);
+
+const RANGE_LABELS: Record<string, string> = {
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+  "90d": "Last 90 days",
+};
 
 function fmtDay(iso: string): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -24,41 +42,46 @@ function fmtCost(raw: string | number): string {
   return `$${n.toFixed(2)}`;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const params = await searchParams;
+  const range = VALID_RANGE.has(params.range ?? "") ? (params.range ?? "30d") : "30d";
+
   const { getToken } = await auth();
   const token = await getToken();
   const api = createApiClient(token!);
 
-  const [dashboard, timeseries, providers, budgets] = await Promise.all([
+  const [dashboard, timeseries, providers, budgets, anomalies] = await Promise.all([
     api.get<DashboardSummary>("/usage/dashboard").catch(() => null),
-    api.get<DailyPoint[]>("/usage/timeseries?range=30d&group_by=model").catch(
-      () => [] as DailyPoint[],
-    ),
-    api.get<ExploreRow[]>("/usage/explore?group_by=provider&range=30d").catch(
-      () => [] as ExploreRow[],
-    ),
+    api
+      .get<DailyPoint[]>(`/usage/timeseries?range=${range}&group_by=model`)
+      .catch(() => [] as DailyPoint[]),
+    api
+      .get<ExploreRow[]>(`/usage/explore?group_by=provider&range=${range}`)
+      .catch(() => [] as ExploreRow[]),
     api.get<BudgetRead[]>("/budgets").catch(() => [] as BudgetRead[]),
+    api.get<AnomalyRead[]>("/anomalies").catch(() => [] as AnomalyRead[]),
   ]);
 
   // Empty state — no integrations connected or no data yet
   if (!dashboard || dashboard.month.total_requests === 0) {
     return (
       <PageMotion>
-        <div className="flex h-full min-h-[400px] flex-col items-center justify-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <TrendingUp className="h-7 w-7 text-primary" strokeWidth={1.5} />
-          </div>
-          <h2 className="text-lg font-semibold">No spend data yet</h2>
-          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-            Connect an integration to start tracking your LLM API costs across models and providers.
-          </p>
-          <Link
-            href="/settings/integrations"
-            className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
-          >
-            Connect integration
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+        <div className="space-y-6">
+          <PageHeader
+            title="Dashboard"
+            description="LLM spend overview for your organisation"
+            actions={<PeriodSelector range={range} />}
+          />
+          <EmptyState
+            icon={TrendingUp}
+            title="No spend data yet"
+            description="Connect an integration to start tracking your LLM API costs across models and providers."
+            action={{ label: "Connect integration", href: "/settings/integrations" }}
+          />
         </div>
       </PageMotion>
     );
@@ -74,8 +97,7 @@ export default async function DashboardPage() {
         : "healthy"
     : "healthy";
 
-  // ── Sparklines — derive total-per-day from the timeseries ─────────────────
-  // timeseries has one row per (day, model); aggregate to total cost per day.
+  // ── Derive sparklines from timeseries ────────────────────────────────────
   const dailyTotals = new Map<string, number>();
   for (const point of timeseries) {
     dailyTotals.set(point.day, (dailyTotals.get(point.day) ?? 0) + parseFloat(point.cost_usd));
@@ -83,11 +105,9 @@ export default async function DashboardPage() {
   const sortedDays = [...dailyTotals.entries()].sort(([a], [b]) => a.localeCompare(b));
   const allDailyCosts = sortedDays.map(([, cost]) => cost);
 
-  // Current calendar month prefix (YYYY-MM) for MTD sparkline
   const thisMonthPrefix = new Date().toISOString().slice(0, 7);
-
   const sparklines = {
-    day: allDailyCosts.slice(-2),   // last 2 days so there's a direction to show
+    day: allDailyCosts.slice(-2),
     week: allDailyCosts.slice(-7),
     month: allDailyCosts,
     mtd: sortedDays
@@ -95,7 +115,7 @@ export default async function DashboardPage() {
       .map(([, cost]) => cost),
   };
 
-  // ── Pivot timeseries for 30d area chart ──────────────────────────────────
+  // ── Pivot timeseries for area chart ──────────────────────────────────────
   const models = [...new Set(timeseries.map((p) => p.group_key))].sort();
   const dayMap = new Map<string, ChartRow>();
   for (const point of timeseries) {
@@ -108,7 +128,7 @@ export default async function DashboardPage() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([, row]) => row);
 
-  // ── Top-10 by-model bar chart ─────────────────────────────────────────────
+  // ── Top-10 bar chart data ─────────────────────────────────────────────────
   const modelTotals = new Map<string, number>();
   for (const point of timeseries) {
     modelTotals.set(
@@ -124,73 +144,75 @@ export default async function DashboardPage() {
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10);
 
-  // ── MoM comparison values ─────────────────────────────────────────────────
-  const momPct = dashboard.mom_pct_change;
-  const lastMonthCost = parseFloat(dashboard.last_month_cost_usd);
+  // ── Provider total for card header ────────────────────────────────────────
+  const totalProviderCost = providers.reduce(
+    (sum, r) => sum + parseFloat(r.total_cost_usd),
+    0,
+  );
+
+  const rangeLabel = RANGE_LABELS[range] ?? range;
 
   return (
     <PageMotion>
       <div className="space-y-6">
-        {/* Page header */}
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            All providers · complete days only (UTC)
-          </p>
-        </div>
+        {/* ── Page header with period selector ─────────────────────────── */}
+        <PageHeader
+          title="Dashboard"
+          description="LLM spend overview · all providers · complete days only (UTC)"
+          actions={<PeriodSelector range={range} />}
+        />
 
-        {/* Four time-window stat cards with sparklines */}
+        {/* ── Four KPI stat cards ───────────────────────────────────────── */}
         <DashboardStatCards
           periods={dashboard}
           sparklines={sparklines}
           budgetStatus={budgetStatus}
         />
 
-        {/* MoM callout + provider donut row */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Month-over-month comparison */}
-          <div className="rounded-xl border border-border/60 bg-card p-5">
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              Month over month
-            </p>
-            {momPct === null ? (
-              <>
-                <p className="mt-2 text-2xl font-semibold text-muted-foreground">—</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  No prior-month data yet
-                </p>
-              </>
-            ) : (
-              <>
-                <p
-                  className={`mt-2 text-2xl font-semibold tabular-nums ${
-                    momPct > 0
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-emerald-600 dark:text-emerald-400"
-                  }`}
-                >
-                  {momPct > 0 ? "+" : ""}
-                  {momPct.toFixed(1)}%
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  vs {fmtCost(lastMonthCost)} same period last month
-                </p>
-              </>
-            )}
+        {/* ── Spend trend (2/3 width) + Provider split (1/3 width) ─────── */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          {/* Spend trend area chart */}
+          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card lg:col-span-2">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-foreground">Spend trend</h2>
+              <p className="text-xs text-muted-foreground">
+                Daily spend by model · {rangeLabel}
+              </p>
+            </div>
+            <SpendTrendChart chartData={chartData} models={models} />
           </div>
 
-          {/* Spend by provider donut */}
-          <div className="rounded-xl border border-border/60 bg-card p-5">
-            <div className="mb-3">
-              <h2 className="text-sm font-medium">Spend by provider</h2>
-              <p className="text-xs text-muted-foreground">30-day share</p>
+          {/* Provider split donut */}
+          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">By provider</h2>
+                <p className="text-xs text-muted-foreground">{rangeLabel} share</p>
+              </div>
+              <span className="text-sm font-semibold text-mono">
+                {fmtCost(totalProviderCost)}
+              </span>
             </div>
             <ProviderDonut rows={providers} />
           </div>
         </div>
 
-        {/* 30d trend + top-10 model charts */}
-        <DashboardCharts chartData={chartData} models={models} barData={barData} />
+        {/* ── Top models (1/2) + Recent alerts (1/2) ───────────────────── */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Top-10 models bar chart */}
+          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-foreground">Cost by model</h2>
+              <p className="text-xs text-muted-foreground">
+                Top 10 models · {rangeLabel}
+              </p>
+            </div>
+            <TopModelsChart barData={barData} />
+          </div>
+
+          {/* Recent open anomalies */}
+          <RecentAlertsWidget anomalies={anomalies} />
+        </div>
       </div>
     </PageMotion>
   );
