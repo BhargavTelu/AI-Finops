@@ -6,7 +6,7 @@
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
-**Last updated:** 2026-05-27 (M-P3 + M-P4 added)
+**Last updated:** 2026-05-27 (M-P5 + M-P6 added)
 
 ---
 
@@ -20,8 +20,8 @@
 | **M-P2** Cost Explorer Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P3** API Key Management Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P4** Settings Redesign | ✅ COMPLETE | 2026-05-27 |
-| **M-P5** Alerts & Anomalies Redesign | ⏳ NOT STARTED | — |
-| **M-P6** Recommendations Redesign | ⏳ NOT STARTED | — |
+| **M-P5** Alerts & Anomalies Redesign | ✅ COMPLETE | 2026-05-27 |
+| **M-P6** Recommendations Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P7** Budgets Redesign | ⏳ NOT STARTED | — |
 | **M-QA** Polish & QA Pass | ⏳ NOT STARTED | — |
 
@@ -205,6 +205,44 @@ Design patterns applied:
 - All Delete/Disconnect actions require `ConfirmDialog` — no `alert()` calls
 - `EmptyState` component used consistently in all zero-data states
 - shadcn `Switch` used for the Slack mute toggle (replaces custom Tailwind button)
+
+---
+
+## M-P5 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` — **Full redesign**: replaced dense table with alert card list; each card has a 4px left color strip (amber for low/medium severity, red for high/critical); `StatusBadge` component used for severity (warning/critical); relative timestamps ("2h ago") with absolute datetime in `Tooltip` on hover; `PageHeader` with "Acknowledge all" button (only shown when open alerts exist); critical summary banner (`bg-critical-subtle`) shown when high-severity alerts are present; severity filter dropdown (All / Low / Medium / Critical) using shadcn `Select`; individual "Acknowledge" + "Dismiss" ghost buttons per card; "View in Cost Explorer" link on every card; `EmptyState` shared component used with context-aware messages (check-circle icon for "all clear" open state); error banner for action failures
+- `apps/web/src/app/(dashboard)/anomalies/page.tsx` — **Updated**: removed inline h1/p header (now owned by client component); passes `initialAnomalies` + `status` to client
+- `apps/web/src/app/(dashboard)/anomalies/loading.tsx` — **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching new card layout (strip + header row + title + description + link)
+
+Design patterns applied:
+- `shadow-card` / `shadow-card-hover` on alert cards
+- Left strip: `bg-warning` (amber-500) for low/medium, `bg-critical` (red) for high
+- `border-critical/30 bg-critical-subtle` for the critical summary banner
+- "Acknowledge all" uses `Promise.all` for parallel API calls
+- Severity filter is client-side (no server re-fetch); status tabs navigate via URL for server re-fetch
+- Empty states: `CheckCircle2` icon for "all clear" (open + no alerts), `Bell` icon for acked/dismissed
+
+---
+
+## M-P6 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` — **Full redesign**: introduced **effort badge** (Easy/Medium/Hard derived from recommendation type: model_swap=Easy green, caching/batch=Medium amber, other=Hard gray); savings amount promoted to dominant visual (`text-2xl font-bold text-success text-mono`); new two-column card layout (left column: badges + savings/resolved state; right column: title + description; footer: confidence bar + action buttons); `PageHeader` added; summary bar shows total estimated savings in `text-success text-mono` when on "new" tab with data; `StaggerGrid` + `StaggerItem` entrance animation for card list; `EmptyState` shared component used with status-aware messages and CTA to `/cost-explorer` when no new recommendations; `RecommendationsLoading` skeleton updated to match new 2-column card layout; applied/dismissed states show check/X icon with date instead of large savings number
+- `apps/web/src/app/(dashboard)/recommendations/page.tsx` — **Updated**: removed inline h1/p header (now owned by client component); delegates to `RecommendationsClient`
+- `apps/web/src/app/(dashboard)/recommendations/loading.tsx` — **No change required**: already delegates to `RecommendationsLoading` exported from client
+
+Design patterns applied:
+- Effort badge before TypeBadge — signals implementation effort at a glance
+- `text-2xl font-bold text-success text-mono` for savings — visually dominant per spec
+- Footer `border-t border-border/60` separates confidence + actions from card content
+- `StaggerGrid` wraps the card list for staggered entrance animation (0.07s delay per item)
+- Optimistic removal on apply/dismiss with full `initialRecs` revert on API error
+- `CircleDollarSign` icon for applied/dismissed empty states, `Lightbulb` for new
 
 ---
 

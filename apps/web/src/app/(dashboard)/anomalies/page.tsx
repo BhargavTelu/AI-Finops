@@ -27,16 +27,7 @@ export default async function AnomaliesPage({
 
   return (
     <PageMotion>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Anomalies</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Cost spikes detected by nightly statistical analysis (rolling 7-day mean + 2&sigma;)
-          </p>
-        </div>
-
-        <AnomaliesClient initialAnomalies={anomalies} status={status} />
-      </div>
+      <AnomaliesClient initialAnomalies={anomalies} status={status} />
     </PageMotion>
   );
 }

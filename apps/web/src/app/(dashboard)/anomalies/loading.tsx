@@ -3,45 +3,54 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function AnomaliesLoading() {
   return (
     <div className="space-y-6">
-      <div>
-        <Skeleton className="h-6 w-32" />
-        <Skeleton className="mt-1.5 h-4 w-64" />
-      </div>
-
-      {/* Status tabs skeleton */}
-      <div className="flex gap-1">
-        <Skeleton className="h-8 w-20 rounded-lg" />
-        <Skeleton className="h-8 w-24 rounded-lg" />
-        <Skeleton className="h-8 w-24 rounded-lg" />
-      </div>
-
-      {/* Table skeleton */}
-      <div className="overflow-hidden rounded-xl border">
-        <div className="border-b bg-muted/40 px-4 py-3">
-          <div className="grid grid-cols-7 gap-4">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <Skeleton key={i} className="h-4" />
-            ))}
-          </div>
+      {/* PageHeader skeleton */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1.5">
+          <Skeleton className="h-6 w-44" />
+          <Skeleton className="h-4 w-80" />
         </div>
-        <div className="divide-y">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="px-4 py-4">
-              <div className="grid grid-cols-7 gap-4">
-                <Skeleton className="h-4" />
-                <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-5 w-16 rounded-full" />
-                <div className="flex gap-2">
-                  <Skeleton className="h-7 w-16 rounded-md" />
-                  <Skeleton className="h-7 w-16 rounded-md" />
+        <Skeleton className="h-9 w-36 shrink-0" />
+      </div>
+
+      {/* Filter row skeleton */}
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1 rounded-lg bg-muted/60 p-1">
+          <Skeleton className="h-8 w-14 rounded-md" />
+          <Skeleton className="h-8 w-28 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+        </div>
+        <Skeleton className="h-9 w-36 rounded-md" />
+      </div>
+
+      {/* Alert card skeletons (4 cards) */}
+      <div className="space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="overflow-hidden rounded-xl border bg-card">
+            <div className="flex">
+              {/* Left strip */}
+              <div className="w-1 shrink-0 bg-muted" />
+              {/* Content */}
+              <div className="flex flex-1 flex-col gap-3 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Skeleton className="h-7 w-28 rounded-md" />
+                    <Skeleton className="h-7 w-7 rounded-md" />
+                  </div>
                 </div>
+                <Skeleton className="h-5 w-56" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                </div>
+                <Skeleton className="h-4 w-40" />
               </div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );

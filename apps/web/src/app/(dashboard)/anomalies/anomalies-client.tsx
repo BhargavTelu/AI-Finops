@@ -1,37 +1,40 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, XCircle } from "lucide-react";
+import Link from "next/link";
+import {
+  AlertTriangle,
+  Bell,
+  Check,
+  CheckCircle2,
+  X,
+  ArrowRight,
+} from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
 import { createApiClient } from "@/lib/api-client";
 import type { AnomalyRead, AnomalyStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
 
-// ── Severity badge ─────────────────────────────────────────────────────────────
-
-const SEVERITY_STYLES: Record<string, string> = {
-  low: "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400",
-  medium: "bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400",
-  high: "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400",
-};
-
-function SeverityBadge({ severity }: { severity: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize",
-        SEVERITY_STYLES[severity] ?? "bg-muted text-muted-foreground"
-      )}
-    >
-      {severity}
-    </span>
-  );
-}
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function fmtCost(raw: string): string {
   const n = parseFloat(raw);
@@ -40,18 +43,78 @@ function fmtCost(raw: string): string {
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function fmtDate(iso: string): string {
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+function absoluteTime(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-// ── Status tabs ────────────────────────────────────────────────────────────────
+function generateTitle(anomaly: AnomalyRead): string {
+  const labels: Record<string, string> = {
+    model: "Model",
+    feature: "Feature",
+    team: "Team",
+    customer: "Customer",
+    provider: "Provider",
+  };
+  const label = labels[anomaly.scope_kind] ?? "Cost";
+  const value = anomaly.scope_value ?? anomaly.scope_kind;
+  return `${label} cost spike — ${value}`;
+}
 
-const TABS: { label: string; value: AnomalyStatus }[] = [
+function generateDescription(anomaly: AnomalyRead): string {
+  return `Spend jumped +${anomaly.spike_pct}% vs 7-day average — ${fmtCost(anomaly.baseline_usd)}/day baseline → ${fmtCost(anomaly.actual_usd)} actual`;
+}
+
+function buildContextTags(context: Record<string, unknown> | null): string | null {
+  if (!context) return null;
+  const parts: string[] = [];
+  const keys = ["feature_tag", "team_tag", "customer_tag"] as const;
+  for (const k of keys) {
+    const v = context[k];
+    if (v && typeof v === "string") parts.push(v);
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+// ── Severity mapping ──────────────────────────────────────────────────────────
+
+const SEVERITY_STRIP: Record<string, string> = {
+  low: "bg-warning",
+  medium: "bg-warning",
+  high: "bg-critical",
+};
+
+const SEVERITY_BADGE_STATUS = {
+  low: "warning",
+  medium: "warning",
+  high: "critical",
+} as const;
+
+const SEVERITY_BADGE_LABEL: Record<string, string> = {
+  low: "Low",
+  medium: "Warning",
+  high: "Critical",
+};
+
+// ── Status tabs ───────────────────────────────────────────────────────────────
+
+const STATUS_TABS: { label: string; value: AnomalyStatus }[] = [
   { label: "Open", value: "open" },
   { label: "Acknowledged", value: "acked" },
   { label: "Dismissed", value: "dismissed" },
@@ -59,15 +122,14 @@ const TABS: { label: string; value: AnomalyStatus }[] = [
 
 function StatusTabs({ current }: { current: AnomalyStatus }) {
   const router = useRouter();
-
   return (
     <div className="flex gap-1 rounded-lg bg-muted/60 p-1 w-fit">
-      {TABS.map((tab) => (
+      {STATUS_TABS.map((tab) => (
         <button
           key={tab.value}
           onClick={() => router.push(`/anomalies?status=${tab.value}`)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150",
             current === tab.value
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -80,7 +142,121 @@ function StatusTabs({ current }: { current: AnomalyStatus }) {
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Alert card ────────────────────────────────────────────────────────────────
+
+interface AlertCardProps {
+  anomaly: AnomalyRead;
+  showActions: boolean;
+  isLoading: boolean;
+  onAcknowledge: (id: string) => void;
+  onDismiss: (id: string) => void;
+}
+
+function AlertCard({
+  anomaly,
+  showActions,
+  isLoading,
+  onAcknowledge,
+  onDismiss,
+}: AlertCardProps) {
+  const contextTags = buildContextTags(anomaly.context);
+  const title = generateTitle(anomaly);
+  const description = anomaly.explanation ?? generateDescription(anomaly);
+  const stripClass = SEVERITY_STRIP[anomaly.severity] ?? "bg-muted-foreground/40";
+  const badgeStatus = SEVERITY_BADGE_STATUS[anomaly.severity as keyof typeof SEVERITY_BADGE_STATUS] ?? "warning";
+  const badgeLabel = SEVERITY_BADGE_LABEL[anomaly.severity] ?? anomaly.severity;
+  const isAcknowledged = anomaly.status === "acked";
+
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border bg-card shadow-card transition-shadow hover:shadow-card-hover",
+        isAcknowledged && "opacity-60"
+      )}
+    >
+      <div className="flex">
+        {/* Left severity strip — 4px, amber for low/medium, red for high */}
+        <div className={cn("w-1 shrink-0", stripClass)} aria-hidden />
+
+        {/* Card content */}
+        <div className="flex flex-1 flex-col gap-3 p-5">
+          {/* Header: badge + timestamp + action buttons */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <StatusBadge status={badgeStatus} label={badgeLabel} />
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-default text-xs text-muted-foreground">
+                      {relativeTime(anomaly.detected_at)}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p className="text-xs">{absoluteTime(anomaly.detected_at)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {showActions && (
+              <div className="flex shrink-0 items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  disabled={isLoading}
+                  onClick={() => onAcknowledge(anomaly.id)}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Acknowledge
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                  disabled={isLoading}
+                  onClick={() => onDismiss(anomaly.id)}
+                  aria-label="Dismiss alert"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+
+            {isAcknowledged && (
+              <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                <Check className="h-3.5 w-3.5 text-success" />
+                Acknowledged
+              </span>
+            )}
+          </div>
+
+          {/* Title + context tags */}
+          <div>
+            <p className="font-semibold leading-snug">{title}</p>
+            {contextTags && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{contextTags}</p>
+            )}
+          </div>
+
+          {/* Description */}
+          <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+
+          {/* Footer link */}
+          <Link
+            href="/cost-explorer"
+            className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary hover:underline"
+          >
+            View in Cost Explorer
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
   initialAnomalies: AnomalyRead[];
@@ -93,6 +269,8 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [isAckingAll, setIsAckingAll] = useState(false);
+  const [severityFilter, setSeverityFilter] = useState<string>("all");
 
   async function handleStatusUpdate(id: string, newStatus: "acked" | "dismissed") {
     setError(null);
@@ -102,7 +280,7 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
         const token = await getToken();
         const api = createApiClient(token!);
         await api.patch(`/anomalies/${id}`, { status: newStatus });
-        // Remove from current tab view — it now belongs in a different tab.
+        // Remove from current tab — it now belongs in a different tab
         setAnomalies((prev) => prev.filter((a) => a.id !== id));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Update failed");
@@ -112,13 +290,89 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
     });
   }
 
-  return (
-    <div className="space-y-4">
-      <StatusTabs current={status} />
+  async function handleAcknowledgeAll() {
+    if (anomalies.length === 0) return;
+    setError(null);
+    setIsAckingAll(true);
+    try {
+      const token = await getToken();
+      const api = createApiClient(token!);
+      await Promise.all(
+        anomalies.map((a) => api.patch(`/anomalies/${a.id}`, { status: "acked" }))
+      );
+      setAnomalies([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to acknowledge all alerts");
+    } finally {
+      setIsAckingAll(false);
+    }
+  }
 
+  const filteredAnomalies = useMemo(() => {
+    if (severityFilter === "all") return anomalies;
+    return anomalies.filter((a) => a.severity === severityFilter);
+  }, [anomalies, severityFilter]);
+
+  // Count critical (high) open alerts for the summary banner
+  const criticalCount = useMemo(
+    () => anomalies.filter((a) => a.severity === "high").length,
+    [anomalies]
+  );
+
+  const isAnyLoading = isPending || isAckingAll;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Alerts & Anomalies"
+        description="Cost spikes detected by nightly statistical analysis (rolling 7-day mean + 2σ)"
+        actions={
+          status === "open" && anomalies.length > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isAnyLoading}
+              onClick={handleAcknowledgeAll}
+              className="gap-1.5"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Acknowledge all
+            </Button>
+          ) : undefined
+        }
+      />
+
+      {/* Critical summary banner — only for open, unacknowledged critical alerts */}
+      {criticalCount > 0 && status === "open" && (
+        <div className="flex items-center gap-3 rounded-lg border border-critical/30 bg-critical-subtle px-4 py-3">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-critical" aria-hidden />
+          <span className="text-sm font-medium text-critical">
+            {criticalCount} critical{" "}
+            {criticalCount === 1 ? "alert needs" : "alerts need"} attention
+          </span>
+        </div>
+      )}
+
+      {/* Filter row: status tabs + severity dropdown */}
+      <div className="flex flex-wrap items-center gap-3">
+        <StatusTabs current={status} />
+        <Select value={severityFilter} onValueChange={setSeverityFilter}>
+          <SelectTrigger className="h-9 w-36 text-sm">
+            <SelectValue placeholder="All severities" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All severities</SelectItem>
+            <SelectItem value="low">Low</SelectItem>
+            <SelectItem value="medium">Medium</SelectItem>
+            <SelectItem value="high">Critical</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Error banner for action failures */}
       {error && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          <XCircle className="h-4 w-4 shrink-0" />
+          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
           <button className="ml-auto underline" onClick={() => setError(null)}>
             Dismiss
@@ -126,181 +380,50 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
         </div>
       )}
 
-      {anomalies.length === 0 ? (
-        <EmptyState status={status} />
+      {/* Alert list or empty state */}
+      {filteredAnomalies.length === 0 ? (
+        anomalies.length > 0 ? (
+          // Data exists but is hidden by the severity filter
+          <EmptyState
+            icon={Bell}
+            title="No alerts match this filter"
+            description="Try adjusting the severity filter to see more results."
+            action={{ label: "Clear filter", onClick: () => setSeverityFilter("all") }}
+          />
+        ) : (
+          // Truly no data for this status
+          <EmptyState
+            icon={status === "open" ? CheckCircle2 : Bell}
+            title={
+              status === "open"
+                ? "All clear — no open alerts"
+                : status === "acked"
+                ? "No acknowledged alerts"
+                : "No dismissed alerts"
+            }
+            description={
+              status === "open"
+                ? "Detection runs nightly. It requires 14+ days of spend history per scope."
+                : status === "acked"
+                ? "Alerts you acknowledge will appear here."
+                : "Alerts you dismiss will appear here."
+            }
+          />
+        )
       ) : (
-        <div className="overflow-hidden rounded-xl border">
-          <table className="w-full text-sm">
-            <thead className="border-b bg-muted/40">
-              <tr>
-                <th className="w-8 px-2 py-3" />
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Time</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Scope</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Spike</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Baseline</th>
-                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actual</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Severity</th>
-                {status === "open" && (
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {anomalies.map((anomaly) => (
-                <AnomalyRow
-                  key={anomaly.id}
-                  anomaly={anomaly}
-                  showActions={status === "open"}
-                  isLoading={loadingId === anomaly.id && isPending}
-                  onUpdate={handleStatusUpdate}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="space-y-3">
+          {filteredAnomalies.map((anomaly) => (
+            <AlertCard
+              key={anomaly.id}
+              anomaly={anomaly}
+              showActions={status === "open"}
+              isLoading={(loadingId === anomaly.id && isPending) || isAckingAll}
+              onAcknowledge={(id) => handleStatusUpdate(id, "acked")}
+              onDismiss={(id) => handleStatusUpdate(id, "dismissed")}
+            />
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Row ────────────────────────────────────────────────────────────────────────
-
-interface RowProps {
-  anomaly: AnomalyRead;
-  showActions: boolean;
-  isLoading: boolean;
-  onUpdate: (id: string, status: "acked" | "dismissed") => void;
-}
-
-function AnomalyRow({ anomaly, showActions, isLoading, onUpdate }: RowProps) {
-  const [expanded, setExpanded] = useState(false);
-  const scopeLabel = anomaly.scope_value ?? anomaly.scope_kind;
-  const contextTags = buildContextTags(anomaly.context);
-  const hasExplanation = Boolean(anomaly.explanation);
-  const colSpan = showActions ? 8 : 7;
-
-  return (
-    <>
-      <tr className={cn("hover:bg-muted/20", expanded && "bg-muted/10")}>
-        {/* Expand toggle — only shown when an explanation exists */}
-        <td className="px-2 py-4 text-center">
-          {hasExplanation && (
-            <button
-              onClick={() => setExpanded((v) => !v)}
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label={expanded ? "Collapse explanation" : "Expand explanation"}
-            >
-              {expanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronRight className="h-4 w-4" />
-              )}
-            </button>
-          )}
-        </td>
-        <td className="px-4 py-4 text-muted-foreground whitespace-nowrap">
-          {fmtDate(anomaly.detected_at)}
-        </td>
-        <td className="px-4 py-4">
-          <div className="font-medium">{scopeLabel}</div>
-          {contextTags && (
-            <div className="mt-0.5 text-xs text-muted-foreground">{contextTags}</div>
-          )}
-        </td>
-        <td className="px-4 py-4 text-right tabular-nums font-medium text-red-600 dark:text-red-400">
-          +{anomaly.spike_pct}%
-        </td>
-        <td className="px-4 py-4 text-right tabular-nums text-muted-foreground">
-          {fmtCost(anomaly.baseline_usd)}/day
-        </td>
-        <td className="px-4 py-4 text-right tabular-nums font-medium">
-          {fmtCost(anomaly.actual_usd)}
-        </td>
-        <td className="px-4 py-4">
-          <SeverityBadge severity={anomaly.severity} />
-        </td>
-        {showActions && (
-          <td className="px-4 py-4">
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-xs"
-                disabled={isLoading}
-                onClick={() => onUpdate(anomaly.id, "acked")}
-              >
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Ack
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-                disabled={isLoading}
-                onClick={() => onUpdate(anomaly.id, "dismissed")}
-              >
-                <XCircle className="h-3.5 w-3.5" />
-                Dismiss
-              </Button>
-            </div>
-          </td>
-        )}
-      </tr>
-
-      {/* Collapsible explanation row */}
-      {expanded && anomaly.explanation && (
-        <tr className="bg-muted/5">
-          <td />
-          <td colSpan={colSpan - 1} className="px-4 pb-4 pt-1">
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {anomaly.explanation}
-            </p>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// Build a compact tag context string from the context jsonb, e.g. "chat-v2 · backend"
-function buildContextTags(context: Record<string, unknown> | null): string | null {
-  if (!context) return null;
-  const parts: string[] = [];
-  const keys = ["feature_tag", "team_tag", "customer_tag"] as const;
-  for (const k of keys) {
-    const v = context[k];
-    if (v && typeof v === "string") parts.push(v);
-  }
-  return parts.length > 0 ? parts.join(" · ") : null;
-}
-
-// ── Empty state ────────────────────────────────────────────────────────────────
-
-function EmptyState({ status }: { status: AnomalyStatus }) {
-  const messages: Record<AnomalyStatus, { title: string; body: string }> = {
-    open: {
-      title: "No anomalies detected",
-      body: "Detection runs nightly after aggregation. It requires 14+ days of spend history per model.",
-    },
-    acked: {
-      title: "No acknowledged anomalies",
-      body: "Anomalies you mark as acknowledged will appear here.",
-    },
-    dismissed: {
-      title: "No dismissed anomalies",
-      body: "Anomalies you dismiss will appear here.",
-    },
-  };
-
-  const { title, body } = messages[status];
-
-  return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/50 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 dark:bg-amber-950/40">
-        <AlertTriangle className="h-7 w-7 text-amber-500" strokeWidth={1.5} />
-      </div>
-      <h2 className="text-base font-medium">{title}</h2>
-      <p className="mt-2 max-w-xs text-sm text-muted-foreground">{body}</p>
     </div>
   );
 }
