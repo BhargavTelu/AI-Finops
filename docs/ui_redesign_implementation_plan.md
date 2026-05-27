@@ -6,7 +6,7 @@
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
-**Last updated:** 2026-05-27
+**Last updated:** 2026-05-27 (M-P3 + M-P4 added)
 
 ---
 
@@ -18,8 +18,8 @@
 | **M-CL** Component Library | ✅ COMPLETE | 2026-05-27 |
 | **M-P1** Dashboard Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P2** Cost Explorer Redesign | ✅ COMPLETE | 2026-05-27 |
-| **M-P3** API Key Management Redesign | ⏳ NOT STARTED | — |
-| **M-P4** Settings Redesign | ⏳ NOT STARTED | — |
+| **M-P3** API Key Management Redesign | ✅ COMPLETE | 2026-05-27 |
+| **M-P4** Settings Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P5** Alerts & Anomalies Redesign | ⏳ NOT STARTED | — |
 | **M-P6** Recommendations Redesign | ⏳ NOT STARTED | — |
 | **M-P7** Budgets Redesign | ⏳ NOT STARTED | — |
@@ -169,6 +169,42 @@ Changes shipped:
 - `apps/web/src/app/(dashboard)/cost-explorer/explore-controls.tsx` — **Redesigned**: `SlidersHorizontal` icon prefix; native selects styled with consistent `h-9 rounded-md` height; active dimension filter badges use `X` icon buttons; "Reset filters" button with active count badge only shown when filters are active
 - `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` — **Redesigned**: all numeric columns right-aligned (`text-right`); cost/requests/tokens use `text-mono`; lucide sort icons (`ArrowUp`/`ArrowDown`/`ArrowUpDown`) replace text arrows; row hover `hover:bg-muted/40`; grand total footer uses `font-semibold`; table border changed to `rounded-xl border-border/60`; `scrollbar-thin` utility applied
 - `apps/web/src/app/(dashboard)/cost-explorer/page.tsx` — **Redesigned**: `PageHeader` with `ExportButton` in actions; `PageMotion` wrapper; summary bar between controls and table (row count + range + grand total); `EmptyState` differentiated between "no data" vs "no filter results"; uses `EmptyState` component properly
+
+---
+
+## M-P3 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/components/integrations-page.tsx` — **Full redesign**: replaced bare-bones form+table with card-based layout; each integration renders as a `rounded-xl border bg-card shadow-card` card with provider avatar, masked key display + copy feedback, `StatusBadge` component, `DropdownMenu` for actions (Force sync, Revoke); "Add Integration" moved to a `Dialog` with shadcn `Select`/`Input`/`Label`; revoke opens `ConfirmDialog`; `EmptyState` used when no integrations; error state shows inline `AlertCircle` + `bg-critical-subtle` message; `PageHeader` replaced with section-level `h2` (settings layout now owns the top-level H1); `PageMotion` wrapper added
+- `apps/web/src/app/(dashboard)/settings/integrations/loading.tsx` — **Redesigned**: skeleton now matches the new card layout (provider avatar + title + badge + actions + metrics row)
+
+Design patterns applied:
+- Provider cards use `shadow-card` resting / `shadow-card-hover` on hover
+- Error cards get `border-critical/30` tint
+- Revoked cards use `opacity-60`
+- Copy button gives `Check` icon feedback for 1.5s (key never leaves server)
+- Destructive revoke always gated by `ConfirmDialog`
+
+---
+
+## M-P4 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` — **Full redesign**: horizontal underline tab bar replaced with a **left sidebar nav** (`SettingsSidebar`); two groups — "Connected Services" (API Integrations, Slack) and "Configuration" (Tag Rules) — with 10px uppercase tracking group labels; active state uses animated `bg-primary/10` highlight with `text-primary` icon; old `SettingsTabs` name re-exported as alias for any lingering imports
+- `apps/web/src/app/(dashboard)/settings/layout.tsx` — **Updated**: `space-y-6` + horizontal tabs replaced with `PageHeader("Settings")` → `Separator` → flex row (sidebar + vertical divider + `flex-1` content panel); sidebar width `w-52`, vertical `Separator` visible on `lg+`
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — **Full redesign**: inline toggle forms replaced with `Dialog`-based Create Tag and Create Rule modals using shadcn `Select`/`Input`/`Label`; delete buttons replaced with `ConfirmDialog` (removes `alert()` calls); `EmptyState` added for both no-tags and no-rules states; tables use `rounded-xl border-border/60 bg-card` with `hover:bg-muted/30 transition-colors`; pattern preview kept inline in Create Rule dialog; `PageHeader` / `Badge` unused imports removed
+- `apps/web/src/app/(dashboard)/settings/slack/slack-client.tsx` — **Full redesign**: inline heading replaced with section `h2`; Slack connected state becomes card with `StatusBadge`, workspace metadata, reconnect/disconnect buttons with `ConfirmDialog` on disconnect; mute toggle upgraded to shadcn `Switch` component; empty/not-connected state uses proper card + icon layout; feature list upgraded to icon-card rows with `Check` icons; `bg-success-subtle` / `bg-critical-subtle` flash messages with icons
+
+Design patterns applied:
+- Settings layout owns the top-level H1 (`PageHeader`); sub-pages use `h2` section headers
+- All Create actions use Dialog modals (not inline toggle forms) for cleaner UX
+- All Delete/Disconnect actions require `ConfirmDialog` — no `alert()` calls
+- `EmptyState` component used consistently in all zero-data states
+- shadcn `Switch` used for the Slack mute toggle (replaces custom Tailwind button)
 
 ---
 

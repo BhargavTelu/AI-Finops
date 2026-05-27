@@ -1,36 +1,55 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Loading skeleton for the integrations page — matches the new card layout.
 export default function IntegrationsLoading() {
   return (
     <div className="space-y-6">
-      <div className="h-5 w-32 animate-pulse rounded-md bg-muted" />
-
-      {/* Form card skeleton */}
-      <div className="rounded-xl border border-border/60 bg-card p-5 space-y-4">
-        <div className="h-4 w-40 animate-pulse rounded-md bg-muted" />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-9 animate-pulse rounded-lg bg-muted" />
-          ))}
+      {/* Page header skeleton */}
+      <div className="flex items-start justify-between">
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-36" />
+          <Skeleton className="h-4 w-64" />
         </div>
-        <div className="h-9 w-36 animate-pulse rounded-lg bg-muted" />
+        <Skeleton className="h-9 w-36 rounded-lg" />
       </div>
 
-      {/* Table skeleton */}
-      <div className="rounded-xl border border-border/60 bg-card">
-        <div className="flex gap-4 border-b border-border/60 px-4 py-3">
-          {[120, 100, 80, 100, 60].map((w, i) => (
-            <div key={i} className="h-3.5 animate-pulse rounded-md bg-muted" style={{ width: `${w}px` }} />
-          ))}
-        </div>
-        {[1, 2].map((i) => (
-          <div key={i} className="flex items-center gap-4 border-b border-border/40 px-4 py-3.5 last:border-0">
-            <div className="h-3.5 w-28 animate-pulse rounded-md bg-muted" />
-            <div className="h-3.5 w-24 animate-pulse rounded-md bg-muted" />
-            <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
-            <div className="h-3.5 w-24 animate-pulse rounded-md bg-muted" />
-            <div className="h-7 w-16 animate-pulse rounded-lg bg-muted" />
+      {/* Integration card skeletons */}
+      {[1, 2].map((i) => (
+        <div key={i} className="rounded-xl border bg-card shadow-card">
+          {/* Card header */}
+          <div className="flex items-start justify-between gap-4 p-6">
+            <div className="flex items-start gap-3">
+              <Skeleton className="h-9 w-9 rounded-lg" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+                <Skeleton className="h-3.5 w-48" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-8 w-8 rounded-md" />
+            </div>
           </div>
-        ))}
-      </div>
+
+          {/* Separator */}
+          <div className="h-px bg-border/60" />
+
+          {/* Metrics row */}
+          <div className="flex items-center gap-6 px-6 py-4">
+            <div className="space-y-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <div className="space-y-1">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

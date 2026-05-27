@@ -322,6 +322,28 @@ export type ChartRow = Record<string, string | number>;
 const costFormatter = (value: number) =>
   value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : `$${value.toFixed(2)}`;
 
+/**
+ * Shorten raw model+token-type labels so they fit in the chart legend.
+ * e.g. "gpt-4o-2024-08-06, cached input" → "gpt-4o · cached input"
+ *      "claude-3-5-haiku-20241022, output" → "claude-3-5-haiku · output"
+ */
+function shortenModelLabel(label: string): string {
+  const commaIdx = label.indexOf(", ");
+  if (commaIdx === -1) {
+    // No token type — just strip trailing date suffixes
+    return label
+      .replace(/-\d{8}$/, "")          // strip -20241022
+      .replace(/-\d{4}-\d{2}-\d{2}$/, ""); // strip -2024-08-06
+  }
+  const model = label.slice(0, commaIdx);
+  const tokenType = label.slice(commaIdx + 2);
+  const shortModel = model
+    .replace(/-\d{8}$/, "")            // strip -20241022
+    .replace(/-\d{4}-\d{2}-\d{2}$/, "") // strip -2024-08-06
+    .replace(/-\d{4}$/, "");            // strip trailing -2024
+  return `${shortModel} · ${tokenType}`;
+}
+
 interface SpendTrendProps {
   chartData: ChartRow[];
   models: string[];
@@ -335,13 +357,27 @@ export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
       </div>
     );
   }
+
+  // Map raw model keys → shortened display labels. Tremor uses the category
+  // string as both the data key and the legend text, so we must rename the keys
+  // in the data rows to avoid long strings overflowing the legend / tooltip.
+  const labelMap = new Map(models.map((m) => [m, shortenModelLabel(m)]));
+  const shortLabels = models.map((m) => labelMap.get(m) ?? m);
+  const renamedData: ChartRow[] = chartData.map((row) => {
+    const newRow: ChartRow = { date: row.date as string };
+    for (const m of models) {
+      newRow[labelMap.get(m) ?? m] = (row[m] as number) ?? 0;
+    }
+    return newRow;
+  });
+
   return (
     <AreaChart
-      data={chartData}
+      data={renamedData}
       index="date"
-      categories={models}
+      categories={shortLabels}
       valueFormatter={costFormatter}
-      className="h-64"
+      className="h-72"
       showLegend={models.length > 1}
       showGridLines
       curveType="monotone"
