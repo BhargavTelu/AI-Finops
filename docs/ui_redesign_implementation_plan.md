@@ -6,7 +6,7 @@
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
-**Last updated:** 2026-05-27 (M-P5 + M-P6 added)
+**Last updated:** 2026-05-27 (M-P5 + M-P6 + M-P7 added)
 
 ---
 
@@ -22,7 +22,7 @@
 | **M-P4** Settings Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P5** Alerts & Anomalies Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P6** Recommendations Redesign | ✅ COMPLETE | 2026-05-27 |
-| **M-P7** Budgets Redesign | ⏳ NOT STARTED | — |
+| **M-P7** Budgets Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-QA** Polish & QA Pass | ⏳ NOT STARTED | — |
 
 ---
@@ -243,6 +243,27 @@ Design patterns applied:
 - `StaggerGrid` wraps the card list for staggered entrance animation (0.07s delay per item)
 - Optimistic removal on apply/dismiss with full `initialRecs` revert on API error
 - `CircleDollarSign` icon for applied/dismissed empty states, `Lightbulb` for new
+
+---
+
+## M-P7 Completion Notes
+
+**Completed 2026-05-27.**
+
+Changes shipped:
+- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` — **Full redesign**: replaced table-row layout with a **2-column card grid** (1-col on mobile, 2-col on `sm+`); each card shows scope label, spend vs. limit in `text-mono`, a color-coded progress bar (green <alert_at_pct, amber ≥alert_at_pct, red ≥100%), a `BudgetStatusBadge` (On Track / Caution / Over Budget), remaining spend, and days left in the month; `PageHeader` added with "+ New Budget" button; shared `EmptyState` (Wallet icon) replaces custom inline empty state; `ConfirmDialog` used for delete (replaces inline toggle pattern); **Edit dialog** added (PATCH /budgets/{id}) for updating monthly_limit and alert_at_pct (scope locked after creation); over-budget critical banner (`bg-critical-subtle border-critical/30`) shown when any budget exceeds 100%; `StaggerGrid` + `StaggerItem` entrance animation on the card grid
+- `apps/web/src/app/(dashboard)/budgets/page.tsx` — **Updated**: removed inline `h1/p` header (now owned by client component); delegates to `BudgetsClient`
+- `apps/web/src/app/(dashboard)/budgets/loading.tsx` — **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching the new card layout (header row with badge, spend number, progress bar, days left, footer)
+
+Design patterns applied:
+- `shadow-card` / `shadow-card-hover` on budget cards
+- `border-critical/30` tint on over-budget cards
+- Status badge uses semantic color tokens (`bg-success-subtle text-success`, `bg-warning-subtle text-warning`, `bg-critical-subtle text-critical`)
+- Progress bar: `bg-success` below alert threshold, `bg-warning` at/above threshold, `bg-critical` at 100%
+- Edit preserves scope (cannot be changed) — only limit + alert threshold editable
+- `BudgetFormFields` shared component used by both create and edit dialogs
+- Stagger animation (0.07s delay per card) for polished entrance
+- All destructive actions gated by `ConfirmDialog`
 
 ---
 
@@ -1338,8 +1359,10 @@ CREDIBILITY:
 | `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` | M-P4 | Sidebar nav pattern |
 | `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` | M-P5 | Alert card redesign |
 | `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` | M-P6 | Card redesign |
-| `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` | M-P7 | Progress bar + status |
+| `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` | M-P7 | Full card redesign + edit dialog |
+| `apps/web/src/app/(dashboard)/budgets/page.tsx` | M-P7 | Remove inline header |
+| `apps/web/src/app/(dashboard)/budgets/loading.tsx` | M-P7 | Card grid skeleton |
 
 ---
 
-*Last updated: 2026-05-27 · Version 1.0 · Based on UI/UX Redesign Brief v1.0*
+*Last updated: 2026-05-27 · Version 1.3 · Based on UI/UX Redesign Brief v1.0*

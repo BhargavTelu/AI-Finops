@@ -16,16 +16,7 @@ export default async function BudgetsPage() {
 
   return (
     <PageMotion>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Budgets</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Monthly spend limits with email alerts at your threshold and at 100%
-          </p>
-        </div>
-
-        <BudgetsClient initialBudgets={budgets} />
-      </div>
+      <BudgetsClient initialBudgets={budgets} />
     </PageMotion>
   );
 }

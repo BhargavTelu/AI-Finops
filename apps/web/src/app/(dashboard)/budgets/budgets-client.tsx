@@ -1,9 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Wallet, Plus, Trash2, AlertTriangle } from "lucide-react";
+import {
+  Wallet,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  AlertCircle,
+  Pencil,
+  CheckCircle2,
+} from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
-import { motion, AnimatePresence } from "framer-motion";
 
 import { createApiClient } from "@/lib/api-client";
 import type { BudgetRead, BudgetScopeType } from "@/lib/types";
@@ -23,10 +30,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import { StaggerGrid, StaggerItem } from "@/components/motion-wrapper";
+import { useToast } from "@/hooks/use-toast";
 
-// ── Scope helpers ───────────────────────────────────────────────────────────────
+// ── Scope helpers ─────────────────────────────────────────────────────────────
 
 const SCOPE_LABELS: Record<BudgetScopeType, string> = {
   global: "Global (all spend)",
@@ -52,68 +64,442 @@ function scopeLabel(budget: BudgetRead): string {
   return `${SCOPE_LABELS[budget.scope_type]}: ${budget.scope_value}`;
 }
 
-// ── Spend progress bar ─────────────────────────────────────────────────────────
-
-function SpendBar({ pct }: { pct: number }) {
-  const capped = Math.min(pct, 100);
-  const color =
-    pct >= 100
-      ? "bg-red-500"
-      : pct >= 80
-      ? "bg-amber-400"
-      : "bg-emerald-500";
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-        <div
-          className={cn("h-full rounded-full transition-all", color)}
-          style={{ width: `${capped}%` }}
-        />
-      </div>
-      <span
-        className={cn(
-          "w-10 text-right text-xs font-medium tabular-nums",
-          pct >= 100 ? "text-red-500" : pct >= 80 ? "text-amber-500" : "text-muted-foreground"
-        )}
-      >
-        {pct}%
-      </span>
-    </div>
-  );
-}
-
-// ── Formatters ─────────────────────────────────────────────────────────────────
-
 function fmtUSD(raw: string | number): string {
   const n = typeof raw === "string" ? parseFloat(raw) : raw;
   return `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// ── Add budget dialog ──────────────────────────────────────────────────────────
+function daysLeftInMonth(): number {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return lastDay - now.getDate();
+}
 
-interface AddBudgetFormState {
+// ── Budget status badge ───────────────────────────────────────────────────────
+
+type BudgetStatus = "on-track" | "caution" | "over-budget";
+
+function getBudgetStatus(budget: BudgetRead): BudgetStatus {
+  if (budget.spent_pct >= 100) return "over-budget";
+  if (budget.spent_pct >= budget.alert_at_pct) return "caution";
+  return "on-track";
+}
+
+const STATUS_CONFIG: Record<
+  BudgetStatus,
+  { label: string; Icon: React.ElementType; className: string }
+> = {
+  "on-track": {
+    label: "On Track",
+    Icon: CheckCircle2,
+    className: "bg-success-subtle text-success border-success/20",
+  },
+  caution: {
+    label: "Caution",
+    Icon: AlertTriangle,
+    className: "bg-warning-subtle text-warning border-warning/20",
+  },
+  "over-budget": {
+    label: "Over Budget",
+    Icon: AlertCircle,
+    className: "bg-critical-subtle text-critical border-critical/20",
+  },
+};
+
+function BudgetStatusBadge({ budget }: { budget: BudgetRead }) {
+  const status = getBudgetStatus(budget);
+  const { label, Icon, className } = STATUS_CONFIG[status];
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+        className
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {label}
+    </span>
+  );
+}
+
+// ── Spend progress bar ────────────────────────────────────────────────────────
+
+function SpendBar({ pct, alertPct }: { pct: number; alertPct: number }) {
+  const capped = Math.min(pct, 100);
+  const trackColor =
+    pct >= 100
+      ? "bg-critical"
+      : pct >= alertPct
+      ? "bg-warning"
+      : "bg-success";
+
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={cn("h-full rounded-full transition-all duration-500", trackColor)}
+        style={{ width: `${capped}%` }}
+      />
+    </div>
+  );
+}
+
+// ── Shared form ───────────────────────────────────────────────────────────────
+
+interface BudgetFormState {
   scope_type: BudgetScopeType;
   scope_value: string;
   monthly_limit: string;
   alert_at_pct: string;
 }
 
-const FORM_DEFAULTS: AddBudgetFormState = {
+const FORM_DEFAULTS: BudgetFormState = {
   scope_type: "global",
   scope_value: "",
   monthly_limit: "",
   alert_at_pct: "80",
 };
 
-function AddBudgetDialog({ onCreated }: { onCreated: (budget: BudgetRead) => void }) {
+function validateForm(form: BudgetFormState): string | null {
+  const limit = parseFloat(form.monthly_limit);
+  if (isNaN(limit) || limit <= 0) return "Monthly limit must be a positive number.";
+  const pct = parseInt(form.alert_at_pct, 10);
+  if (isNaN(pct) || pct < 1 || pct > 99) return "Alert threshold must be between 1 and 99.";
+  if (form.scope_type !== "global" && !form.scope_value.trim()) {
+    return "Scope value is required for this scope type.";
+  }
+  return null;
+}
+
+function BudgetFormFields({
+  form,
+  onChange,
+  scopeLocked = false,
+}: {
+  form: BudgetFormState;
+  onChange: (updates: Partial<BudgetFormState>) => void;
+  scopeLocked?: boolean;
+}) {
+  const needsValue = form.scope_type !== "global";
+
+  return (
+    <>
+      <div className="space-y-1.5">
+        <Label htmlFor="budget-scope-type">Scope</Label>
+        <Select
+          value={form.scope_type}
+          onValueChange={(v) =>
+            onChange({ scope_type: v as BudgetScopeType, scope_value: "" })
+          }
+          disabled={scopeLocked}
+        >
+          <SelectTrigger id="budget-scope-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(SCOPE_LABELS) as BudgetScopeType[]).map((s) => (
+              <SelectItem key={s} value={s}>
+                {SCOPE_LABELS[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {scopeLocked && (
+          <p className="text-xs text-muted-foreground">
+            Scope cannot be changed after creation.
+          </p>
+        )}
+      </div>
+
+      {needsValue && (
+        <div className="space-y-1.5">
+          <Label htmlFor="budget-scope-value">Scope value</Label>
+          <Input
+            id="budget-scope-value"
+            value={form.scope_value}
+            onChange={(e) => onChange({ scope_value: e.target.value })}
+            placeholder={SCOPE_VALUE_PLACEHOLDER[form.scope_type] ?? ""}
+            autoComplete="off"
+            disabled={scopeLocked}
+          />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <Label htmlFor="budget-monthly-limit">Monthly limit (USD)</Label>
+        <Input
+          id="budget-monthly-limit"
+          type="number"
+          min="0.01"
+          step="0.01"
+          value={form.monthly_limit}
+          onChange={(e) => onChange({ monthly_limit: e.target.value })}
+          placeholder="1000.00"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="budget-alert-pct">Alert threshold (%)</Label>
+        <Input
+          id="budget-alert-pct"
+          type="number"
+          min="1"
+          max="99"
+          value={form.alert_at_pct}
+          onChange={(e) => onChange({ alert_at_pct: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          You&apos;ll receive an email at this threshold and again at 100%.
+        </p>
+      </div>
+    </>
+  );
+}
+
+// ── Budget card ───────────────────────────────────────────────────────────────
+
+function BudgetCard({
+  budget,
+  onUpdated,
+  onDeleted,
+}: {
+  budget: BudgetRead;
+  onUpdated: (budget: BudgetRead) => void;
+  onDeleted: (id: string) => void;
+}) {
   const { getToken } = useAuth();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<AddBudgetFormState>(FORM_DEFAULTS);
+  const { toast } = useToast();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isPendingDelete, startDelete] = useTransition();
+  const [isPendingEdit, startEdit] = useTransition();
+  const [editForm, setEditForm] = useState<BudgetFormState>({
+    scope_type: budget.scope_type,
+    scope_value: budget.scope_value ?? "",
+    monthly_limit: budget.monthly_limit,
+    alert_at_pct: String(budget.alert_at_pct),
+  });
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const remaining =
+    parseFloat(budget.monthly_limit) - parseFloat(budget.current_spend_mtd);
+  const daysLeft = daysLeftInMonth();
+  const isOver = budget.spent_pct >= 100;
+
+  function handleDelete() {
+    startDelete(async () => {
+      try {
+        const token = await getToken();
+        const api = createApiClient(token!);
+        await api.delete(`/budgets/${budget.id}`);
+        onDeleted(budget.id);
+      } catch {
+        setDeleteOpen(false);
+      }
+    });
+  }
+
+  function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError(null);
+    const err = validateForm(editForm);
+    if (err) {
+      setEditError(err);
+      return;
+    }
+    startEdit(async () => {
+      try {
+        const token = await getToken();
+        const api = createApiClient(token!);
+        const updated = await api.patch<BudgetRead>(`/budgets/${budget.id}`, {
+          monthly_limit: parseFloat(editForm.monthly_limit),
+          alert_at_pct: parseInt(editForm.alert_at_pct, 10),
+        });
+        onUpdated(updated);
+        setEditOpen(false);
+        toast({ title: "Budget updated", description: "Changes have been saved." });
+      } catch (err) {
+        setEditError(
+          err instanceof Error ? err.message : "Failed to update budget."
+        );
+      }
+    });
+  }
+
+  return (
+    <>
+      <div
+        className={cn(
+          "flex flex-col rounded-xl border bg-card shadow-card transition-shadow duration-200 hover:shadow-card-hover",
+          isOver && "border-critical/30"
+        )}
+      >
+        {/* Card body */}
+        <div className="flex flex-col gap-4 p-6">
+          {/* Header: name + status badge */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-foreground">
+                {scopeLabel(budget)}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Alert at {budget.alert_at_pct}%
+                {budget.hard_cap ? " · Hard cap on" : ""}
+              </p>
+            </div>
+            <BudgetStatusBadge budget={budget} />
+          </div>
+
+          {/* Spend numbers */}
+          <div>
+            <p
+              className={cn(
+                "text-2xl font-bold text-mono",
+                isOver ? "text-critical" : "text-foreground"
+              )}
+            >
+              {fmtUSD(budget.current_spend_mtd)}
+            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              of {fmtUSD(budget.monthly_limit)} monthly limit
+            </p>
+          </div>
+
+          {/* Progress bar + percentage */}
+          <div className="space-y-1.5">
+            <SpendBar pct={budget.spent_pct} alertPct={budget.alert_at_pct} />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {remaining >= 0
+                  ? `${fmtUSD(remaining)} remaining`
+                  : `${fmtUSD(Math.abs(remaining))} over limit`}
+              </p>
+              <p
+                className={cn(
+                  "text-xs font-semibold tabular-nums",
+                  isOver
+                    ? "text-critical"
+                    : budget.spent_pct >= budget.alert_at_pct
+                    ? "text-warning"
+                    : "text-muted-foreground"
+                )}
+              >
+                {budget.spent_pct}%
+              </p>
+            </div>
+          </div>
+
+          {/* Days left — urgent when ≤5 days remain and budget is not on track */}
+          <p
+            className={cn(
+              "text-xs",
+              daysLeft <= 5 && getBudgetStatus(budget) !== "on-track"
+                ? "font-medium text-warning"
+                : "text-muted-foreground"
+            )}
+          >
+            {daysLeft === 0
+              ? "Last day of the month"
+              : `${daysLeft} day${daysLeft !== 1 ? "s" : ""} left this month`}
+          </p>
+        </div>
+
+        {/* Card footer */}
+        <Separator />
+        <div className="flex items-center justify-between px-4 py-3">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={() => setEditOpen(true)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-muted-foreground hover:text-destructive"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete
+          </Button>
+        </div>
+      </div>
+
+      {/* Edit dialog */}
+      <Dialog
+        open={editOpen}
+        onOpenChange={(v) => {
+          setEditOpen(v);
+          if (!v) setEditError(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit budget</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4 pt-2">
+            <BudgetFormFields
+              form={editForm}
+              onChange={(updates) =>
+                setEditForm((f) => ({ ...f, ...updates }))
+              }
+              scopeLocked
+            />
+            {editError && (
+              <p className="flex items-center gap-1.5 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {editError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isPendingEdit}>
+                {isPendingEdit ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <ConfirmDialog
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDelete}
+        title="Delete budget"
+        description={`This will permanently delete the "${scopeLabel(budget)}" budget. Email alerts for this scope will stop immediately.`}
+        confirmLabel="Delete budget"
+        variant="destructive"
+        isLoading={isPendingDelete}
+      />
+    </>
+  );
+}
+
+// ── Create budget dialog ──────────────────────────────────────────────────────
+
+function CreateBudgetDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (budget: BudgetRead) => void;
+}) {
+  const { getToken } = useAuth();
+  const { toast } = useToast();
+  const [form, setForm] = useState<BudgetFormState>(FORM_DEFAULTS);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const needsValue = form.scope_type !== "global";
 
   function reset() {
     setForm(FORM_DEFAULTS);
@@ -123,38 +509,31 @@ function AddBudgetDialog({ onCreated }: { onCreated: (budget: BudgetRead) => voi
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
-    const limit = parseFloat(form.monthly_limit);
-    if (isNaN(limit) || limit <= 0) {
-      setError("Monthly limit must be a positive number.");
+    const err = validateForm(form);
+    if (err) {
+      setError(err);
       return;
     }
-    const pct = parseInt(form.alert_at_pct, 10);
-    if (isNaN(pct) || pct < 1 || pct > 100) {
-      setError("Alert threshold must be between 1 and 100.");
-      return;
-    }
-    if (needsValue && !form.scope_value.trim()) {
-      setError("Scope value is required for this scope type.");
-      return;
-    }
-
     startTransition(async () => {
       try {
         const token = await getToken();
         const api = createApiClient(token!);
         const created = await api.post<BudgetRead>("/budgets", {
           scope_type: form.scope_type,
-          scope_value: needsValue ? form.scope_value.trim() : null,
-          monthly_limit: limit,
-          alert_at_pct: pct,
+          scope_value:
+            form.scope_type !== "global" ? form.scope_value.trim() : null,
+          monthly_limit: parseFloat(form.monthly_limit),
+          alert_at_pct: parseInt(form.alert_at_pct, 10),
           hard_cap: false,
         });
         onCreated(created);
-        setOpen(false);
+        onOpenChange(false);
         reset();
+        toast({ title: "Budget created", description: "Your new budget is now active." });
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create budget.");
+        setError(
+          err instanceof Error ? err.message : "Failed to create budget."
+        );
       }
     });
   }
@@ -163,92 +542,31 @@ function AddBudgetDialog({ onCreated }: { onCreated: (budget: BudgetRead) => voi
     <Dialog
       open={open}
       onOpenChange={(v) => {
-        setOpen(v);
+        onOpenChange(v);
         if (!v) reset();
       }}
     >
-      <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          Add budget
-        </Button>
-      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New budget</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="scope_type">Scope</Label>
-            <Select
-              value={form.scope_type}
-              onValueChange={(v) =>
-                setForm((f) => ({ ...f, scope_type: v as BudgetScopeType, scope_value: "" }))
-              }
-            >
-              <SelectTrigger id="scope_type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(SCOPE_LABELS) as BudgetScopeType[]).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {SCOPE_LABELS[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {needsValue && (
-            <div className="space-y-1.5">
-              <Label htmlFor="scope_value">Scope value</Label>
-              <Input
-                id="scope_value"
-                value={form.scope_value}
-                onChange={(e) => setForm((f) => ({ ...f, scope_value: e.target.value }))}
-                placeholder={SCOPE_VALUE_PLACEHOLDER[form.scope_type] ?? ""}
-                autoComplete="off"
-              />
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="monthly_limit">Monthly limit (USD)</Label>
-            <Input
-              id="monthly_limit"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={form.monthly_limit}
-              onChange={(e) => setForm((f) => ({ ...f, monthly_limit: e.target.value }))}
-              placeholder="1000.00"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="alert_at_pct">Alert threshold (%)</Label>
-            <Input
-              id="alert_at_pct"
-              type="number"
-              min="1"
-              max="100"
-              value={form.alert_at_pct}
-              onChange={(e) => setForm((f) => ({ ...f, alert_at_pct: e.target.value }))}
-            />
-            <p className="text-xs text-muted-foreground">
-              You'll receive an email when spend reaches this % and again at 100%.
-            </p>
-          </div>
-
+          <BudgetFormFields
+            form={form}
+            onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
+          />
           {error && (
-            <p className="flex items-center gap-1.5 text-sm text-red-500">
+            <p className="flex items-center gap-1.5 text-sm text-destructive">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               {error}
             </p>
           )}
-
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -261,376 +579,86 @@ function AddBudgetDialog({ onCreated }: { onCreated: (budget: BudgetRead) => voi
   );
 }
 
-// ── Delete confirmation ────────────────────────────────────────────────────────
+// ── Root client component ─────────────────────────────────────────────────────
 
-function DeleteButton({
-  budget,
-  onDeleted,
+export function BudgetsClient({
+  initialBudgets,
 }: {
-  budget: BudgetRead;
-  onDeleted: (id: string) => void;
+  initialBudgets: BudgetRead[];
 }) {
-  const { getToken } = useAuth();
-  const [isPending, startTransition] = useTransition();
-  const [confirming, setConfirming] = useState(false);
-
-  function handleDelete() {
-    startTransition(async () => {
-      try {
-        const token = await getToken();
-        const api = createApiClient(token!);
-        await api.delete(`/budgets/${budget.id}`);
-        onDeleted(budget.id);
-      } catch {
-        // keep confirming state — user can retry
-      }
-    });
-  }
-
-  if (confirming) {
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">Delete?</span>
-        <Button
-          size="sm"
-          variant="destructive"
-          className="h-7 px-2 text-xs"
-          onClick={handleDelete}
-          disabled={isPending}
-        >
-          {isPending ? "…" : "Yes"}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 px-2 text-xs"
-          onClick={() => setConfirming(false)}
-        >
-          No
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <Button
-      size="sm"
-      variant="ghost"
-      className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-      onClick={() => setConfirming(true)}
-      aria-label="Delete budget"
-    >
-      <Trash2 className="h-4 w-4" />
-    </Button>
-  );
-}
-
-// ── Budget row ─────────────────────────────────────────────────────────────────
-
-function BudgetRow({
-  budget,
-  onDeleted,
-}: {
-  budget: BudgetRead;
-  onDeleted: (id: string) => void;
-}) {
-  const isOver = budget.spent_pct >= 100;
-  const isWarning = budget.spent_pct >= budget.alert_at_pct && !isOver;
-
-  return (
-    <motion.tr
-      layout
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.2 }}
-      className="border-b last:border-0"
-    >
-      {/* Scope */}
-      <td className="px-4 py-3.5">
-        <span className="text-sm font-medium">{scopeLabel(budget)}</span>
-      </td>
-
-      {/* Monthly limit */}
-      <td className="px-4 py-3.5 text-sm tabular-nums">
-        {fmtUSD(budget.monthly_limit)}
-      </td>
-
-      {/* MTD spend */}
-      <td className="px-4 py-3.5 text-sm tabular-nums">
-        <span
-          className={cn(
-            isOver ? "text-red-500 font-medium" : isWarning ? "text-amber-600" : ""
-          )}
-        >
-          {fmtUSD(budget.current_spend_mtd)}
-        </span>
-      </td>
-
-      {/* Progress bar */}
-      <td className="px-4 py-3.5 min-w-[160px]">
-        <SpendBar pct={budget.spent_pct} />
-      </td>
-
-      {/* Alert at */}
-      <td className="px-4 py-3.5 text-sm text-muted-foreground">
-        {budget.alert_at_pct}%
-      </td>
-
-      {/* Actions */}
-      <td className="px-4 py-3.5 text-right">
-        <DeleteButton budget={budget} onDeleted={onDeleted} />
-      </td>
-    </motion.tr>
-  );
-}
-
-// ── Empty state ────────────────────────────────────────────────────────────────
-
-function EmptyState({ onAddClicked }: { onAddClicked: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.97 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.25 }}
-      className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/50 text-center"
-    >
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-950/40">
-        <Wallet className="h-7 w-7 text-blue-500" strokeWidth={1.5} />
-      </div>
-      <h2 className="text-base font-medium">No budgets configured</h2>
-      <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-        Set monthly spend limits per provider, model, or team. Get emailed at your alert
-        threshold and again at 100%.
-      </p>
-      <Button size="sm" className="mt-5 gap-1.5" onClick={onAddClicked}>
-        <Plus className="h-4 w-4" />
-        Set your first budget
-      </Button>
-    </motion.div>
-  );
-}
-
-// ── Budget table ───────────────────────────────────────────────────────────────
-
-const TABLE_HEADERS = ["Scope", "Monthly limit", "MTD spend", "Usage", "Alert at", ""];
-
-function BudgetTable({
-  budgets,
-  onDeleted,
-}: {
-  budgets: BudgetRead[];
-  onDeleted: (id: string) => void;
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border">
-      <table className="w-full text-left">
-        <thead className="border-b bg-muted/40">
-          <tr>
-            {TABLE_HEADERS.map((h) => (
-              <th
-                key={h}
-                className="px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <AnimatePresence initial={false}>
-            {budgets.map((b) => (
-              <BudgetRow key={b.id} budget={b} onDeleted={onDeleted} />
-            ))}
-          </AnimatePresence>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ── Root client component ──────────────────────────────────────────────────────
-
-export function BudgetsClient({ initialBudgets }: { initialBudgets: BudgetRead[] }) {
   const [budgets, setBudgets] = useState<BudgetRead[]>(initialBudgets);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
 
   function handleCreated(budget: BudgetRead) {
     setBudgets((prev) => [budget, ...prev]);
+  }
+
+  function handleUpdated(updated: BudgetRead) {
+    setBudgets((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
   }
 
   function handleDeleted(id: string) {
     setBudgets((prev) => prev.filter((b) => b.id !== id));
   }
 
-  const overCount = budgets.filter((b) => b.spent_pct >= 100).length;
+  const overBudgetCount = budgets.filter((b) => b.spent_pct >= 100).length;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        {overCount > 0 && (
-          <p className="flex items-center gap-1.5 text-sm text-red-500">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {overCount} budget{overCount > 1 ? "s" : ""} exceeded this month
+    <div className="space-y-6">
+      <PageHeader
+        title="Budgets"
+        description="Monthly spend limits with email alerts at your threshold and at 100%."
+        actions={
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setCreateOpen(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New budget
+          </Button>
+        }
+      />
+
+      {/* Over-budget critical banner */}
+      {overBudgetCount > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-critical/30 bg-critical-subtle px-4 py-3 text-sm text-critical">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <p>
+            <span className="font-semibold">
+              {overBudgetCount} budget{overBudgetCount > 1 ? "s" : ""}
+            </span>{" "}
+            exceeded this month — review your spend or raise the limit.
           </p>
-        )}
-        {overCount === 0 && <span />}
-
-        {/* Dialog trigger wired to allow EmptyState to open it programmatically */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1.5">
-              <Plus className="h-4 w-4" />
-              Add budget
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>New budget</DialogTitle>
-            </DialogHeader>
-            <AddBudgetForm
-              onCreated={(b) => {
-                handleCreated(b);
-                setDialogOpen(false);
-              }}
-            />
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {budgets.length === 0 ? (
-        <EmptyState onAddClicked={() => setDialogOpen(true)} />
-      ) : (
-        <BudgetTable budgets={budgets} onDeleted={handleDeleted} />
-      )}
-    </div>
-  );
-}
-
-// ── Form extracted for reuse in both dialog locations ──────────────────────────
-
-function AddBudgetForm({ onCreated }: { onCreated: (budget: BudgetRead) => void }) {
-  const { getToken } = useAuth();
-  const [form, setForm] = useState<AddBudgetFormState>(FORM_DEFAULTS);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const needsValue = form.scope_type !== "global";
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    const limit = parseFloat(form.monthly_limit);
-    if (isNaN(limit) || limit <= 0) {
-      setError("Monthly limit must be a positive number.");
-      return;
-    }
-    const pct = parseInt(form.alert_at_pct, 10);
-    if (isNaN(pct) || pct < 1 || pct > 100) {
-      setError("Alert threshold must be between 1 and 100.");
-      return;
-    }
-    if (needsValue && !form.scope_value.trim()) {
-      setError("Scope value is required for this scope type.");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const token = await getToken();
-        const api = createApiClient(token!);
-        const created = await api.post<BudgetRead>("/budgets", {
-          scope_type: form.scope_type,
-          scope_value: needsValue ? form.scope_value.trim() : null,
-          monthly_limit: limit,
-          alert_at_pct: pct,
-          hard_cap: false,
-        });
-        onCreated(created);
-        setForm(FORM_DEFAULTS);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to create budget.");
-      }
-    });
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-      <div className="space-y-1.5">
-        <Label htmlFor="scope_type">Scope</Label>
-        <Select
-          value={form.scope_type}
-          onValueChange={(v) =>
-            setForm((f) => ({ ...f, scope_type: v as BudgetScopeType, scope_value: "" }))
-          }
-        >
-          <SelectTrigger id="scope_type">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(SCOPE_LABELS) as BudgetScopeType[]).map((s) => (
-              <SelectItem key={s} value={s}>
-                {SCOPE_LABELS[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {needsValue && (
-        <div className="space-y-1.5">
-          <Label htmlFor="scope_value">Scope value</Label>
-          <Input
-            id="scope_value"
-            value={form.scope_value}
-            onChange={(e) => setForm((f) => ({ ...f, scope_value: e.target.value }))}
-            placeholder={SCOPE_VALUE_PLACEHOLDER[form.scope_type] ?? ""}
-            autoComplete="off"
-          />
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <Label htmlFor="monthly_limit">Monthly limit (USD)</Label>
-        <Input
-          id="monthly_limit"
-          type="number"
-          min="0.01"
-          step="0.01"
-          value={form.monthly_limit}
-          onChange={(e) => setForm((f) => ({ ...f, monthly_limit: e.target.value }))}
-          placeholder="1000.00"
+      {budgets.length === 0 ? (
+        <EmptyState
+          icon={Wallet}
+          title="No budgets configured"
+          description="Set monthly spend limits per provider, model, or team. Get alerted before you overspend."
+          action={{ label: "Create first budget", onClick: () => setCreateOpen(true) }}
         />
-      </div>
-
-      <div className="space-y-1.5">
-        <Label htmlFor="alert_at_pct">Alert threshold (%)</Label>
-        <Input
-          id="alert_at_pct"
-          type="number"
-          min="1"
-          max="100"
-          value={form.alert_at_pct}
-          onChange={(e) => setForm((f) => ({ ...f, alert_at_pct: e.target.value }))}
-        />
-        <p className="text-xs text-muted-foreground">
-          You'll receive an email at this threshold and again at 100%.
-        </p>
-      </div>
-
-      {error && (
-        <p className="flex items-center gap-1.5 text-sm text-red-500">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
-        </p>
+      ) : (
+        <StaggerGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {budgets.map((budget) => (
+            <StaggerItem key={budget.id}>
+              <BudgetCard
+                budget={budget}
+                onUpdated={handleUpdated}
+                onDeleted={handleDeleted}
+              />
+            </StaggerItem>
+          ))}
+        </StaggerGrid>
       )}
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating…" : "Create budget"}
-        </Button>
-      </div>
-    </form>
+      <CreateBudgetDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={handleCreated}
+      />
+    </div>
   );
 }
