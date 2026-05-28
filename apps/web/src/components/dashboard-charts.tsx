@@ -2,9 +2,10 @@
 
 import {
   AreaChart,
-  BarChart,
 } from "@tremor/react";
 import {
+  Bar,
+  BarChart,
   Cell,
   Legend,
   Line,
@@ -13,6 +14,8 @@ import {
   PieChart,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 import {
   CalendarDays,
@@ -299,7 +302,16 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
         </Pie>
         <Tooltip
           formatter={(value: number) => [`$${value.toFixed(2)}`, "Cost"]}
-          contentStyle={{ fontSize: "12px", borderRadius: "8px" }}
+          contentStyle={{
+            fontSize: "12px",
+            borderRadius: "8px",
+            border: "1px solid hsl(var(--border))",
+            backgroundColor: "hsl(var(--card))",
+            color: "hsl(var(--foreground))",
+            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.12)",
+          }}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
         />
         <Legend
           iconSize={8}
@@ -321,6 +333,51 @@ export type ChartRow = Record<string, string | number>;
 
 const costFormatter = (value: number) =>
   value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : `$${value.toFixed(2)}`;
+
+// Custom tooltip for the Tremor AreaChart - uses design tokens so it works in
+// both light and dark mode and stays visually consistent with the card surface.
+interface SpendTooltipEntry {
+  name?: string;
+  category?: string;
+  value: number;
+  color: string;
+}
+interface SpendTooltipProps {
+  payload: SpendTooltipEntry[] | undefined;
+  active: boolean | undefined;
+  label: string;
+}
+
+function SpendTrendTooltip({ payload, active, label }: SpendTooltipProps) {
+  if (!active || !payload?.length) return null;
+  const nonZero = payload.filter((e) => e.value > 0);
+  if (nonZero.length === 0) return null;
+  return (
+    <div
+      className="rounded-lg border border-border bg-card px-3 py-2.5 shadow-card"
+      style={{ minWidth: "160px", maxWidth: "260px" }}
+    >
+      <p className="mb-1.5 text-xs font-semibold text-foreground">{label}</p>
+      <div className="space-y-1">
+        {nonZero.map((entry) => {
+          const key = entry.name ?? entry.category ?? "";
+          return (
+            <div key={key} className="flex items-center gap-2 text-xs">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="max-w-[120px] truncate text-muted-foreground">{key}</span>
+              <span className="ml-auto pl-2 text-mono font-medium text-foreground">
+                {costFormatter(entry.value)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Shorten raw model+token-type labels so they fit in the chart legend.
@@ -381,6 +438,8 @@ export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
       showLegend={models.length > 1}
       showGridLines
       curveType="monotone"
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      customTooltip={SpendTrendTooltip as any}
     />
   );
 }
@@ -398,8 +457,6 @@ interface TopModelsProps {
   barData: BarRow[];
 }
 
-const costBarFormatter = (value: number) => `$${value.toFixed(2)}`;
-
 export function TopModelsChart({ barData }: TopModelsProps) {
   if (barData.length === 0) {
     return (
@@ -408,17 +465,46 @@ export function TopModelsChart({ barData }: TopModelsProps) {
       </div>
     );
   }
+  const chartHeight = Math.max(200, barData.length * 44);
   return (
-    <BarChart
-      data={barData}
-      index="model"
-      categories={["cost"]}
-      valueFormatter={costBarFormatter}
-      layout="vertical"
-      style={{ height: `${Math.max(180, barData.length * 44)}px` }}
-      showLegend={false}
-      yAxisWidth={180}
-    />
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <BarChart
+        data={barData}
+        layout="vertical"
+        margin={{ top: 4, right: 52, left: 0, bottom: 4 }}
+      >
+        <XAxis
+          type="number"
+          tickFormatter={(v: number) => `$${v.toFixed(2)}`}
+          tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <YAxis
+          type="category"
+          dataKey="model"
+          width={176}
+          tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }}
+          axisLine={false}
+          tickLine={false}
+        />
+        <Tooltip
+          cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+          formatter={(value: number) => [`$${value.toFixed(2)}`, "Cost"]}
+          contentStyle={{
+            fontSize: "12px",
+            borderRadius: "8px",
+            border: "1px solid hsl(var(--border))",
+            backgroundColor: "hsl(var(--card))",
+            color: "hsl(var(--foreground))",
+            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.12)",
+          }}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
+          labelStyle={{ fontWeight: 600, color: "hsl(var(--foreground))" }}
+        />
+        <Bar dataKey="cost" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={28} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
