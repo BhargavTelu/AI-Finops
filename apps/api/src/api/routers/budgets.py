@@ -126,6 +126,11 @@ async def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
             detail="A budget with this scope already exists",
         )
 
+    # org.user_id is the Clerk sub claim (not a UUID). Resolve the Supabase
+    # users.id UUID so the FK constraint on created_by is satisfied.
+    user_row = db.table("users").select("id").eq("clerk_id", org.user_id).limit(1).execute()
+    created_by: str | None = user_row.data[0]["id"] if user_row.data else None
+
     insert_result = (
         db.table("budgets")
         .insert(
@@ -136,7 +141,7 @@ async def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
                 "monthly_limit": str(body.monthly_limit),
                 "alert_at_pct": body.alert_at_pct,
                 "hard_cap": body.hard_cap,
-                "created_by": org.user_id,
+                "created_by": created_by,
             }
         )
         .execute()
