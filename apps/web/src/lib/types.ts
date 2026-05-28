@@ -1,5 +1,5 @@
 // Shared TypeScript types matching FastAPI Pydantic schemas.
-// Decimal fields are serialised as strings over JSON — parse with Number() or parseFloat() when needed.
+// Decimal fields are serialised as strings over JSON - parse with Number() or parseFloat() when needed.
 
 export interface IntegrationRead {
   id: string;

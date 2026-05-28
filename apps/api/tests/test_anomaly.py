@@ -37,7 +37,7 @@ class TestDetectAnomalies:
         assert detect_anomalies(small) is None
 
     def test_no_anomaly_within_two_sigma(self) -> None:
-        # Flat spend — z-score is 0
+        # Flat spend - z-score is 0
         flat = _costs([100.0] * 15)
         assert detect_anomalies(flat) is None
 
@@ -73,7 +73,7 @@ class TestDetectAnomalies:
         # z = (actual - 100) / 0.01 = 2.5 when actual = 100.025
         # Use a near-flat baseline of slight variance to get a real stdev.
         # Easier: use variance-free baseline → stdev=0 → clipped to 0.01.
-        # actual = 100 + 0.01 * 2.5 = 100.025 but must be ≥ $10 — that's fine.
+        # actual = 100 + 0.01 * 2.5 = 100.025 but must be ≥ $10 - that's fine.
         baseline = 100.0
         # z = (actual - baseline) / 0.01 between 2 and 3 → severity = "low"
         actual = baseline + 0.01 * 2.5  # z ≈ 2.5

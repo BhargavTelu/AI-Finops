@@ -1,4 +1,4 @@
-# Implementation Guide — SpendOps AI
+# Implementation Guide - SpendOps AI
 
 Companion to `project_spec.md` (what + scope) and `architecture.md` (how).
 This file is the **build checklist**: per milestone, the tasks to complete and the
@@ -9,7 +9,7 @@ gate that proves the milestone is actually done.
   **Done gate** passes.
 - A task is checked only when it works end to end on `staging`, not when it compiles.
 - FR-IDs (e.g. FR-3) refer to the functional requirements table in `project_spec.md`.
-  This guide does not restate them — it tracks completion.
+  This guide does not restate them - it tracks completion.
 - No calendar dates. Milestones are relative: each begins when the prior gate passes.
 - Security, code-quality, and infra rules live in `architecture.md`. They are
   **not** duplicated here; the Cross-Cutting section below only points to them.
@@ -71,7 +71,7 @@ Goal: prove the per-feature attribution wedge with a multi-provider design partn
 
 - [ ] Anthropic ingestion (FR-8) via `/v1/organizations/usage_report/messages`
       + `/cost_report`, through the same adapter protocol
-- [ ] Gemini ingestion (FR-9) — verify billing granularity first; if weak, defer to V1
+- [ ] Gemini ingestion (FR-9) - verify billing granularity first; if weak, defer to V1
 - [ ] Unified multi-provider view, USD-normalized (FR-10)
 - [ ] Tag CRUD: feature / team / customer / env, assignable colors (FR-11)
 - [ ] Tag-rule engine: regex/substring match on API key label, runs at ingestion,
@@ -91,7 +91,7 @@ Goal: prove the per-feature attribution wedge with a multi-provider design partn
 - [ ] Tag rules correctly classify their real keys across ≥2 dimensions.
 
 **Scope guard:** `customer` exists as a tag dimension here, but full per-customer
-*attribution / chargeback* is a V1 feature — do not build the chargeback dashboard now.
+*attribution / chargeback* is a V1 feature - do not build the chargeback dashboard now.
 
 ---
 
@@ -100,7 +100,7 @@ Goal: prove the per-feature attribution wedge with a multi-provider design partn
 Goal: automated detection + alerting so the product works while the customer sleeps.
 
 - [ ] Anomaly detection (FR-14): rolling mean + 2σ over 7d window, $10 floor,
-      nightly job. Algorithm is fixed in `architecture.md` — implement as specified.
+      nightly job. Algorithm is fixed in `architecture.md` - implement as specified.
 - [ ] Anomaly log fields: timestamp, scope, baseline cost, actual cost, spike %,
       severity low/medium/high by z-score; status open → acknowledged → resolved (FR-15)
 - [ ] Anomaly explainer: 1–2 sentence plain-English cause (Claude Haiku, 24h cached)
@@ -113,7 +113,7 @@ Goal: automated detection + alerting so the product works while the customer sle
       top 3 cost drivers, open anomalies, budget status
 - [ ] Slack manage: disconnect, mute alerts, change channel
 - [ ] Rule-based recommendations engine (FR-19): model swap, caching, batching,
-      input compression — each with a $ savings estimate, confidence (0–100%), evidence
+      input compression - each with a $ savings estimate, confidence (0–100%), evidence
 - [ ] `/recommendations` screen; mark applied / dismissed (FR-20)
 
 **Done gate:**
@@ -150,7 +150,7 @@ Goal: a stranger can self-serve from landing page to paid without you touching a
 
 **Done gate (this is also the MVP-complete gate):**
 - [ ] A non-friend stranger lands on `/`, signs up, connects OpenAI, sets a budget,
-      receives a Slack alert, and pays $299 — with no manual intervention.
+      receives a Slack alert, and pays $299 - with no manual intervention.
 - [ ] That customer has data tagged across ≥2 dimensions.
 - [ ] A CFO PDF has been generated for them.
 
@@ -158,7 +158,7 @@ Goal: a stranger can self-serve from landing page to paid without you touching a
 
 ## Pre-Build Gate (before opening Cursor at all)
 
-From `project_spec.md` — repeated here as a hard checklist because it blocks M0:
+From `project_spec.md` - repeated here as a hard checklist because it blocks M0:
 
 - [ ] 10 founder calls done
 - [ ] 5+ described the same pain unprompted
@@ -170,7 +170,7 @@ If these are not all checked, do more customer calls. Do not start M0.
 
 ## Pre-Deploy Smoke (run before every deploy)
 
-Mirror of `architecture.md` — kept here as the operational checklist:
+Mirror of `architecture.md` - kept here as the operational checklist:
 
 - [ ] RLS two-tenant isolation probe passes
 - [ ] Signup → org → connect → chart works on staging
@@ -181,7 +181,7 @@ Mirror of `architecture.md` — kept here as the operational checklist:
 
 ---
 
-## Cross-Cutting Requirements (do not duplicate — see source of truth)
+## Cross-Cutting Requirements (do not duplicate - see source of truth)
 
 These are **defined in `architecture.md`**. Verify against that file; do not
 re-specify them here, so there is exactly one place to update each:
@@ -192,7 +192,7 @@ re-specify them here, so there is exactly one place to update each:
 - PostHog activation events → `architecture.md` › Engineering Reqs
 - DB schema, API surface, adapter protocol, anomaly algorithm → `architecture.md`
 
-## Out of MVP (do not build now — see source of truth)
+## Out of MVP (do not build now - see source of truth)
 
 Full lists with repay-triggers live in `project_spec.md` › Post-MVP and
 `architecture.md` › Known V1 debt. Headline "never in MVP": proxy mode,

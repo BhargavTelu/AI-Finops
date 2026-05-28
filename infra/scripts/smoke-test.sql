@@ -3,14 +3,14 @@
 -- Run as a Supabase service-role client BEFORE every deploy.
 --
 -- How it works:
---   1. INSERTs run as postgres (service role) — bypasses RLS intentionally
+--   1. INSERTs run as postgres (service role) - bypasses RLS intentionally
 --      so we can seed test data without needing INSERT policies.
---   2. SET LOCAL ROLE authenticated — switches to the non-superuser role
+--   2. SET LOCAL ROLE authenticated - switches to the non-superuser role
 --      that RLS policies actually apply to. Without this step the postgres
 --      superuser bypasses every USING clause and sees all rows.
---   3. SET LOCAL "request.jwt.claims" — populates auth.jwt() so the policy
+--   3. SET LOCAL "request.jwt.claims" - populates auth.jwt() so the policy
 --      expression (org_id = (auth.jwt()->>'org_id')::uuid) can evaluate.
---   4. ROLLBACK — discards all test data; safe to re-run at any time.
+--   4. ROLLBACK - discards all test data; safe to re-run at any time.
 -- =============================================================================
 
 BEGIN;
@@ -27,7 +27,7 @@ VALUES
     ('bbbbbbbb-0000-0000-0000-000000000002', CURRENT_DATE, 'openai', 'gpt-4o', 200.00, 2000, 900000);
 
 -- Switch to the authenticated role so RLS policies are enforced.
--- The postgres superuser skips all USING clauses — this line is mandatory.
+-- The postgres superuser skips all USING clauses - this line is mandatory.
 SET LOCAL ROLE authenticated;
 
 -- ── Probe as Org A ────────────────────────────────────────────────────────────

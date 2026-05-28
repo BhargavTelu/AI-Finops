@@ -66,7 +66,7 @@ export default async function DashboardPage({
     api.get<AnomalyRead[]>("/anomalies").catch(() => [] as AnomalyRead[]),
   ]);
 
-  // Empty state — no integrations connected or no data yet
+  // Empty state - no integrations connected or no data yet
   if (!dashboard || dashboard.month.total_requests === 0) {
     return (
       <PageMotion>

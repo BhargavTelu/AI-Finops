@@ -1,10 +1,10 @@
 # UI/UX Redesign Implementation Plan
-## SpendOps AI — Analyst-Grade SaaS Platform
+## SpendOps AI - Analyst-Grade SaaS Platform
 
 **Document version:** 1.3
 **Based on brief:** `docs/ai_finops_ui_redesign_general_prompt.md`
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
-**Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
+**Design direction:** Stripe / Vercel / Vantage - minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
 **Last updated:** 2026-05-28 (M-QA complete)
 
@@ -32,11 +32,11 @@
 **Completed 2026-05-27. All tokens live in production build.**
 
 Changes shipped:
-- `apps/web/src/app/globals.css` — added `--info`, `--critical`, `--*-subtle` tokens for all status types; fixed dark mode `--border` visibility (`17%` → `22%` lightness); changed `--radius` from `0.625rem` to `0.5rem` (8px base); added `--shadow-card`, `--shadow-card-hover`, `--transition-fast`, `--transition-base` CSS custom properties; added `.text-mono` utility (monospace + tabular-nums)
-- `apps/web/tailwind.config.ts` — added `info`, `critical` color tokens with `.subtle` sub-keys; added `fontFamily.mono` stack override; added `boxShadow.card` and `boxShadow.card-hover` mapped to CSS custom properties; corrected border radius comments for 8px base
+- `apps/web/src/app/globals.css` - added `--info`, `--critical`, `--*-subtle` tokens for all status types; fixed dark mode `--border` visibility (`17%` → `22%` lightness); changed `--radius` from `0.625rem` to `0.5rem` (8px base); added `--shadow-card`, `--shadow-card-hover`, `--transition-fast`, `--transition-base` CSS custom properties; added `.text-mono` utility (monospace + tabular-nums)
+- `apps/web/tailwind.config.ts` - added `info`, `critical` color tokens with `.subtle` sub-keys; added `fontFamily.mono` stack override; added `boxShadow.card` and `boxShadow.card-hover` mapped to CSS custom properties; corrected border radius comments for 8px base
 
 Token reference (for page milestone work):
-- Financial values: `className="text-mono"` — monospace + tabular-nums
+- Financial values: `className="text-mono"` - monospace + tabular-nums
 - Success badges: `bg-success-subtle text-success`
 - Warning badges: `bg-warning-subtle text-warning`
 - Critical alerts: `bg-critical-subtle text-critical`
@@ -53,11 +53,11 @@ Token reference (for page milestone work):
 **shadcn components installed** (added to `src/components/ui/`):
 `badge` · `alert` · `tooltip` · `tabs` · `separator` · `toast` · `toaster` · `dropdown-menu` · `switch` · `textarea` · `progress` · `popover` · `avatar` · `calendar`
 
-Note: `calendar` was installed after the initial M-CL pass (missed in original). Used `react-day-picker` v10 — required fixing the generated `calendar.tsx` to use `month_grid` instead of deprecated `table` classname. All 14 shadcn components now present.
+Note: `calendar` was installed after the initial M-CL pass (missed in original). Used `react-day-picker` v10 - required fixing the generated `calendar.tsx` to use `month_grid` instead of deprecated `table` classname. All 14 shadcn components now present.
 
 **Existing components updated:**
-- `button.tsx` — base class changed to `rounded-lg` (8px); `transition-colors duration-150` explicit; `sm`/`lg` size variants corrected to `rounded-md`/`rounded-lg`
-- `dialog.tsx` — overlay changed to `bg-black/50 backdrop-blur-sm` (was `/80`); content changed to `max-w-md rounded-xl shadow-card` (was `max-w-lg rounded-lg shadow-lg`); close button uses `rounded-md` and `duration-150`; footer uses `gap-2` instead of `space-x-2`
+- `button.tsx` - base class changed to `rounded-lg` (8px); `transition-colors duration-150` explicit; `sm`/`lg` size variants corrected to `rounded-md`/`rounded-lg`
+- `dialog.tsx` - overlay changed to `bg-black/50 backdrop-blur-sm` (was `/80`); content changed to `max-w-md rounded-xl shadow-card` (was `max-w-lg rounded-lg shadow-lg`); close button uses `rounded-md` and `duration-150`; footer uses `gap-2` instead of `space-x-2`
 
 **New shared components built:**
 
@@ -71,9 +71,9 @@ Note: `calendar` was installed after the initial M-CL pass (missed in original).
 | `src/components/data-table-skeleton.tsx` | Table-shaped loading skeleton (configurable rows/columns) |
 
 **Layout changes:**
-- `nav-links.tsx` — active links now use `font-medium` for stronger visual distinction
-- `(dashboard)/layout.tsx` — main content wrapped in `max-w-7xl mx-auto px-6 py-8 lg:px-10` for comfortable wide-screen layout
-- `app/layout.tsx` — `<Toaster />` added to root so `useToast()` works globally on all pages
+- `nav-links.tsx` - active links now use `font-medium` for stronger visual distinction
+- `(dashboard)/layout.tsx` - main content wrapped in `max-w-7xl mx-auto px-6 py-8 lg:px-10` for comfortable wide-screen layout
+- `app/layout.tsx` - `<Toaster />` added to root so `useToast()` works globally on all pages
 
 **Usage patterns for page milestone work:**
 
@@ -138,7 +138,7 @@ toast({ title: "Saved", description: "Settings updated." })
 - **6 new shared components**: StatusBadge, EmptyState, ErrorState, PageHeader, ConfirmDialog, DataTableSkeleton
 - **Full design token system**: HSL CSS variables for all status types (success/warning/critical/info) with subtle tint variants; `--radius: 0.5rem`; `shadow-card`/`shadow-card-hover`; `.text-mono` utility
 - **Layout**: `max-w-7xl` content wrapper, responsive padding (`px-6 lg:px-10`), Toaster in root
-- Framer Motion helpers, Tremor + Recharts charts, lucide-react icons, TanStack Table — all unchanged
+- Framer Motion helpers, Tremor + Recharts charts, lucide-react icons, TanStack Table - all unchanged
 
 ### Remaining gaps (to be addressed in page milestones M-P1 through M-P7)
 - Page-level layouts not yet redesigned (dashboard, cost explorer, integrations, settings, etc.)
@@ -154,9 +154,9 @@ toast({ title: "Saved", description: "Settings updated." })
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/dashboard/period-selector.tsx` — **NEW** client component; segmented Tabs control (7d / 30d / 90d) that drives URL param `range`, triggering server re-fetch of timeseries + provider data
-- `apps/web/src/components/dashboard-charts.tsx` — **Full redesign**: KPI numbers upgraded to `text-3xl font-bold text-mono`; `DeltaBadge` uses pill style (green/red rounded badge); sparklines preserved; `ProviderDonut` shows legend+tooltip; **NEW** `SpendTrendChart` and `TopModelsChart` (standalone chart components, cards rendered in page.tsx); **NEW** `RecentAlertsWidget` shows last 5 open anomalies with left-border color coding (severity: high=red, medium=amber, low=sky) + "View all alerts" link + EmptyState when clear
-- `apps/web/src/app/(dashboard)/dashboard/page.tsx` — **Full redesign**: uses `PageHeader` + `PeriodSelector` in actions slot; fetches anomalies from `/anomalies`; layout is now 3-section: 4-card KPI grid → 2/3+1/3 (trend+donut) → 1/2+1/2 (models+alerts); `EmptyState` component used for no-data state; `shadow-card` / `shadow-card-hover` on all cards
+- `apps/web/src/app/(dashboard)/dashboard/period-selector.tsx` - **NEW** client component; segmented Tabs control (7d / 30d / 90d) that drives URL param `range`, triggering server re-fetch of timeseries + provider data
+- `apps/web/src/components/dashboard-charts.tsx` - **Full redesign**: KPI numbers upgraded to `text-3xl font-bold text-mono`; `DeltaBadge` uses pill style (green/red rounded badge); sparklines preserved; `ProviderDonut` shows legend+tooltip; **NEW** `SpendTrendChart` and `TopModelsChart` (standalone chart components, cards rendered in page.tsx); **NEW** `RecentAlertsWidget` shows last 5 open anomalies with left-border color coding (severity: high=red, medium=amber, low=sky) + "View all alerts" link + EmptyState when clear
+- `apps/web/src/app/(dashboard)/dashboard/page.tsx` - **Full redesign**: uses `PageHeader` + `PeriodSelector` in actions slot; fetches anomalies from `/anomalies`; layout is now 3-section: 4-card KPI grid → 2/3+1/3 (trend+donut) → 1/2+1/2 (models+alerts); `EmptyState` component used for no-data state; `shadow-card` / `shadow-card-hover` on all cards
 
 ---
 
@@ -165,10 +165,10 @@ Changes shipped:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/cost-explorer/export-button.tsx` — **NEW** client component; CSV export of current filtered/grouped data with proper quoting; button disabled when rows=0
-- `apps/web/src/app/(dashboard)/cost-explorer/explore-controls.tsx` — **Redesigned**: `SlidersHorizontal` icon prefix; native selects styled with consistent `h-9 rounded-md` height; active dimension filter badges use `X` icon buttons; "Reset filters" button with active count badge only shown when filters are active
-- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` — **Redesigned**: all numeric columns right-aligned (`text-right`); cost/requests/tokens use `text-mono`; lucide sort icons (`ArrowUp`/`ArrowDown`/`ArrowUpDown`) replace text arrows; row hover `hover:bg-muted/40`; grand total footer uses `font-semibold`; table border changed to `rounded-xl border-border/60`; `scrollbar-thin` utility applied
-- `apps/web/src/app/(dashboard)/cost-explorer/page.tsx` — **Redesigned**: `PageHeader` with `ExportButton` in actions; `PageMotion` wrapper; summary bar between controls and table (row count + range + grand total); `EmptyState` differentiated between "no data" vs "no filter results"; uses `EmptyState` component properly
+- `apps/web/src/app/(dashboard)/cost-explorer/export-button.tsx` - **NEW** client component; CSV export of current filtered/grouped data with proper quoting; button disabled when rows=0
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-controls.tsx` - **Redesigned**: `SlidersHorizontal` icon prefix; native selects styled with consistent `h-9 rounded-md` height; active dimension filter badges use `X` icon buttons; "Reset filters" button with active count badge only shown when filters are active
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` - **Redesigned**: all numeric columns right-aligned (`text-right`); cost/requests/tokens use `text-mono`; lucide sort icons (`ArrowUp`/`ArrowDown`/`ArrowUpDown`) replace text arrows; row hover `hover:bg-muted/40`; grand total footer uses `font-semibold`; table border changed to `rounded-xl border-border/60`; `scrollbar-thin` utility applied
+- `apps/web/src/app/(dashboard)/cost-explorer/page.tsx` - **Redesigned**: `PageHeader` with `ExportButton` in actions; `PageMotion` wrapper; summary bar between controls and table (row count + range + grand total); `EmptyState` differentiated between "no data" vs "no filter results"; uses `EmptyState` component properly
 
 ---
 
@@ -177,8 +177,8 @@ Changes shipped:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/components/integrations-page.tsx` — **Full redesign**: replaced bare-bones form+table with card-based layout; each integration renders as a `rounded-xl border bg-card shadow-card` card with provider avatar, masked key display + copy feedback, `StatusBadge` component, `DropdownMenu` for actions (Force sync, Revoke); "Add Integration" moved to a `Dialog` with shadcn `Select`/`Input`/`Label`; revoke opens `ConfirmDialog`; `EmptyState` used when no integrations; error state shows inline `AlertCircle` + `bg-critical-subtle` message; `PageHeader` replaced with section-level `h2` (settings layout now owns the top-level H1); `PageMotion` wrapper added
-- `apps/web/src/app/(dashboard)/settings/integrations/loading.tsx` — **Redesigned**: skeleton now matches the new card layout (provider avatar + title + badge + actions + metrics row)
+- `apps/web/src/components/integrations-page.tsx` - **Full redesign**: replaced bare-bones form+table with card-based layout; each integration renders as a `rounded-xl border bg-card shadow-card` card with provider avatar, masked key display + copy feedback, `StatusBadge` component, `DropdownMenu` for actions (Force sync, Revoke); "Add Integration" moved to a `Dialog` with shadcn `Select`/`Input`/`Label`; revoke opens `ConfirmDialog`; `EmptyState` used when no integrations; error state shows inline `AlertCircle` + `bg-critical-subtle` message; `PageHeader` replaced with section-level `h2` (settings layout now owns the top-level H1); `PageMotion` wrapper added
+- `apps/web/src/app/(dashboard)/settings/integrations/loading.tsx` - **Redesigned**: skeleton now matches the new card layout (provider avatar + title + badge + actions + metrics row)
 
 Design patterns applied:
 - Provider cards use `shadow-card` resting / `shadow-card-hover` on hover
@@ -194,15 +194,15 @@ Design patterns applied:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` — **Full redesign**: horizontal underline tab bar replaced with a **left sidebar nav** (`SettingsSidebar`); two groups — "Connected Services" (API Integrations, Slack) and "Configuration" (Tag Rules) — with 10px uppercase tracking group labels; active state uses animated `bg-primary/10` highlight with `text-primary` icon; old `SettingsTabs` name re-exported as alias for any lingering imports
-- `apps/web/src/app/(dashboard)/settings/layout.tsx` — **Updated**: `space-y-6` + horizontal tabs replaced with `PageHeader("Settings")` → `Separator` → flex row (sidebar + vertical divider + `flex-1` content panel); sidebar width `w-52`, vertical `Separator` visible on `lg+`
-- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — **Full redesign**: inline toggle forms replaced with `Dialog`-based Create Tag and Create Rule modals using shadcn `Select`/`Input`/`Label`; delete buttons replaced with `ConfirmDialog` (removes `alert()` calls); `EmptyState` added for both no-tags and no-rules states; tables use `rounded-xl border-border/60 bg-card` with `hover:bg-muted/30 transition-colors`; pattern preview kept inline in Create Rule dialog; `PageHeader` / `Badge` unused imports removed
-- `apps/web/src/app/(dashboard)/settings/slack/slack-client.tsx` — **Full redesign**: inline heading replaced with section `h2`; Slack connected state becomes card with `StatusBadge`, workspace metadata, reconnect/disconnect buttons with `ConfirmDialog` on disconnect; mute toggle upgraded to shadcn `Switch` component; empty/not-connected state uses proper card + icon layout; feature list upgraded to icon-card rows with `Check` icons; `bg-success-subtle` / `bg-critical-subtle` flash messages with icons
+- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` - **Full redesign**: horizontal underline tab bar replaced with a **left sidebar nav** (`SettingsSidebar`); two groups - "Connected Services" (API Integrations, Slack) and "Configuration" (Tag Rules) - with 10px uppercase tracking group labels; active state uses animated `bg-primary/10` highlight with `text-primary` icon; old `SettingsTabs` name re-exported as alias for any lingering imports
+- `apps/web/src/app/(dashboard)/settings/layout.tsx` - **Updated**: `space-y-6` + horizontal tabs replaced with `PageHeader("Settings")` → `Separator` → flex row (sidebar + vertical divider + `flex-1` content panel); sidebar width `w-52`, vertical `Separator` visible on `lg+`
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` - **Full redesign**: inline toggle forms replaced with `Dialog`-based Create Tag and Create Rule modals using shadcn `Select`/`Input`/`Label`; delete buttons replaced with `ConfirmDialog` (removes `alert()` calls); `EmptyState` added for both no-tags and no-rules states; tables use `rounded-xl border-border/60 bg-card` with `hover:bg-muted/30 transition-colors`; pattern preview kept inline in Create Rule dialog; `PageHeader` / `Badge` unused imports removed
+- `apps/web/src/app/(dashboard)/settings/slack/slack-client.tsx` - **Full redesign**: inline heading replaced with section `h2`; Slack connected state becomes card with `StatusBadge`, workspace metadata, reconnect/disconnect buttons with `ConfirmDialog` on disconnect; mute toggle upgraded to shadcn `Switch` component; empty/not-connected state uses proper card + icon layout; feature list upgraded to icon-card rows with `Check` icons; `bg-success-subtle` / `bg-critical-subtle` flash messages with icons
 
 Design patterns applied:
 - Settings layout owns the top-level H1 (`PageHeader`); sub-pages use `h2` section headers
 - All Create actions use Dialog modals (not inline toggle forms) for cleaner UX
-- All Delete/Disconnect actions require `ConfirmDialog` — no `alert()` calls
+- All Delete/Disconnect actions require `ConfirmDialog` - no `alert()` calls
 - `EmptyState` component used consistently in all zero-data states
 - shadcn `Switch` used for the Slack mute toggle (replaces custom Tailwind button)
 
@@ -213,9 +213,9 @@ Design patterns applied:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` — **Full redesign**: replaced dense table with alert card list; each card has a 4px left color strip (amber for low/medium severity, red for high/critical); `StatusBadge` component used for severity (warning/critical); relative timestamps ("2h ago") with absolute datetime in `Tooltip` on hover; `PageHeader` with "Acknowledge all" button (only shown when open alerts exist); critical summary banner (`bg-critical-subtle`) shown when high-severity alerts are present; severity filter dropdown (All / Low / Medium / Critical) using shadcn `Select`; individual "Acknowledge" + "Dismiss" ghost buttons per card; "View in Cost Explorer" link on every card; `EmptyState` shared component used with context-aware messages (check-circle icon for "all clear" open state); error banner for action failures
-- `apps/web/src/app/(dashboard)/anomalies/page.tsx` — **Updated**: removed inline h1/p header (now owned by client component); passes `initialAnomalies` + `status` to client
-- `apps/web/src/app/(dashboard)/anomalies/loading.tsx` — **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching new card layout (strip + header row + title + description + link)
+- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` - **Full redesign**: replaced dense table with alert card list; each card has a 4px left color strip (amber for low/medium severity, red for high/critical); `StatusBadge` component used for severity (warning/critical); relative timestamps ("2h ago") with absolute datetime in `Tooltip` on hover; `PageHeader` with "Acknowledge all" button (only shown when open alerts exist); critical summary banner (`bg-critical-subtle`) shown when high-severity alerts are present; severity filter dropdown (All / Low / Medium / Critical) using shadcn `Select`; individual "Acknowledge" + "Dismiss" ghost buttons per card; "View in Cost Explorer" link on every card; `EmptyState` shared component used with context-aware messages (check-circle icon for "all clear" open state); error banner for action failures
+- `apps/web/src/app/(dashboard)/anomalies/page.tsx` - **Updated**: removed inline h1/p header (now owned by client component); passes `initialAnomalies` + `status` to client
+- `apps/web/src/app/(dashboard)/anomalies/loading.tsx` - **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching new card layout (strip + header row + title + description + link)
 
 Design patterns applied:
 - `shadow-card` / `shadow-card-hover` on alert cards
@@ -232,13 +232,13 @@ Design patterns applied:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` — **Full redesign**: introduced **effort badge** (Easy/Medium/Hard derived from recommendation type: model_swap=Easy green, caching/batch=Medium amber, other=Hard gray); savings amount promoted to dominant visual (`text-2xl font-bold text-success text-mono`); new two-column card layout (left column: badges + savings/resolved state; right column: title + description; footer: confidence bar + action buttons); `PageHeader` added; summary bar shows total estimated savings in `text-success text-mono` when on "new" tab with data; `StaggerGrid` + `StaggerItem` entrance animation for card list; `EmptyState` shared component used with status-aware messages and CTA to `/cost-explorer` when no new recommendations; `RecommendationsLoading` skeleton updated to match new 2-column card layout; applied/dismissed states show check/X icon with date instead of large savings number
-- `apps/web/src/app/(dashboard)/recommendations/page.tsx` — **Updated**: removed inline h1/p header (now owned by client component); delegates to `RecommendationsClient`
-- `apps/web/src/app/(dashboard)/recommendations/loading.tsx` — **No change required**: already delegates to `RecommendationsLoading` exported from client
+- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` - **Full redesign**: introduced **effort badge** (Easy/Medium/Hard derived from recommendation type: model_swap=Easy green, caching/batch=Medium amber, other=Hard gray); savings amount promoted to dominant visual (`text-2xl font-bold text-success text-mono`); new two-column card layout (left column: badges + savings/resolved state; right column: title + description; footer: confidence bar + action buttons); `PageHeader` added; summary bar shows total estimated savings in `text-success text-mono` when on "new" tab with data; `StaggerGrid` + `StaggerItem` entrance animation for card list; `EmptyState` shared component used with status-aware messages and CTA to `/cost-explorer` when no new recommendations; `RecommendationsLoading` skeleton updated to match new 2-column card layout; applied/dismissed states show check/X icon with date instead of large savings number
+- `apps/web/src/app/(dashboard)/recommendations/page.tsx` - **Updated**: removed inline h1/p header (now owned by client component); delegates to `RecommendationsClient`
+- `apps/web/src/app/(dashboard)/recommendations/loading.tsx` - **No change required**: already delegates to `RecommendationsLoading` exported from client
 
 Design patterns applied:
-- Effort badge before TypeBadge — signals implementation effort at a glance
-- `text-2xl font-bold text-success text-mono` for savings — visually dominant per spec
+- Effort badge before TypeBadge - signals implementation effort at a glance
+- `text-2xl font-bold text-success text-mono` for savings - visually dominant per spec
 - Footer `border-t border-border/60` separates confidence + actions from card content
 - `StaggerGrid` wraps the card list for staggered entrance animation (0.07s delay per item)
 - Optimistic removal on apply/dismiss with full `initialRecs` revert on API error
@@ -251,16 +251,16 @@ Design patterns applied:
 **Completed 2026-05-27.**
 
 Changes shipped:
-- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` — **Full redesign**: replaced table-row layout with a **2-column card grid** (1-col on mobile, 2-col on `sm+`); each card shows scope label, spend vs. limit in `text-mono`, a color-coded progress bar (green <alert_at_pct, amber ≥alert_at_pct, red ≥100%), a `BudgetStatusBadge` (On Track / Caution / Over Budget), remaining spend, and days left in the month; `PageHeader` added with "+ New Budget" button; shared `EmptyState` (Wallet icon) replaces custom inline empty state; `ConfirmDialog` used for delete (replaces inline toggle pattern); **Edit dialog** added (PATCH /budgets/{id}) for updating monthly_limit and alert_at_pct (scope locked after creation); over-budget critical banner (`bg-critical-subtle border-critical/30`) shown when any budget exceeds 100%; `StaggerGrid` + `StaggerItem` entrance animation on the card grid
-- `apps/web/src/app/(dashboard)/budgets/page.tsx` — **Updated**: removed inline `h1/p` header (now owned by client component); delegates to `BudgetsClient`
-- `apps/web/src/app/(dashboard)/budgets/loading.tsx` — **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching the new card layout (header row with badge, spend number, progress bar, days left, footer)
+- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` - **Full redesign**: replaced table-row layout with a **2-column card grid** (1-col on mobile, 2-col on `sm+`); each card shows scope label, spend vs. limit in `text-mono`, a color-coded progress bar (green <alert_at_pct, amber ≥alert_at_pct, red ≥100%), a `BudgetStatusBadge` (On Track / Caution / Over Budget), remaining spend, and days left in the month; `PageHeader` added with "+ New Budget" button; shared `EmptyState` (Wallet icon) replaces custom inline empty state; `ConfirmDialog` used for delete (replaces inline toggle pattern); **Edit dialog** added (PATCH /budgets/{id}) for updating monthly_limit and alert_at_pct (scope locked after creation); over-budget critical banner (`bg-critical-subtle border-critical/30`) shown when any budget exceeds 100%; `StaggerGrid` + `StaggerItem` entrance animation on the card grid
+- `apps/web/src/app/(dashboard)/budgets/page.tsx` - **Updated**: removed inline `h1/p` header (now owned by client component); delegates to `BudgetsClient`
+- `apps/web/src/app/(dashboard)/budgets/loading.tsx` - **Redesigned**: replaced table skeleton with 4 card-shaped skeletons matching the new card layout (header row with badge, spend number, progress bar, days left, footer)
 
 Design patterns applied:
 - `shadow-card` / `shadow-card-hover` on budget cards
 - `border-critical/30` tint on over-budget cards
 - Status badge uses semantic color tokens (`bg-success-subtle text-success`, `bg-warning-subtle text-warning`, `bg-critical-subtle text-critical`)
 - Progress bar: `bg-success` below alert threshold, `bg-warning` at/above threshold, `bg-critical` at 100%
-- Edit preserves scope (cannot be changed) — only limit + alert threshold editable
+- Edit preserves scope (cannot be changed) - only limit + alert threshold editable
 - `BudgetFormFields` shared component used by both create and edit dialogs
 - Stagger animation (0.07s delay per card) for polished entrance
 - All destructive actions gated by `ConfirmDialog`
@@ -274,25 +274,25 @@ Design patterns applied:
 Changes shipped:
 
 **Mobile Navigation:**
-- `apps/web/src/components/dashboard-shell.tsx` — **NEW** client component; extracted sidebar, top bar, and nav from server layout into a client shell that owns a `sidebarOpen` boolean; hamburger button (`Menu` icon) appears on `<lg` screens in the header; sidebar uses `fixed + translate-x` approach (`-translate-x-full` → `translate-x-0` on mobile, `lg:static lg:translate-x-0` on desktop) with 200ms ease-in-out transition; semi-transparent overlay (`bg-black/50`) covers content when sidebar is open on mobile; Close (`X`) button inside sidebar header dismisses on mobile; `aria-expanded` on hamburger button, `aria-label="Main navigation"` on aside
-- `apps/web/src/app/(dashboard)/layout.tsx` — **Simplified**: removed inline sidebar/header/nav JSX; now a minimal server component that guards auth and renders `<DashboardShell>{children}</DashboardShell>`
+- `apps/web/src/components/dashboard-shell.tsx` - **NEW** client component; extracted sidebar, top bar, and nav from server layout into a client shell that owns a `sidebarOpen` boolean; hamburger button (`Menu` icon) appears on `<lg` screens in the header; sidebar uses `fixed + translate-x` approach (`-translate-x-full` → `translate-x-0` on mobile, `lg:static lg:translate-x-0` on desktop) with 200ms ease-in-out transition; semi-transparent overlay (`bg-black/50`) covers content when sidebar is open on mobile; Close (`X`) button inside sidebar header dismisses on mobile; `aria-expanded` on hamburger button, `aria-label="Main navigation"` on aside
+- `apps/web/src/app/(dashboard)/layout.tsx` - **Simplified**: removed inline sidebar/header/nav JSX; now a minimal server component that guards auth and renders `<DashboardShell>{children}</DashboardShell>`
 
 **Usage Events Page (unresigned page catch-up):**
-- `apps/web/src/app/(dashboard)/usage-events/page.tsx` — **Updated**: replaced raw `<h1>/<p>` with `PageHeader` component (consistent with all other pages)
-- `apps/web/src/app/(dashboard)/usage-events/usage-events-client.tsx` — **Redesigned**: replaced bare `rounded-lg border` empty-state div with `EmptyState` component (List icon, CTA to integrations); table restyled to match design system — `rounded-xl border-border/60`, `bg-muted/30` thead, `divide-border/40` tbody rows; `scope="col"` on all `<th>` elements; `text-right text-mono` on Cost and Requests columns; `whitespace-nowrap` on Time, Provider, Cost, Requests cells; `hover:bg-muted/40 transition-colors duration-150` on rows; `PageMotion` wrapper for entrance animation; `role="alert"` on override dialog error message
+- `apps/web/src/app/(dashboard)/usage-events/page.tsx` - **Updated**: replaced raw `<h1>/<p>` with `PageHeader` component (consistent with all other pages)
+- `apps/web/src/app/(dashboard)/usage-events/usage-events-client.tsx` - **Redesigned**: replaced bare `rounded-lg border` empty-state div with `EmptyState` component (List icon, CTA to integrations); table restyled to match design system - `rounded-xl border-border/60`, `bg-muted/30` thead, `divide-border/40` tbody rows; `scope="col"` on all `<th>` elements; `text-right text-mono` on Cost and Requests columns; `whitespace-nowrap` on Time, Provider, Cost, Requests cells; `hover:bg-muted/40 transition-colors duration-150` on rows; `PageMotion` wrapper for entrance animation; `role="alert"` on override dialog error message
 
 **Accessibility Fixes (all pages):**
-- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` — Added `scope="col"` on all `<th>` elements; `aria-sort` (`ascending`/`descending`/`none`) on each sortable column header; `aria-label` on sort buttons describing column and current sort direction; `whitespace-nowrap` on all numeric `<td>` cells and grand total footer cells
-- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — Added `scope="col"` to all `<th>` in Tags and Tag Rules tables; `role="alert"` on tag creation error and rule creation error paragraphs; `role="img"` + `aria-label="Color: #hex"` on color swatch span
-- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` — Added `role="alert"` on the action-error banner div; `role="tablist"` on the status tabs container, `role="tab"` + `aria-selected` on each tab button
-- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` — Added `role="alert"` on the error banner; `role="tablist"` + `role="tab"` + `aria-selected` on status tabs; `aria-pressed` on effort filter pill buttons (toggle buttons)
-- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` — Added `role="alert"` + `aria-hidden` on error paragraphs in Create and Edit dialogs
-- `apps/web/src/components/integrations-page.tsx` — Added `role="alert"` + `aria-hidden` on the connection-error state div
-- `apps/web/src/components/nav-links.tsx` — Added `aria-current="page"` on the active nav link
-- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` — Added `aria-current="page"` on the active settings sidebar link
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` - Added `scope="col"` on all `<th>` elements; `aria-sort` (`ascending`/`descending`/`none`) on each sortable column header; `aria-label` on sort buttons describing column and current sort direction; `whitespace-nowrap` on all numeric `<td>` cells and grand total footer cells
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` - Added `scope="col"` to all `<th>` in Tags and Tag Rules tables; `role="alert"` on tag creation error and rule creation error paragraphs; `role="img"` + `aria-label="Color: #hex"` on color swatch span
+- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` - Added `role="alert"` on the action-error banner div; `role="tablist"` on the status tabs container, `role="tab"` + `aria-selected` on each tab button
+- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` - Added `role="alert"` on the error banner; `role="tablist"` + `role="tab"` + `aria-selected` on status tabs; `aria-pressed` on effort filter pill buttons (toggle buttons)
+- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` - Added `role="alert"` + `aria-hidden` on error paragraphs in Create and Edit dialogs
+- `apps/web/src/components/integrations-page.tsx` - Added `role="alert"` + `aria-hidden` on the connection-error state div
+- `apps/web/src/components/nav-links.tsx` - Added `aria-current="page"` on the active nav link
+- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` - Added `aria-current="page"` on the active settings sidebar link
 
 **Dark Mode Fixes:**
-- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — `TAG_TYPE_COLORS` updated with dark mode variants for all 4 tag types: `dark:bg-*-950/40 dark:text-*-400 dark:border-*-800/40` (blue/purple/emerald/orange); previously used light-only Tailwind classes that rendered incorrect contrast on dark backgrounds
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` - `TAG_TYPE_COLORS` updated with dark mode variants for all 4 tag types: `dark:bg-*-950/40 dark:text-*-400 dark:border-*-800/40` (blue/purple/emerald/orange); previously used light-only Tailwind classes that rendered incorrect contrast on dark backgrounds
 
 Design patterns enforced:
 - Mobile sidebar: `fixed` positioning + `z-50` ensures it overlays content correctly; overlay div is `z-40` (below sidebar, above page content)
@@ -347,7 +347,7 @@ M-DS  Design System Foundation         ← Do first; everything else depends on 
 | `--warning` | Budget alerts | `38 92% 50%` (amber-500) | Keep |
 | `--destructive` | Errors, overages | red-family | Verify sufficient contrast |
 | `--muted` | Secondary bg, hover | `214 32% 91%` | Keep |
-| `--border` | Dividers, card borders | light gray | Verify — must be subtle, not heavy |
+| `--border` | Dividers, card borders | light gray | Verify - must be subtle, not heavy |
 | `--foreground` | Primary text | near-black | Must be ≥ 4.5:1 contrast on `--background` |
 | `--muted-foreground` | Secondary text | dark gray | Must be ≥ 3:1 on card |
 
@@ -409,9 +409,9 @@ All spacing should use Tailwind's default scale (already 4px base × 2 = 8px ste
 
 #### 5. Files to Modify
 
-- `apps/web/src/app/globals.css` — add new semantic tokens, `.text-mono` utility
-- `apps/web/tailwind.config.ts` — verify/add new color mappings, add `fontFamily.mono` entry
-- `apps/web/components.json` — no change required (already CSS variables mode)
+- `apps/web/src/app/globals.css` - add new semantic tokens, `.text-mono` utility
+- `apps/web/tailwind.config.ts` - verify/add new color mappings, add `fontFamily.mono` entry
+- `apps/web/components.json` - no change required (already CSS variables mode)
 
 ### Success Criteria
 - [ ] Color palette documented with all hex/HSL values
@@ -499,7 +499,7 @@ Colors: active=success-subtle/success, error=critical-subtle/destructive,
 ```
 Props: icon?, title, description, action?: { label, href? | onClick? }
 Layout: centered, icon (large, muted), title (H3), description (small, muted), CTA button
-Usage: All pages when data arrays are empty — enforced pattern, never blank screen
+Usage: All pages when data arrays are empty - enforced pattern, never blank screen
 ```
 
 **`components/error-state.tsx`**
@@ -535,7 +535,7 @@ Used as loading placeholder for all data tables
 
 #### 4. Update Navigation (`components/nav-links.tsx`)
 
-- Increase active indicator contrast (not just color — also bold text)
+- Increase active indicator contrast (not just color - also bold text)
 - Ensure hover state on non-active items has subtle bg (`hover:bg-muted`)
 - Ensure `cursor-pointer` on all nav items
 - Verify `transition-colors duration-150` on hover
@@ -595,7 +595,7 @@ Used as loading placeholder for all data tables
 │  KPI Cards Row (4 cards, full-width grid)                   │
 │  [Total Spend] [Budget Status] [Active Anomalies] [YTD Est] │
 ├─────────────────────────────────────────────────────────────┤
-│  [Spend Trend Chart — AreaChart 30d]  [Provider Split Donut]│
+│  [Spend Trend Chart - AreaChart 30d]  [Provider Split Donut]│
 │   (2/3 width)                          (1/3 width)          │
 ├─────────────────────────────────────────────────────────────┤
 │  [Top Models BarChart]                [Recent Alerts list]  │
@@ -807,13 +807,13 @@ Used as loading placeholder for all data tables
 - Key masking: `sk-proj-` + `••••••••••••` + last 4 chars (e.g., `Xk9a`)
 - Copy button: `lucide-react Copy` (16px), click copies full key from server, show `Check` for 1.5s
 - Status badge: uses `StatusBadge` component (active/error/syncing/inactive)
-- Last sync: `text-xs text-muted-foreground` — "Synced 2 minutes ago"
+- Last sync: `text-xs text-muted-foreground` - "Synced 2 minutes ago"
 - Divider: `<Separator>` between header and metrics
 
 **Inline Metrics Row**
 - Monthly spend, API call count, rate limit %
 - Values: `font-mono` for numbers
-- Rate limit: color-coded — green <50%, amber 50–80%, red >80%
+- Rate limit: color-coded - green <50%, amber 50–80%, red >80%
 - `text-sm` labels, `text-base font-semibold` values
 
 **Action Menu (3-dot `...` Dropdown)**
@@ -836,7 +836,7 @@ Used as loading placeholder for all data tables
 **Error Key State**
 - Card: subtle red border `border-destructive/30`
 - Status badge: red "Error"
-- Error message inline: "Authentication failed — check key permissions"
+- Error message inline: "Authentication failed - check key permissions"
 - Action: "Reconnect" primary action (not just in dropdown)
 
 ### States
@@ -908,7 +908,7 @@ Used as loading placeholder for all data tables
 
 **Team Members Section**
 - Table: Name · Email · Role · Joined date · Actions
-- Invite member: form in-page (not modal) — email input + role select + Send Invite
+- Invite member: form in-page (not modal) - email input + role select + Send Invite
 - Role dropdown: Admin, Member, Viewer
 - Remove member: `ConfirmDialog`
 - Pending invites shown in separate subsection
@@ -948,7 +948,7 @@ Used as loading placeholder for all data tables
 |-------|---------------|
 | Form saving | Button shows spinner + "Saving…" disabled state |
 | Save success | Toast: "Settings saved" (success color) |
-| Save error | Toast: "Failed to save — try again" (error color) |
+| Save error | Toast: "Failed to save - try again" (error color) |
 | Loading section | Skeleton form fields |
 
 ### Success Criteria
@@ -990,7 +990,7 @@ Used as loading placeholder for all data tables
 │  │     [View in Cost Explorer →]                          │ │
 │  └────────────────────────────────────────────────────────┘ │
 │  ┌────────────────────────────────────────────────────────┐ │
-│  │ [●] Anomaly — Cost Spike             Yesterday  [✓]   │ │
+│  │ [●] Anomaly - Cost Spike             Yesterday  [✓]   │ │
 │  │     gpt-4o spend ↑ 340% vs. 7-day avg ($847 vs $249)  │ │
 │  │     [View Details →]                                   │ │
 │  └────────────────────────────────────────────────────────┘ │
@@ -1000,13 +1000,13 @@ Used as loading placeholder for all data tables
 ### Features / Components
 
 **Alert Card**
-- Left color strip: `4px wide, rounded-l-xl` — amber (warning) or red (critical)
+- Left color strip: `4px wide, rounded-l-xl` - amber (warning) or red (critical)
 - Severity indicator: colored dot + `StatusBadge` (Warning / Critical)
 - Title: `font-semibold text-base`
-- Description: `text-sm text-muted-foreground` — detail of what happened
-- Timestamp: `text-xs text-muted-foreground` — relative time ("2 hours ago")
-- Acknowledge button: `Check` icon, tertiary style — marks alert as read
-- Link: "View in Cost Explorer" or "View Details" — `text-primary text-sm font-medium`
+- Description: `text-sm text-muted-foreground` - detail of what happened
+- Timestamp: `text-xs text-muted-foreground` - relative time ("2 hours ago")
+- Acknowledge button: `Check` icon, tertiary style - marks alert as read
+- Link: "View in Cost Explorer" or "View Details" - `text-primary text-sm font-medium`
 - Acknowledged state: card `opacity-60`, icon changes to filled check
 
 **Filter Controls**
@@ -1029,7 +1029,7 @@ Used as loading placeholder for all data tables
 
 | State | Implementation |
 |-------|---------------|
-| No alerts | `EmptyState` with check-circle icon: "All clear — no alerts" |
+| No alerts | `EmptyState` with check-circle icon: "All clear - no alerts" |
 | All acknowledged | `EmptyState` with success tone: "Nothing outstanding" |
 | Loading | 3–4 card-shaped skeletons |
 | Error loading | `ErrorState` with retry |
@@ -1055,7 +1055,7 @@ Used as loading placeholder for all data tables
 - Savings amount is the first thing users notice
 - Effort level is clear (easy/medium/hard)
 - Applied/dismissed tracking functional
-- No dark patterns — easy to dismiss
+- No dark patterns - easy to dismiss
 
 ### Layout Structure
 
@@ -1080,8 +1080,8 @@ Used as loading placeholder for all data tables
 ### Features / Components
 
 **Recommendation Card**
-- Effort badge: top-left — `Easy` (green), `Medium` (amber), `Hard` (gray/blue)
-- Savings: `text-2xl font-bold text-success` — the biggest text on the card
+- Effort badge: top-left - `Easy` (green), `Medium` (amber), `Hard` (gray/blue)
+- Savings: `text-2xl font-bold text-success` - the biggest text on the card
 - "Save $X/mo" label below in `text-sm text-muted-foreground`
 - Title: `text-base font-semibold`
 - Description: current state → proposed change, `text-sm`
@@ -1099,7 +1099,7 @@ Used as loading placeholder for all data tables
 - Status toggle: show applied and dismissed (collapsed by default)
 
 **Empty State**
-- If no recommendations: `EmptyState` with lightbulb icon — "No recommendations right now. Check back after more data is collected."
+- If no recommendations: `EmptyState` with lightbulb icon - "No recommendations right now. Check back after more data is collected."
 
 ### States
 
@@ -1141,7 +1141,7 @@ Used as loading placeholder for all data tables
 ├─────────────────────────────────────────────────────────────┤
 │  Budget Cards (grid: 2 cols desktop, 1 col mobile):         │
 │  ┌─────────────────────┐  ┌─────────────────────┐          │
-│  │ OpenAI Monthly       │  │ All Providers — Dev  │          │
+│  │ OpenAI Monthly       │  │ All Providers - Dev  │          │
 │  │ $7,823 / $10,000     │  │ $2,100 / $3,000      │          │
 │  │ ████████░░ 78%       │  │ ██████████ 70%       │          │
 │  │ [●] On Track         │  │ [●] Caution          │          │
@@ -1156,7 +1156,7 @@ Used as loading placeholder for all data tables
 
 **Budget Card**
 - Budget name: `text-base font-semibold`
-- Spend vs. limit: `font-mono` — "$7,823 / $10,000"
+- Spend vs. limit: `font-mono` - "$7,823 / $10,000"
 - Progress bar: shadcn `Progress` component
   - Color: green <50%, amber 50–80%, red >80%
   - Percentage label right-aligned: `text-sm font-medium`
@@ -1171,7 +1171,7 @@ Used as loading placeholder for all data tables
 - Save triggers toast on success
 
 **No Budgets State**
-- `EmptyState` with wallet icon — "No budgets yet. Set spending limits to stay in control."
+- `EmptyState` with wallet icon - "No budgets yet. Set spending limits to stay in control."
 - CTA: "Create first budget"
 
 ### Success Criteria
@@ -1209,10 +1209,10 @@ Go through every interactive element and verify:
 | Secondary button | Filled bg | Ring visible | Same | 150ms |
 | Ghost/text button | Light bg | Ring visible | Same | 150ms |
 | Form inputs | Border highlight | Ring + border | Muted bg | 150ms |
-| Table rows | `bg-muted/50` | — | — | 150ms |
-| Nav items | `bg-muted` | Ring | — | 150ms |
-| Cards (interactive) | `shadow-md` | — | — | 200ms |
-| Dropdown items | `bg-muted` | Ring | — | 100ms |
+| Table rows | `bg-muted/50` | - | - | 150ms |
+| Nav items | `bg-muted` | Ring | - | 150ms |
+| Cards (interactive) | `shadow-md` | - | - | 200ms |
+| Dropdown items | `bg-muted` | Ring | - | 100ms |
 
 #### 2. Empty State Audit
 
@@ -1223,7 +1223,7 @@ Every page must have an empty state. Verify:
 | Dashboard | "Connect your first API key to see spend data" | Link to integrations |
 | Cost Explorer | "No data matches your filters" | Reset filters |
 | Integrations | "No API keys connected" | Add integration button |
-| Anomalies | "All clear — no alerts" | None (positive state) |
+| Anomalies | "All clear - no alerts" | None (positive state) |
 | Recommendations | "No recommendations yet" | Informational |
 | Budgets | "No budgets set" | Create budget |
 
@@ -1283,7 +1283,7 @@ Lower priority for mobile: Cost Explorer (pivot tables inherently require width)
 #### 7. Dark Mode Verification
 
 - [ ] All pages look professional in dark mode
-- [ ] No hardcoded `#colors` — only CSS variable tokens
+- [ ] No hardcoded `#colors` - only CSS variable tokens
 - [ ] Charts readable in dark mode (Tremor/Recharts dark adaptation)
 - [ ] Status colors readable in both modes
 - [ ] Skeleton animations visible in dark mode

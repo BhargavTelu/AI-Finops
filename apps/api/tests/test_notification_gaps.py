@@ -1,9 +1,9 @@
 """
 Notification worker gap tests.
 
-Gap-23 (high): Digest idempotency race — digest posted to Slack but DB write fails.
+Gap-23 (high): Digest idempotency race - digest posted to Slack but DB write fails.
                On retry the idempotency check passes again → duplicate post.
-Gap-24 (high): send_budget_alert retry exhaustion — alert lost after max_retries.
+Gap-24 (high): send_budget_alert retry exhaustion - alert lost after max_retries.
                Slack must not be called when email fails (design intent: email first).
 """
 
@@ -203,7 +203,7 @@ class TestBudgetAlertRetryExhaustion:
     def test_resend_failure_slack_not_called(self) -> None:
         """
         When Resend always raises, send_budget_alert retries and eventually drops.
-        Slack must NOT be called — email failure prevents Slack notification (by design).
+        Slack must NOT be called - email failure prevents Slack notification (by design).
         """
         from api.workers.notifications import send_budget_alert
 

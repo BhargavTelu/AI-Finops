@@ -1,6 +1,6 @@
 """
 Unit tests for anomaly_detection worker tasks.
-All Supabase calls are mocked — no network, no DB.
+All Supabase calls are mocked - no network, no DB.
 Pattern follows test_workers.py: mock _get_supabase, control execute() side effects.
 """
 
@@ -76,7 +76,7 @@ class TestDetectOrg:
 
         # execute() call order in detect_org:
         # 1. daily_cost_summaries SELECT (history rows)
-        # 2. anomalies SELECT (open anomalies today — dedup check)
+        # 2. anomalies SELECT (open anomalies today - dedup check)
         # 3. anomalies INSERT (one per detected anomaly, if any)
         exec_history = MagicMock()
         exec_history.data = summary_rows
@@ -110,25 +110,25 @@ class TestDetectOrg:
         assert inserted["severity"] in ("low", "medium", "high")
 
     def test_no_insert_when_no_spike(self) -> None:
-        # Flat $20/day — z-score is 0, no anomaly
+        # Flat $20/day - z-score is 0, no anomaly
         rows = _make_summary_rows(cost_per_day=20.0)
         db = self._run(rows)
         db.insert.assert_not_called()
 
     def test_no_insert_when_actual_below_ten_dollar_floor(self) -> None:
-        # $2/day baseline, spike to $9 — below the $10 floor
+        # $2/day baseline, spike to $9 - below the $10 floor
         rows = _make_summary_rows(cost_per_day=2.0, spike_day_cost=9.0)
         db = self._run(rows)
         db.insert.assert_not_called()
 
     def test_no_insert_when_insufficient_history(self) -> None:
-        # Only 5 rows — fills the rest of the window with $0, never meets threshold
+        # Only 5 rows - fills the rest of the window with $0, never meets threshold
         rows = _make_summary_rows(n_days=5, cost_per_day=100.0, spike_day_cost=10_000.0)
         db = self._run(rows)
         # With 10 zero-filled days, the rolling window has mostly zeros;
-        # the spike is real but baseline is $0 — spike_pct corner case.
+        # the spike is real but baseline is $0 - spike_pct corner case.
         # Either way no $10 floor-failing insert should come from 5-row data.
-        # (If detect_anomalies fires, that's fine too — test intent is no crash.)
+        # (If detect_anomalies fires, that's fine too - test intent is no crash.)
         # We just verify the worker completes without error.
 
     def test_dedup_skips_already_open_anomaly_today(self) -> None:
@@ -166,7 +166,7 @@ class TestDetectAllOrgs:
         exec_orgs.data = [
             {"org_id": "org-1"},
             {"org_id": "org-2"},
-            {"org_id": "org-1"},  # duplicate — should only dispatch 2 unique
+            {"org_id": "org-1"},  # duplicate - should only dispatch 2 unique
         ]
         db.execute.return_value = exec_orgs
 
@@ -202,7 +202,7 @@ class TestDetectAllOrgs:
 # ── TC-ANO-20: detect_org context field population ───────────────────────────
 
 class TestDetectOrgContextField:
-    """TC-ANO-20 — detect_org inserts anomaly row with populated context dict."""
+    """TC-ANO-20 - detect_org inserts anomaly row with populated context dict."""
 
     def _make_history_rows(self, org_id: str) -> list[dict]:
         """Generate 15 days of baseline ($10/day) + 1 day spike ($100)."""
@@ -225,7 +225,7 @@ class TestDetectOrgContextField:
 
     def test_inserted_anomaly_has_context_with_tags(self) -> None:
         """
-        TC-ANO-20 — context dict must contain model, feature_tag, and team_tag
+        TC-ANO-20 - context dict must contain model, feature_tag, and team_tag
         so the anomaly explainer can generate specific narratives.
         """
         from unittest.mock import MagicMock, patch
@@ -285,11 +285,11 @@ class TestDetectOrgContextField:
 # ── TC-ANO-21: detect_org scope_value field ──────────────────────────────────
 
 class TestDetectOrgScopeValue:
-    """TC-ANO-21 — detect_org sets scope_kind='model' and scope_value=model name."""
+    """TC-ANO-21 - detect_org sets scope_kind='model' and scope_value=model name."""
 
     def test_inserted_anomaly_has_correct_scope_fields(self) -> None:
         """
-        TC-ANO-21 — anomaly row must have scope_kind='model' and scope_value='gpt-4o'.
+        TC-ANO-21 - anomaly row must have scope_kind='model' and scope_value='gpt-4o'.
         These fields drive the GET /anomalies filter queries.
         """
         from datetime import date, timedelta, timezone

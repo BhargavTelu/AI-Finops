@@ -1,11 +1,11 @@
 """
-Nightly recommendations generation — runs at 02:30 UTC (after budget checks at 02:00).
+Nightly recommendations generation - runs at 02:30 UTC (after budget checks at 02:00).
 
 For each org with active integrations:
   1. Aggregate last 30d daily_cost_summaries by (provider, model, feature_tag)
   2. Run rule-based heuristics (model_swap, caching, batch)
   3. Insert new recommendations, skipping any (org, type, scope_value) that already
-     has an open ('new') recommendation — dedup via explicit query rather than relying
+     has an open ('new') recommendation - dedup via explicit query rather than relying
      on partial unique index error parsing.
 """
 
@@ -49,7 +49,7 @@ def generate_org_recommendations(org_id: str) -> None:
     today = datetime.now(timezone.utc).date()
     start_day = (today - timedelta(days=30)).isoformat()
 
-    # Pull last 30d summaries — one row per (day, provider, model, feature_tag, ...).
+    # Pull last 30d summaries - one row per (day, provider, model, feature_tag, ...).
     result = (
         db.table("daily_cost_summaries")
         .select("provider, model, feature_tag, total_cost_usd, total_requests, total_tokens")

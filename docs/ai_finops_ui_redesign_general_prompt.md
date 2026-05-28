@@ -26,11 +26,11 @@
 
 AI FinOps is financial software for engineering leaders. Design should reflect:
 
-1. **Trust** — Clean, minimal, data-focused (not colorful or playful)
-2. **Clarity** — Information hierarchy is obvious; no guessing
-3. **Professionalism** — Looks like enterprise SaaS, not a startup toy
-4. **Speed** — Key insights visible instantly, no clicks needed
-5. **Control** — Users feel in control of their data, budgets, and alerts
+1. **Trust** - Clean, minimal, data-focused (not colorful or playful)
+2. **Clarity** - Information hierarchy is obvious; no guessing
+3. **Professionalism** - Looks like enterprise SaaS, not a startup toy
+4. **Speed** - Key insights visible instantly, no clicks needed
+5. **Control** - Users feel in control of their data, budgets, and alerts
 
 **Visual Language:** Modern, minimal, data-first. Similar to Stripe, Vercel, or Vantage aesthetics. No heavy shadows, no excessive animations, no icon clutter.
 

@@ -14,7 +14,7 @@ const OPTIONS = [
 ] as const;
 
 /**
- * Period selector for the dashboard — navigates via URL param so the server
+ * Period selector for the dashboard - navigates via URL param so the server
  * re-fetches timeseries + provider data for the chosen range.
  */
 export function PeriodSelector({ range }: Props) {

@@ -1,5 +1,5 @@
 """
-Anomaly detection — statistical, not ML.
+Anomaly detection - statistical, not ML.
 Algorithm from architecture.md § Anomaly Algorithm.
 
 Explainable to a CFO, runs in milliseconds, sufficient for < 50 customers.

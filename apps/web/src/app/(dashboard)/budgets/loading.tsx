@@ -12,7 +12,7 @@ export default function BudgetsLoading() {
         <Skeleton className="h-9 w-32 rounded-lg" />
       </div>
 
-      {/* Budget card grid skeleton — 2 columns on sm+ */}
+      {/* Budget card grid skeleton - 2 columns on sm+ */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} className="flex flex-col rounded-xl border bg-card">

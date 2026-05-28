@@ -1,5 +1,5 @@
 """
-Tag-rule engine — pure functions, no side effects.
+Tag-rule engine - pure functions, no side effects.
 
 Matches usage event api_key_labels against org tag rules and returns tag assignments.
 Rule priority: lower number = higher priority. First match per tag type wins.
@@ -72,7 +72,7 @@ def _matches(rule: CompiledRule, label: str) -> bool:
             try:
                 return bool(future.result(timeout=_REGEX_TIMEOUT_SECS))
             except concurrent.futures.TimeoutError:
-                # Pattern is catastrophically backtracking — treat as non-match.
+                # Pattern is catastrophically backtracking - treat as non-match.
                 return False
         except re.error:
             return False
@@ -87,7 +87,7 @@ def apply_rules(label: str | None, rules: list[CompiledRule]) -> dict[str, str |
     For each tag type, the first matching rule (lowest priority number) wins.
     Types with no matching rule return None.
 
-    None/empty label is treated as empty string — rules with empty pattern or
+    None/empty label is treated as empty string - rules with empty pattern or
     regex patterns like ^$ will still match.
     """
     label_str = label or ""
@@ -107,6 +107,6 @@ def apply_rules(label: str | None, rules: list[CompiledRule]) -> dict[str, str |
             result[key] = rule.tag_name
             assigned.add(key)
         if len(assigned) == 4:
-            break  # all types resolved — stop early
+            break  # all types resolved - stop early
 
     return result

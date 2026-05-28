@@ -15,7 +15,7 @@ export function DashboardShell({ children }: Props) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      {/* Mobile overlay — tap outside to close sidebar */}
+      {/* Mobile overlay - tap outside to close sidebar */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
@@ -37,7 +37,7 @@ export function DashboardShell({ children }: Props) {
             <Zap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} aria-hidden />
           </div>
           <span className="text-sm font-semibold tracking-tight">SpendOps AI</span>
-          {/* Close button — mobile only */}
+          {/* Close button - mobile only */}
           <button
             className="ml-auto rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
             onClick={() => setSidebarOpen(false)}
@@ -71,7 +71,7 @@ export function DashboardShell({ children }: Props) {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-card px-5">
-          {/* Hamburger — mobile only */}
+          {/* Hamburger - mobile only */}
           <button
             className="rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
             onClick={() => setSidebarOpen(true)}
@@ -92,7 +92,7 @@ export function DashboardShell({ children }: Props) {
           />
         </header>
 
-        {/* Page content — max-w-7xl keeps wide monitors comfortable */}
+        {/* Page content - max-w-7xl keeps wide monitors comfortable */}
         <main className="flex-1 overflow-auto scrollbar-thin">
           <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
             {children}

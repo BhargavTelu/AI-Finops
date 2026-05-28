@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class SlackOAuthCallbackBody(BaseModel):
     code: str
-    state: str  # CSRF token — validated against the org_id in the JWT
+    state: str  # CSRF token - validated against the org_id in the JWT
 
 
 class SlackStatusResponse(BaseModel):

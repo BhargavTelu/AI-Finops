@@ -9,13 +9,13 @@ import yaml
 from api.adapters.base import NormalizedUsageEvent
 
 # Reference:
-#   GET /v1/organizations/usage_report/messages  — token counts per model per day bucket
+#   GET /v1/organizations/usage_report/messages  - token counts per model per day bucket
 #   Costs computed from pricing.yaml (Anthropic does not expose a per-org cost API with model granularity)
 _BASE_URL = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _PAGE_LIMIT = 30  # days per page; 30 covers a full month backfill in one request
 
-# Load pricing at import time — file is small, parsing is cheap
+# Load pricing at import time - file is small, parsing is cheap
 _PRICING_PATH = Path(__file__).parents[5] / "packages" / "pricing" / "pricing.yaml"
 
 def _load_anthropic_pricing() -> dict[str, dict[str, float]]:
@@ -31,7 +31,7 @@ _ANTHROPIC_PRICING: dict[str, dict[str, float]] = _load_anthropic_pricing()
 def _compute_cost(model: str, input_tokens: int, output_tokens: int, cached_tokens: int) -> Decimal:
     """
     Calculate USD cost from token counts using pricing.yaml rates.
-    Returns Decimal("0") for unknown models — token counts are still captured.
+    Returns Decimal("0") for unknown models - token counts are still captured.
     """
     rates = _ANTHROPIC_PRICING.get(model)
     if not rates:
@@ -121,7 +121,7 @@ class AnthropicAdapter:
 
                 cost = _compute_cost(model, input_tokens, output_tokens, cached_tokens)
 
-                # Skip rows with no tokens and no cost — identical to OpenAI zero-cost skip
+                # Skip rows with no tokens and no cost - identical to OpenAI zero-cost skip
                 if cost == 0 and input_tokens == 0 and output_tokens == 0:
                     continue
 

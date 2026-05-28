@@ -1,6 +1,6 @@
 """
 Shared pytest fixtures.
-Provider API calls are mocked at the httpx transport level — no real network.
+Provider API calls are mocked at the httpx transport level - no real network.
 """
 
 import pytest

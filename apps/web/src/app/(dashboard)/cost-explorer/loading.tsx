@@ -24,7 +24,7 @@ export default function CostExplorerLoading() {
 
       {/* Table skeleton */}
       <div className="rounded-xl border border-border/60 bg-card">
-        {/* Table header — 6 columns: Dimension, Cost, Requests, Tokens, Avg/1K, % Total */}
+        {/* Table header - 6 columns: Dimension, Cost, Requests, Tokens, Avg/1K, % Total */}
         <div className="flex gap-4 border-b border-border/60 px-4 py-3">
           {[200, 96, 80, 96, 88, 80].map((w, i) => (
             <div key={i} className="h-3.5 animate-pulse rounded-md bg-muted" style={{ width: `${w}px` }} />

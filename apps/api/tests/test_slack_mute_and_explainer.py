@@ -60,7 +60,7 @@ def _anomaly_row(severity: str = "high") -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Feature C — Slack mute alerts
+# Feature C - Slack mute alerts
 # ══════════════════════════════════════════════════════════════════════════════
 
 
@@ -194,12 +194,12 @@ class TestAlertsMutedWorkerGuard:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Feature D — Anomaly Explainer
+# Feature D - Anomaly Explainer
 # ══════════════════════════════════════════════════════════════════════════════
 
 
 class TestAnomalyExplainerService:
-    """services/anomaly_explainer.py — pure rate-limit + API call logic."""
+    """services/anomaly_explainer.py - pure rate-limit + API call logic."""
 
     def test_returns_none_when_no_api_key(self) -> None:
         from api.services.anomaly_explainer import generate_explanation
@@ -293,7 +293,7 @@ class TestIsRateLimited:
 
 
 class TestExplainAnomalyTask:
-    """workers/anomaly_explainer.py — Celery task."""
+    """workers/anomaly_explainer.py - Celery task."""
 
     def test_generates_and_persists_explanation(self) -> None:
         from api.workers.anomaly_explainer import explain_anomaly
@@ -318,7 +318,7 @@ class TestExplainAnomalyTask:
     def test_skips_when_explanation_is_fresh(self) -> None:
         from api.workers.anomaly_explainer import explain_anomaly
 
-        # Set generated_at to 1 hour ago — within the 24h cache
+        # Set generated_at to 1 hour ago - within the 24h cache
         recent_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
         row = {**_anomaly_row(), "explanation_generated_at": recent_ts}
 
@@ -337,7 +337,7 @@ class TestExplainAnomalyTask:
     def test_regenerates_after_cache_ttl(self) -> None:
         from api.workers.anomaly_explainer import explain_anomaly
 
-        # Set generated_at to 25 hours ago — past the 24h cache TTL
+        # Set generated_at to 25 hours ago - past the 24h cache TTL
         stale_ts = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
         row = {**_anomaly_row(), "explanation_generated_at": stale_ts}
 
@@ -385,7 +385,7 @@ class TestExplainAnomalyTask:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Feature D — _consume_quota Redis behaviour
+# Feature D - _consume_quota Redis behaviour
 # ══════════════════════════════════════════════════════════════════════════════
 
 

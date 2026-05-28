@@ -26,7 +26,7 @@ const FEATURES = [
   {
     title: "Daily cost digest",
     description:
-      "Yesterday's spend, 7-day average, top cost drivers, and open anomalies — delivered at 09:00 UTC.",
+      "Yesterday's spend, 7-day average, top cost drivers, and open anomalies - delivered at 09:00 UTC.",
   },
   {
     title: "Real-time anomaly alerts",

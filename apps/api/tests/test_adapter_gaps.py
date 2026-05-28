@@ -1,7 +1,7 @@
 """
 Provider adapter gap tests.
 
-Gap-18 (critical): OpenAI two-pass fetch — Pass 1 failure raises before Pass 2 runs.
+Gap-18 (critical): OpenAI two-pass fetch - Pass 1 failure raises before Pass 2 runs.
 Gap-19 (high):     Provider 429 raises ValueError with status code in message.
 Gap-20 (high):     Anthropic adapter validate() / fetch_costs() basic coverage.
 Gap-21 (high):     Anthropic pagination stops when has_more is absent/False.
@@ -76,7 +76,7 @@ class TestOpenAITwoPassFetch:
     def test_pass1_http_error_raises_before_pass2(self) -> None:
         """
         Pass 1 (/organization/usage/completions) returning non-200 must raise ValueError.
-        Pass 2 (/organization/costs) must NOT be called — no partial token_lookup.
+        Pass 2 (/organization/costs) must NOT be called - no partial token_lookup.
         """
         from api.adapters.openai import OpenAIAdapter
 
@@ -97,7 +97,7 @@ class TestOpenAITwoPassFetch:
         # Pass 2 must not have been called
         assert not any("organization/costs" in url for url in call_log), (
             "Gap-18: Pass 2 (/costs) was called even though Pass 1 failed. "
-            "It should not run — token_lookup would be empty and events mis-attributed."
+            "It should not run - token_lookup would be empty and events mis-attributed."
         )
 
     def test_pass1_success_pass2_failure_raises(self) -> None:

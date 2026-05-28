@@ -149,7 +149,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
   }
 
   function handleCopyMasked(id: string) {
-    // Visual feedback only — actual key is not returned by API (security)
+    // Visual feedback only - actual key is not returned by API (security)
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   }
@@ -161,7 +161,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
       toast({ title: "Sync triggered", description: "Data will refresh within 5 minutes." });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "";
-      // Backend stub returns 501 until M4 — show informational message instead of error
+      // Backend stub returns 501 until M4 - show informational message instead of error
       if (msg.includes("Not yet implemented") || msg.includes("501")) {
         toast({
           title: "Syncs run automatically",
@@ -180,7 +180,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
   return (
     <PageMotion>
       <div className="space-y-6">
-        {/* Section header — lives inside Settings layout content panel */}
+        {/* Section header - lives inside Settings layout content panel */}
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-base font-semibold text-foreground">
@@ -286,7 +286,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
                 <p className="text-xs text-muted-foreground">
                   Requires an{" "}
                   <span className="font-medium">Organization Admin API key</span>{" "}
-                  — not a project key.
+                  - not a project key.
                 </p>
               </div>
 
@@ -300,7 +300,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
               {submitState === "success" && (
                 <div className="flex items-center gap-2 rounded-md bg-success-subtle border border-success/20 px-3 py-2 text-sm text-success">
                   <Check className="h-4 w-4 shrink-0" />
-                  Connected! Data syncing — numbers appear within 5 minutes.
+                  Connected! Data syncing - numbers appear within 5 minutes.
                 </div>
               )}
 
@@ -345,7 +345,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
   );
 }
 
-/** Individual integration card — shows provider, masked key, status, metrics, actions */
+/** Individual integration card - shows provider, masked key, status, metrics, actions */
 function IntegrationCard({
   integration,
   copiedId,

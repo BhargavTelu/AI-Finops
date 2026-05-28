@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 // Server-side Supabase client for Server Components and Route Handlers.
 // Attaches the Clerk HS256 "supabase" template token so Supabase RLS can
 // read the org_id claim. The RS256 Clerk session token must never be used
-// here — Supabase only accepts HS256 tokens signed with its configured secret.
+// here - Supabase only accepts HS256 tokens signed with its configured secret.
 export async function createClient() {
   const cookieStore = await cookies();
   const { getToken } = await auth();

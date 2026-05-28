@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils"
 interface PageHeaderProps {
   title: string
   description?: string
-  /** Right-aligned slot — pass Button(s) or filter controls */
+  /** Right-aligned slot - pass Button(s) or filter controls */
   actions?: React.ReactNode
   className?: string
 }

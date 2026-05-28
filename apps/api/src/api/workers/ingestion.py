@@ -1,8 +1,8 @@
 """
 Ingestion workers.
-  backfill_integration — triggered on key connect (30d historical data)
-  refresh_all_integrations — Celery beat every 4h
-  refresh_integration — incremental fetch since last_synced_at
+  backfill_integration - triggered on key connect (30d historical data)
+  refresh_all_integrations - Celery beat every 4h
+  refresh_integration - incremental fetch since last_synced_at
 """
 
 from datetime import datetime, timedelta, timezone
@@ -134,7 +134,7 @@ def _ingest_window(
 
     events = list(adapter.fetch_costs(key_bytes, start, end))
 
-    # Load enabled tag rules for this org once — compiled before the event loop
+    # Load enabled tag rules for this org once - compiled before the event loop
     rules_result = (
         db.table("tag_rules")
         .select("match_type, match_pattern, priority, enabled, tags(type, name)")
@@ -299,7 +299,7 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
         key_bytes = cipher.decrypt(bytes.fromhex(enc_hex))
 
         now = datetime.now(timezone.utc)
-        # Fall back to 4h lookback if no prior sync — matches the beat cadence
+        # Fall back to 4h lookback if no prior sync - matches the beat cadence
         if row.get("last_synced_at"):
             start = datetime.fromisoformat(row["last_synced_at"])
             if start.tzinfo is None:

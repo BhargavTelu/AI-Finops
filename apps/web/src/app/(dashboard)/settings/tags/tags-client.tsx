@@ -268,7 +268,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
                           role="img"
                         />
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -374,7 +374,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
                             </span>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -389,7 +389,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
                         {rule.enabled ? (
                           <span className="text-success text-xs font-medium">✓</span>
                         ) : (
-                          <span className="text-muted-foreground text-xs">—</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">

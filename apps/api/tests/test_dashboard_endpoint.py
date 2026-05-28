@@ -1,5 +1,5 @@
 """
-Tests for GET /usage/dashboard — the multi-period summary endpoint added in M1 gap-close.
+Tests for GET /usage/dashboard - the multi-period summary endpoint added in M1 gap-close.
 
 Tests cover:
 - Period boundary arithmetic (day / week / 30d / MTD windows)
@@ -177,7 +177,7 @@ class TestDashboardPctChange:
         assert pct == pytest.approx(-50.0, rel=0.01)  # -50%
 
     def test_pct_change_null_when_no_prior_data(self) -> None:
-        # Only provide yesterday's data — prior day has nothing
+        # Only provide yesterday's data - prior day has nothing
         rows = [_make_row(_yesterday(), "10.00")]
         db = _mock_db(rows)
         with patch("api.routers.usage._get_supabase", return_value=db):
@@ -189,7 +189,7 @@ class TestDashboardPctChange:
         day_before = yesterday - timedelta(days=1)
         rows = [
             _make_row(yesterday, "10.00"),   # current day
-            _make_row(day_before, "10.00"),  # prior day — identical cost
+            _make_row(day_before, "10.00"),  # prior day - identical cost
         ]
         db = _mock_db(rows)
         with patch("api.routers.usage._get_supabase", return_value=db):
@@ -211,7 +211,7 @@ class TestDashboardAggregation:
         yesterday = _yesterday()
         rows = [
             _make_row(yesterday, "3.00"),   # e.g. feature_tag=A
-            _make_row(yesterday, "7.00"),   # e.g. feature_tag=B — same day
+            _make_row(yesterday, "7.00"),   # e.g. feature_tag=B - same day
         ]
         db = _mock_db(rows)
         with patch("api.routers.usage._get_supabase", return_value=db):

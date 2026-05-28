@@ -7,7 +7,7 @@
 --   · All timestamps are UTC (TIMESTAMPTZ)
 --   · created_at / updated_at on every mutable table
 --   · RLS enabled on every org-scoped table
---   · Forward-only — rollback via a new migration
+--   · Forward-only - rollback via a new migration
 -- =============================================================================
 
 -- ── Extensions ───────────────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- IDENTITY  (mirrors Clerk — synced via webhook)
+-- IDENTITY  (mirrors Clerk - synced via webhook)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -72,7 +72,7 @@ CREATE TRIGGER trg_integrations_updated_at
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- CORE ANALYTICS  (high write — ingestion workers land here)
+-- CORE ANALYTICS  (high write - ingestion workers land here)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE usage_events (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -100,7 +100,7 @@ CREATE INDEX idx_usage_events_org_feature ON usage_events (org_id, feature_tag, 
 CREATE INDEX idx_usage_events_org_model   ON usage_events (org_id, model, bucket_hour DESC);
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- READ-OPTIMIZED ROLLUP  (dashboard always hits this — never raw usage_events)
+-- READ-OPTIMIZED ROLLUP  (dashboard always hits this - never raw usage_events)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE daily_cost_summaries (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),

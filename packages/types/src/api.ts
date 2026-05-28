@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// API request / response types — mirrors Pydantic schemas in apps/api/src/api/schemas/
+// API request / response types - mirrors Pydantic schemas in apps/api/src/api/schemas/
 // Keep in sync manually until an OpenAPI code-gen step is added.
 // ─────────────────────────────────────────────────────────────────────────────
 

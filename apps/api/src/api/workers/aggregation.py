@@ -2,7 +2,7 @@
 Nightly aggregation: usage_events → daily_cost_summaries.
 Runs at 00:30 UTC via Celery beat.
 
-Uses UPSERT so it's idempotent — safe to re-run on failure.
+Uses UPSERT so it's idempotent - safe to re-run on failure.
 """
 
 from collections import defaultdict
@@ -42,7 +42,7 @@ def aggregate_all_orgs() -> None:
 def aggregate_org(org_id: str) -> None:
     """
     GROUP BY (day, provider, model, *_tag) → rebuild daily_cost_summaries.
-    Processes all days up to yesterday UTC — never today's partial-day data.
+    Processes all days up to yesterday UTC - never today's partial-day data.
     Delete-before-insert ensures revoked-integration data is purged on every run.
     """
     db = _get_supabase()
@@ -61,7 +61,7 @@ def aggregate_org(org_id: str) -> None:
     )
     active_ids = [row["id"] for row in integrations_result.data]
 
-    # Always wipe the window first — removes stale rows from previously revoked
+    # Always wipe the window first - removes stale rows from previously revoked
     # integrations even when no active events exist for the period.
     db.table("daily_cost_summaries").delete().eq("org_id", org_id).gte(
         "day", from_date.isoformat()

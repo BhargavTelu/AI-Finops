@@ -1,6 +1,6 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-// Browser-side Supabase client — safe to use in Client Components.
+// Browser-side Supabase client - safe to use in Client Components.
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

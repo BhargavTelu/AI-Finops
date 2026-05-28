@@ -19,7 +19,7 @@ const RANGE_OPTIONS = [
   { value: "90d", label: "Last 90 days" },
 ] as const;
 
-// Dimension filter badges — these appear when a row drill-down is active
+// Dimension filter badges - these appear when a row drill-down is active
 const FILTER_DIMENSIONS: Record<string, string> = {
   provider: "Provider",
   model: "Model",
@@ -99,7 +99,7 @@ export function ExploreControls({ groupBy, range, activeFilters }: Props) {
           </select>
         </div>
 
-        {/* Reset button — only shown when dimension filters are active */}
+        {/* Reset button - only shown when dimension filters are active */}
         {activeFilterCount > 0 && (
           <Button
             variant="ghost"

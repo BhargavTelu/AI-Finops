@@ -6,7 +6,7 @@
 -- posting the digest. On Celery retry the worker checks for an existing row
 -- before posting, preventing duplicate messages to the same channel.
 --
--- One row per (org_id, digest_date) — enforced by the UNIQUE constraint.
+-- One row per (org_id, digest_date) - enforced by the UNIQUE constraint.
 -- =============================================================================
 
 CREATE TABLE slack_digests (

@@ -53,7 +53,7 @@ const TYPE_CONFIG: Record<
   },
 };
 
-// ── Effort config — derived from recommendation type ──────────────────────────
+// ── Effort config - derived from recommendation type ──────────────────────────
 // model_swap = Easy (config change only), caching/batch = Medium (code change needed),
 // other = Hard (effort unknown)
 
@@ -265,7 +265,7 @@ function RecCard({ rec, onApply, onDismiss, pending }: CardProps) {
             <TypeBadge type={rec.type} />
           </div>
 
-          {/* Savings — dominant visual per spec */}
+          {/* Savings - dominant visual per spec */}
           {savings && !isResolved && (
             <div>
               <p className="text-2xl font-bold text-success text-mono leading-tight">
@@ -443,7 +443,7 @@ export function RecommendationsClient({ initialRecs, status }: Props) {
     setPendingId(id);
     setError("");
 
-    // Optimistic removal — revert on error
+    // Optimistic removal - revert on error
     setRecs((prev) => prev.filter((r) => r.id !== id));
 
     try {
@@ -463,7 +463,7 @@ export function RecommendationsClient({ initialRecs, status }: Props) {
     <div className="space-y-6">
       <PageHeader
         title="Recommendations"
-        description="Rule-based savings opportunities — analyzed nightly from your LLM usage patterns"
+        description="Rule-based savings opportunities - analyzed nightly from your LLM usage patterns"
       />
 
       {/* Filter row + summary bar */}

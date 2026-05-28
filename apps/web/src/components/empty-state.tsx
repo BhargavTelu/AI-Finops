@@ -21,7 +21,7 @@ interface EmptyStateProps {
 }
 
 /**
- * Standard empty state — shown on every page when data arrays are empty.
+ * Standard empty state - shown on every page when data arrays are empty.
  * Never leave a page blank. Always provide a path forward via the action CTA.
  *
  * Usage:

@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 
-// Page-level fade + slide-up entrance (200ms — keeps navigation snappy)
+// Page-level fade + slide-up entrance (200ms - keeps navigation snappy)
 export function PageMotion({ children }: { children: React.ReactNode }) {
   return (
     <motion.div
@@ -15,7 +15,7 @@ export function PageMotion({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Staggered card grid — children fade in sequentially
+// Staggered card grid - children fade in sequentially
 export function StaggerGrid({
   children,
   className,
@@ -38,7 +38,7 @@ export function StaggerGrid({
   );
 }
 
-// Individual stagger child — used inside StaggerGrid
+// Individual stagger child - used inside StaggerGrid
 export function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div
@@ -53,7 +53,7 @@ export function StaggerItem({ children, className }: { children: React.ReactNode
   );
 }
 
-// Slide-in from right — for toasts and panels
+// Slide-in from right - for toasts and panels
 export function SlideIn({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <motion.div

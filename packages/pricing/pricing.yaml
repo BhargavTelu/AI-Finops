@@ -1,8 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Pricing fallback table — USD per million tokens.
+# Pricing fallback table - USD per million tokens.
 # Source of truth: provider Cost API (used when available).
 # This file is used for: forecasts, estimates when Cost API is unavailable.
-# Review monthly — drift can be 20–40% after model price changes.
+# Review monthly - drift can be 20–40% after model price changes.
 # ─────────────────────────────────────────────────────────────────────────────
 version: "2025-01"
 updated_at: "2025-01-01"

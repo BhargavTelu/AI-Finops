@@ -139,7 +139,7 @@ class TestAggregateOrg:
         # 1. integrations select (to filter active integration IDs)
         # 2. daily_cost_summaries delete (clear window before upsert)
         # 3. usage_events page 1 (actual data)
-        # 4. usage_events page 2 (empty — terminates pagination)
+        # 4. usage_events page 2 (empty - terminates pagination)
         # 5. daily_cost_summaries upsert().execute() (captured by db.upsert side_effect)
         db.execute.side_effect = [exec_integration, exec_empty, exec_with_data, exec_empty, exec_empty]
 

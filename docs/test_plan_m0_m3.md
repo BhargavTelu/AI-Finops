@@ -1,4 +1,4 @@
-# SpendOps AI — Comprehensive Test Plan (M0–M3 Audit)
+# SpendOps AI - Comprehensive Test Plan (M0–M3 Audit)
 **Date:** 2026-05-21 | **Auditor:** QA / Senior Engineer | **Baseline:** 221 tests, 74% coverage
 
 ---
@@ -13,10 +13,10 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 | Bug ID | Severity | File | Description |
 |--------|----------|------|-------------|
 | BUG-01 | **Critical** | `adapters/anthropic.py:178` | `_headers()` missing `anthropic-beta: usage-report-2024-07-01` required by Anthropic API |
-| BUG-02 | **High** | `routers/webhooks.py:217` | `_handle_membership_created` calls `.single()` — if PostgREST raises on 0 rows, the `if not user_resp.data` guard is unreachable |
+| BUG-02 | **High** | `routers/webhooks.py:217` | `_handle_membership_created` calls `.single()` - if PostgREST raises on 0 rows, the `if not user_resp.data` guard is unreachable |
 | BUG-03 | **Medium** | `workers/notifications.py:82`, `routers/slack.py:173` | `lstrip("\\x")` strips any leading `\` or `x` chars instead of exactly a `\x` prefix; inconsistent with `ingestion.py`'s safer `[2:]` slice |
-| BUG-04 | **Medium** | `routers/budgets.py:111` | No DB `UNIQUE` constraint on `(org_id, scope_type, scope_value)` — application-layer check is race-condition-prone under concurrent requests |
-| BUG-05 | **Low** | `services/anomaly.py:35` | Docstring says "len >= 15" but function checks `len(history) < 15` — 14 points returns None; off-by-one is documented but confusing |
+| BUG-04 | **Medium** | `routers/budgets.py:111` | No DB `UNIQUE` constraint on `(org_id, scope_type, scope_value)` - application-layer check is race-condition-prone under concurrent requests |
+| BUG-05 | **Low** | `services/anomaly.py:35` | Docstring says "len >= 15" but function checks `len(history) < 15` - 14 points returns None; off-by-one is documented but confusing |
 
 ---
 
@@ -28,19 +28,19 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 | `routers/integrations.py` | 34% | 85% | Happy path, org isolation, key-never-returned |
 | `routers/webhooks.py` | 26% | 80% | Svix verification, all 3 Clerk event handlers |
 | `services/slack_client.py` | 24% | 80% | exchange_code, revoke_token, post_message |
-| `services/recommendations.py` | 0% | 0% | Stub — no tests needed until M3-D implemented |
+| `services/recommendations.py` | 0% | 0% | Stub - no tests needed until M3-D implemented |
 | `workers/ingestion.py` | 40% | 80% | backfill/refresh task end-to-end |
 | `routers/anomalies.py` | 52% | 85% | List filter, patch status, org isolation |
 | `routers/budgets.py` | 74% | 90% | Patch 404, delete 404, org isolation |
-| `deps.py` | 31% | N/A | Auth middleware — untestable without real Clerk JWKS |
+| `deps.py` | 31% | N/A | Auth middleware - untestable without real Clerk JWKS |
 
 ---
 
 ## Test Cases
 
-### Layer 1 — Unit Tests: Core Services
+### Layer 1 - Unit Tests: Core Services
 
-#### 1.1 EncryptionService (`services/encryption.py`) — 0 tests currently
+#### 1.1 EncryptionService (`services/encryption.py`) - 0 tests currently
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -52,7 +52,7 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 | TC-ENC-06 | Nonce strip & length | blob[:12] = nonce, rest = ciphertext | First 12 bytes are always present in output | **High** |
 | TC-ENC-07 | Binary plaintext round-trip | encrypt(b"\x00\xff\x00") | Decrypts to same bytes | **Medium** |
 
-#### 1.2 Anomaly Service (`services/anomaly.py`) — 100% coverage (fill edge cases)
+#### 1.2 Anomaly Service (`services/anomaly.py`) - 100% coverage (fill edge cases)
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -61,7 +61,7 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 | TC-ANO-14 | Negative value in history | `-5.0` in rolling window | No crash; `pstdev` handles it | **Low** |
 | TC-ANO-15 | spike_pct when mean=0 | All zeros baseline + $50 spike | `spike_pct == 0` (special-cased) | **High** |
 
-#### 1.3 Slack Client Service (`services/slack_client.py`) — 24% coverage
+#### 1.3 Slack Client Service (`services/slack_client.py`) - 24% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -75,7 +75,7 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 | TC-SLK-08 | `post_message` Slack error | Mock 200 with `{"ok": false, "error": "channel_not_found"}` | Raises `ValueError("Slack postMessage failed: channel_not_found")` | **Critical** |
 | TC-SLK-09 | `post_message` HTTP error | Mock HTTP 500 | Raises `ValueError` with status code | **Critical** |
 
-#### 1.4 Anthropic Adapter — Missing Header Bug
+#### 1.4 Anthropic Adapter - Missing Header Bug
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -101,11 +101,11 @@ Current state: 221 passing tests, 2 skipped, 74% aggregate coverage. Several cri
 
 ---
 
-### Layer 2 — Route / API Integration Tests
+### Layer 2 - Route / API Integration Tests
 
 All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`), `OrgDep` overridden via `app.dependency_overrides`.
 
-#### 2.1 Integration Routes (`routers/integrations.py`) — 34% coverage
+#### 2.1 Integration Routes (`routers/integrations.py`) - 34% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -120,7 +120,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 | TC-INT-09 | Duplicate name returns 409 | DB raises unique violation | 409 with "already exists" | **High** |
 | TC-INT-10 | Audit event written | POST succeeds | `audit_events.insert` called with `action="integration.create"` | **High** |
 
-#### 2.2 Anomaly Routes (`routers/anomalies.py`) — 52% coverage
+#### 2.2 Anomaly Routes (`routers/anomalies.py`) - 52% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -132,7 +132,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 | TC-ANOM-06 | Invalid status value | PATCH with `{"status": "deleted"}` | 422 | **Medium** |
 | TC-ANOM-07 | Anomaly not found | PATCH non-existent id | 404 | **Medium** |
 
-#### 2.3 Budget Routes (`routers/budgets.py`) — 74% coverage
+#### 2.3 Budget Routes (`routers/budgets.py`) - 74% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -149,7 +149,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 | TC-BUD-11 | Zero limit budget shows 0% | monthly_limit=0; spend=$500 | `spent_pct=0` (no divide-by-zero) | **High** |
 | TC-BUD-12 | spent_pct capped correctly | spend=$1500 vs limit=$1000 | `spent_pct=150` | **Medium** |
 
-#### 2.4 Slack Routes (`routers/slack.py`) — 91% coverage
+#### 2.4 Slack Routes (`routers/slack.py`) - 91% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -165,7 +165,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 
 ---
 
-### Layer 3 — Worker Tests
+### Layer 3 - Worker Tests
 
 #### 3.1 Ingestion Worker (uncovered paths)
 
@@ -199,7 +199,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 
 ---
 
-### Layer 4 — Webhook Security Tests (`routers/webhooks.py`) — 26% coverage
+### Layer 4 - Webhook Security Tests (`routers/webhooks.py`) - 26% coverage
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -217,7 +217,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 
 ---
 
-### Layer 5 — Security Boundary Tests
+### Layer 5 - Security Boundary Tests
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|
@@ -232,7 +232,7 @@ All route tests use `TestClient` with mocked Supabase (`patch("_get_supabase")`)
 
 ---
 
-### Layer 6 — Pricing Math Tests
+### Layer 6 - Pricing Math Tests
 
 | ID | Test | Scenario | Expected | Priority |
 |----|------|----------|----------|----------|

@@ -6,7 +6,7 @@ Covers:
   - _check_batch_opportunity: triggers, avg_tokens threshold, savings math
   - generate_recommendations: sorted by savings, empty input no-ops
   - dedup logic in generate_org_recommendations worker
-All Supabase calls are mocked — no network, no DB.
+All Supabase calls are mocked - no network, no DB.
 """
 
 from decimal import Decimal
@@ -93,7 +93,7 @@ class TestCheckModelSwap:
         assert recs == []
 
     def test_aggregates_across_feature_tags(self):
-        # Two rows for same model, different tags — should produce one rec with combined cost
+        # Two rows for same model, different tags - should produce one rec with combined cost
         stats = [
             _stats("gpt-4o", feature_tag="chat", total_cost_usd="60.00", total_requests=300),
             _stats("gpt-4o", feature_tag="search", total_cost_usd="40.00", total_requests=200),
@@ -540,7 +540,7 @@ class TestRecommendationsRouter:
     def test_patch_rejects_invalid_status(self):
         with patch("api.routers.recommendations._get_supabase", return_value=_mock_db_router()):
             resp = client.patch(f"/api/v1/recommendations/{REC_ID}", json={"status": "new"})
-        assert resp.status_code == 422  # Pydantic rejects 'new' — only applied/dismissed allowed
+        assert resp.status_code == 422  # Pydantic rejects 'new' - only applied/dismissed allowed
 
     def test_list_accepts_applied_status_filter(self):
         rows = [_rec_row(status="applied")]
@@ -723,7 +723,7 @@ class TestWorkerInsertionAndAggregation:
 
         with (
             patch("api.workers.recommendations._get_supabase") as mock_sup,
-            # Return two identical recs — simulates a hypothetical service bug
+            # Return two identical recs - simulates a hypothetical service bug
             patch(
                 "api.workers.recommendations.generate_recommendations",
                 return_value=[duplicate_rec, duplicate_rec],
@@ -741,7 +741,7 @@ class TestWorkerInsertionAndAggregation:
 
 class TestInputCompressionNotImplemented:
     """
-    TC-REC-20 — FR-19 spec gap tracker: input_compression recommendation type
+    TC-REC-20 - FR-19 spec gap tracker: input_compression recommendation type
     is NOT returned by generate_recommendations (not yet implemented).
 
     When implemented: update this test to assert input_compression IS returned
@@ -749,7 +749,7 @@ class TestInputCompressionNotImplemented:
     """
 
     def test_input_compression_type_not_returned(self) -> None:
-        """TC-REC-20 — generate_recommendations never returns type='input_compression'."""
+        """TC-REC-20 - generate_recommendations never returns type='input_compression'."""
         # Stats that would trigger input_compression if it were implemented:
         # avg_tokens = 3_000_000 / 500 = 6000 > 2000 threshold, high cost
         heavy_stats = [

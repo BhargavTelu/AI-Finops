@@ -49,7 +49,7 @@ function timeAgo(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// SparklineChart — tiny Recharts line used inside KPI cards
+// SparklineChart - tiny Recharts line used inside KPI cards
 // ---------------------------------------------------------------------------
 
 function SparklineChart({ data, up }: { data: number[]; up: boolean | null }) {
@@ -73,7 +73,7 @@ function SparklineChart({ data, up }: { data: number[]; up: boolean | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// DeltaBadge — color-coded ±% pill under each KPI number
+// DeltaBadge - color-coded ±% pill under each KPI number
 // ---------------------------------------------------------------------------
 
 function DeltaBadge({ pct }: { pct: number | null }) {
@@ -98,7 +98,7 @@ function DeltaBadge({ pct }: { pct: number | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// DashboardStatCards — four cost-period cards with sparklines + delta badges
+// DashboardStatCards - four cost-period cards with sparklines + delta badges
 // ---------------------------------------------------------------------------
 
 interface StatCardsProps {
@@ -202,7 +202,7 @@ function SingleStatCard({
               />
             )}
           </div>
-          {/* Primary KPI number — large, bold, monospace */}
+          {/* Primary KPI number - large, bold, monospace */}
           <p className="mt-3 text-3xl font-bold tracking-tight text-mono">
             {fmtCost(period.total_cost_usd)}
           </p>
@@ -216,7 +216,7 @@ function SingleStatCard({
           <Icon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.75} />
         </div>
       </div>
-      {/* Sparkline — only renders when ≥2 data points exist */}
+      {/* Sparkline - only renders when ≥2 data points exist */}
       <div className="mt-4">
         <SparklineChart data={sparkline} up={up} />
       </div>
@@ -250,7 +250,7 @@ export function DashboardStatCards({ periods, sparklines, budgetStatus }: StatCa
 }
 
 // ---------------------------------------------------------------------------
-// ProviderDonut — Recharts PieChart for spend-by-provider breakdown
+// ProviderDonut - Recharts PieChart for spend-by-provider breakdown
 // ---------------------------------------------------------------------------
 
 const PROVIDER_COLORS: Record<string, string> = {
@@ -313,7 +313,7 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// SpendTrendChart — 30d / 7d / 90d area chart (just the chart, card in page.tsx)
+// SpendTrendChart - 30d / 7d / 90d area chart (just the chart, card in page.tsx)
 // ---------------------------------------------------------------------------
 
 // Pivot row shape expected by Tremor: { date: string, [model]: number }
@@ -330,7 +330,7 @@ const costFormatter = (value: number) =>
 function shortenModelLabel(label: string): string {
   const commaIdx = label.indexOf(", ");
   if (commaIdx === -1) {
-    // No token type — just strip trailing date suffixes
+    // No token type - just strip trailing date suffixes
     return label
       .replace(/-\d{8}$/, "")          // strip -20241022
       .replace(/-\d{4}-\d{2}-\d{2}$/, ""); // strip -2024-08-06
@@ -386,7 +386,7 @@ export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
 }
 
 // ---------------------------------------------------------------------------
-// TopModelsChart — top-10 horizontal bar chart (just the chart)
+// TopModelsChart - top-10 horizontal bar chart (just the chart)
 // ---------------------------------------------------------------------------
 
 interface BarRow {
@@ -423,7 +423,7 @@ export function TopModelsChart({ barData }: TopModelsProps) {
 }
 
 // ---------------------------------------------------------------------------
-// RecentAlertsWidget — last 5 open anomalies with severity color coding
+// RecentAlertsWidget - last 5 open anomalies with severity color coding
 // ---------------------------------------------------------------------------
 
 interface AlertsProps {

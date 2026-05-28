@@ -1,7 +1,7 @@
 """
 Tag engine security and correctness gap tests.
 
-Gap-22 (high): _matches() uses re.search() with no timeout — ReDoS vulnerability.
+Gap-22 (high): _matches() uses re.search() with no timeout - ReDoS vulnerability.
                Invalid regex returns False (safe). Empty substring matches any label.
 """
 
@@ -33,12 +33,12 @@ def _rule(
 # ── Gap-22: ReDoS vulnerability in _matches() ─────────────────────────────────
 
 class TestMatchesRegexSecurity:
-    """Gap-22 (high): No regex timeout in _matches() — catastrophic backtracking possible."""
+    """Gap-22 (high): No regex timeout in _matches() - catastrophic backtracking possible."""
 
     def test_invalid_regex_returns_false_without_raising(self) -> None:
         """
         An invalid regex pattern (unclosed group, invalid escape) must return False
-        silently. re.error is caught and suppressed — no exception escapes.
+        silently. re.error is caught and suppressed - no exception escapes.
         """
         invalid_patterns = [
             "[invalid(regex",   # unclosed bracket + group
@@ -105,7 +105,7 @@ class TestMatchesRegexSecurity:
     def test_empty_substring_matches_any_label(self) -> None:
         """
         Empty substring pattern ('') is contained in every string including ''.
-        This acts as a catch-all — any label gets assigned the tag.
+        This acts as a catch-all - any label gets assigned the tag.
         """
         rule = _rule("substring", "")
         assert _matches(rule, "any-api-key-label") is True
@@ -218,7 +218,7 @@ class TestTagEngineRuleApplication:
         assert result["feature_tag"] == "winner"
 
     def test_apply_rules_none_label_coerced_to_empty_string(self) -> None:
-        """None label is treated as '' — a rule matching '' will fire."""
+        """None label is treated as '' - a rule matching '' will fire."""
         rules = compile_rules([
             {
                 "match_type": "exact",

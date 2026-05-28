@@ -7,7 +7,7 @@ All tests are skipped by default. Run with:
     E2E=true E2E_API_URL=http://localhost:8000 E2E_TOKEN=<clerk_jwt> pytest tests/test_e2e_m1.py -v
 
 Optional env vars:
-    E2E_OPENAI_KEY  — real or sandbox OpenAI Admin API key for M1-E-001
+    E2E_OPENAI_KEY  - real or sandbox OpenAI Admin API key for M1-E-001
 """
 
 import os
@@ -41,7 +41,7 @@ class TestConnectIntegrationPopulatesDashboard:
         import httpx
 
         if not _OPENAI_KEY:
-            pytest.skip("E2E_OPENAI_KEY not set — skipping live integration test")
+            pytest.skip("E2E_OPENAI_KEY not set - skipping live integration test")
 
         # Step 1: connect integration
         resp = httpx.post(
@@ -88,7 +88,7 @@ class TestFreshOrgEmptyState:
         resp = httpx.get(f"{_API}/api/v1/usage/dashboard", headers=headers, timeout=10)
         assert resp.status_code == 200
         data = resp.json()
-        # Acceptable if any period has zero data — not an error response
+        # Acceptable if any period has zero data - not an error response
         assert "day" in data
         assert "month" in data
         assert float(data["month"]["total_cost_usd"]) >= 0  # zero or positive
@@ -107,7 +107,7 @@ class TestDeleteIntegrationClearsSummaries:
         import httpx
 
         if not _OPENAI_KEY:
-            pytest.skip("E2E_OPENAI_KEY not set — skipping live integration test")
+            pytest.skip("E2E_OPENAI_KEY not set - skipping live integration test")
 
         # Connect
         resp = httpx.post(

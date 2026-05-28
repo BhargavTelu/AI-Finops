@@ -1,5 +1,5 @@
 """
-Usage data endpoints — read from daily_cost_summaries (never raw usage_events).
+Usage data endpoints - read from daily_cost_summaries (never raw usage_events).
 All queries scoped to the requesting org. Target p95 ≤ 800ms.
 """
 
@@ -34,7 +34,7 @@ def _get_supabase():
 def _parse_range(range_param: str) -> tuple[date, date]:
     """Convert "30d" → (period_start, period_end) using complete days only.
 
-    period_end is always yesterday UTC — the last day guaranteed to be fully
+    period_end is always yesterday UTC - the last day guaranteed to be fully
     aggregated. period_start is period_end - (days - 1) so the window is
     exactly `days` calendar days inclusive.
     """
@@ -52,7 +52,7 @@ async def get_summary(
 ) -> UsageSummary:
     """
     Headline numbers for the dashboard.
-    Reads from daily_cost_summaries — never raw usage_events.
+    Reads from daily_cost_summaries - never raw usage_events.
     Target: p95 ≤ 800ms.
     """
     period_start, period_end = _parse_range(range)
@@ -104,7 +104,7 @@ async def get_timeseries(
         .execute()
     )
 
-    # Group by (day, model) — multiple tag combinations can produce separate rows
+    # Group by (day, model) - multiple tag combinations can produce separate rows
     # for the same day+model pair, so we aggregate in Python.
     GroupKey = tuple[date, str]
     groups: dict[GroupKey, dict] = defaultdict(lambda: {"cost": Decimal("0"), "reqs": 0})
@@ -182,7 +182,7 @@ async def get_explore(
 
     result = q.execute()
 
-    # Group in Python — multiple rows per dimension value when other tag columns differ
+    # Group in Python - multiple rows per dimension value when other tag columns differ
     groups: dict[str, dict] = defaultdict(
         lambda: {"cost": Decimal("0"), "reqs": 0, "tokens": 0}
     )
@@ -212,7 +212,7 @@ async def get_explore(
 async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     """
     All four dashboard time-window periods in a single DB query.
-    Covers: latest day, 7 days, 30 days, MTD — each with delta vs prior equal window.
+    Covers: latest day, 7 days, 30 days, MTD - each with delta vs prior equal window.
     Also returns MoM % change and full prior-month cost for the callout widget.
     Reads from daily_cost_summaries only. Target p95 ≤ 800ms.
     """
@@ -234,7 +234,7 @@ async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
         .execute()
     )
 
-    # Multiple tag-dimension rows can exist per day — aggregate them all in Python.
+    # Multiple tag-dimension rows can exist per day - aggregate them all in Python.
     day_totals: dict[date, dict] = {}
     for row in result.data:
         d = date.fromisoformat(row["day"])
@@ -333,13 +333,13 @@ async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
 @router.get("/forecast")
 async def get_forecast(org: OrgDep) -> ForecastResult:
     """Month-end spend forecast via linear regression on daily_cost_summaries."""
-    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
+    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
 
 
 @router.get("/export.csv")
 async def export_csv(org: OrgDep) -> StreamingResponse:
     """Stream a CSV export of the Cost Explorer result set."""
-    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
+    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
 
 
 # ── Usage event admin endpoints ────────────────────────────────────────────────
@@ -352,7 +352,7 @@ async def list_usage_events(
     """
     Return the most recent usage_events rows for this org (admin-only).
     Used by the tag override UI to show individual events before patching tags.
-    Reads usage_events directly (not aggregated summaries) — do not use on the
+    Reads usage_events directly (not aggregated summaries) - do not use on the
     hot dashboard path.
     """
     db = _get_supabase()
@@ -389,7 +389,7 @@ async def override_event_tags(
 
     db = _get_supabase()
 
-    # Ownership check — 404 if the event doesn't belong to this org
+    # Ownership check - 404 if the event doesn't belong to this org
     existing = (
         db.table("usage_events")
         .select("id")

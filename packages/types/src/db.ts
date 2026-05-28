@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Database row types — matches the schema in infra/migrations/
+// Database row types - matches the schema in infra/migrations/
 // Used only in server-side code that queries Supabase directly.
 // ─────────────────────────────────────────────────────────────────────────────
 

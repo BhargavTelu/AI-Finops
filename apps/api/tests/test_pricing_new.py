@@ -74,7 +74,7 @@ class TestPricingYaml:
 
 class TestPricingYamlRecommendationsSync:
     """
-    TC-PRI-10 / TC-PRI-11 (HIGH) — Enforce sync between pricing.yaml and the
+    TC-PRI-10 / TC-PRI-11 (HIGH) - Enforce sync between pricing.yaml and the
     hardcoded price maps in services/recommendations.py.
 
     If pricing.yaml is updated but _INPUT_PRICE_PER_MTOK / _CACHE_SAVINGS_PER_MTOK
@@ -91,7 +91,7 @@ class TestPricingYamlRecommendationsSync:
         return prices
 
     def test_input_price_map_matches_yaml(self) -> None:  # TC-PRI-10
-        """TC-PRI-10 — _INPUT_PRICE_PER_MTOK values match input_per_mtok in pricing.yaml."""
+        """TC-PRI-10 - _INPUT_PRICE_PER_MTOK values match input_per_mtok in pricing.yaml."""
         from api.services.recommendations import _INPUT_PRICE_PER_MTOK
 
         yaml_prices = self._yaml_prices()
@@ -108,7 +108,7 @@ class TestPricingYamlRecommendationsSync:
             )
 
     def test_cache_savings_map_matches_yaml(self) -> None:  # TC-PRI-11
-        """TC-PRI-11 — _CACHE_SAVINGS_PER_MTOK equals (input - cached) from pricing.yaml."""
+        """TC-PRI-11 - _CACHE_SAVINGS_PER_MTOK equals (input - cached) from pricing.yaml."""
         from api.services.recommendations import _CACHE_SAVINGS_PER_MTOK
 
         yaml_prices = self._yaml_prices()

@@ -77,7 +77,7 @@ async def create_integration(body: IntegrationCreate, org: OrgDep) -> Integratio
 
     row = result.data[0]
 
-    # Audit log — non-fatal if this fails
+    # Audit log - non-fatal if this fails
     try:
         db.table("audit_events").insert(
             {
@@ -91,7 +91,7 @@ async def create_integration(body: IntegrationCreate, org: OrgDep) -> Integratio
     except Exception:
         log.warning("audit_log_failed", org_id=org.org_id, action="integration.create")
 
-    # Fire-and-forget backfill — Celery task handles retry logic
+    # Fire-and-forget backfill - Celery task handles retry logic
     backfill_integration.delay(str(row["id"]), org.org_id)
 
     log.info("integration_created", org_id=org.org_id, integration_id=row["id"], provider=body.provider)
@@ -167,10 +167,10 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
         ).execute()
         aggregate_org.delay(org.org_id)
     except Exception as exc:
-        # Non-fatal — stale data will be cleaned up on the next nightly aggregation run
+        # Non-fatal - stale data will be cleaned up on the next nightly aggregation run
         log.warning("revoke_cleanup_failed", org_id=org.org_id, integration_id=integration_id, error=str(exc))
 
-    # Audit log — non-fatal if this fails
+    # Audit log - non-fatal if this fails
     try:
         db.table("audit_events").insert(
             {
@@ -190,4 +190,4 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
 @router.post("/{integration_id}/test")
 async def test_integration(integration_id: str, org: OrgDep) -> dict:
     """Revalidate the stored key and trigger a fresh backfill job."""
-    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
+    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")

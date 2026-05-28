@@ -265,10 +265,10 @@ class TestPreviewTagRule:
 # ── TC-TAG-10 to TC-TAG-14: PATCH /tags/:id and PATCH /tag-rules/:id ──────────
 
 class TestUpdateTag:
-    """TC-TAG-10 and TC-TAG-11 — PATCH /tags/:id."""
+    """TC-TAG-10 and TC-TAG-11 - PATCH /tags/:id."""
 
     def test_patch_tag_success_returns_200(self) -> None:
-        """TC-TAG-10 — PATCH existing tag updates name and color."""
+        """TC-TAG-10 - PATCH existing tag updates name and color."""
         updated = _tag_row("tag-001", "feature", "new-name", "#ff0000")
         db = _mock_db([updated])
         with patch("api.routers.tags._get_supabase", return_value=db):
@@ -282,7 +282,7 @@ class TestUpdateTag:
         assert body["color"] == "#ff0000"
 
     def test_patch_nonexistent_tag_returns_404(self) -> None:
-        """TC-TAG-11 — PATCH tag that doesn't exist → 404."""
+        """TC-TAG-11 - PATCH tag that doesn't exist → 404."""
         db = _mock_db([])  # empty → not found
         with patch("api.routers.tags._get_supabase", return_value=db):
             resp = client.patch(
@@ -293,10 +293,10 @@ class TestUpdateTag:
 
 
 class TestUpdateTagRule:
-    """TC-TAG-12, TC-TAG-13, TC-TAG-14 — PATCH /tag-rules/:id."""
+    """TC-TAG-12, TC-TAG-13, TC-TAG-14 - PATCH /tag-rules/:id."""
 
     def test_patch_tag_rule_success_returns_200(self) -> None:
-        """TC-TAG-12 — PATCH existing tag rule updates match_pattern and priority."""
+        """TC-TAG-12 - PATCH existing tag rule updates match_pattern and priority."""
         updated = _rule_row("rule-001", "tag-001", "regex", r"^api-", 75)
         db = _mock_db([updated])
         with patch("api.routers.tags._get_supabase", return_value=db):
@@ -315,7 +315,7 @@ class TestUpdateTagRule:
         assert body["priority"] == 75
 
     def test_patch_nonexistent_tag_rule_returns_404(self) -> None:
-        """TC-TAG-13 — PATCH tag rule that doesn't exist → 404."""
+        """TC-TAG-13 - PATCH tag rule that doesn't exist → 404."""
         db = _mock_db([])
         with patch("api.routers.tags._get_supabase", return_value=db):
             resp = client.patch(
@@ -326,7 +326,7 @@ class TestUpdateTagRule:
 
     def test_patch_tag_rule_cross_org_returns_404(self) -> None:
         """
-        TC-TAG-14 — Org B attempts to PATCH a tag rule belonging to Org A.
+        TC-TAG-14 - Org B attempts to PATCH a tag rule belonging to Org A.
         The DB query filters by org_id so returns empty → 404.
         No info leak: 404 not 403.
         """

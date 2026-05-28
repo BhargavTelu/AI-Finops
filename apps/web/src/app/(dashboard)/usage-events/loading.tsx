@@ -8,7 +8,7 @@ export default function UsageEventsLoading() {
         <Skeleton className="mt-1.5 h-4 w-80" />
       </div>
 
-      {/* Table skeleton — matches the UsageEventsClient table layout */}
+      {/* Table skeleton - matches the UsageEventsClient table layout */}
       <div className="overflow-hidden rounded-xl border">
         <div className="border-b bg-muted/40 px-4 py-3">
           <div className="grid grid-cols-8 gap-4">

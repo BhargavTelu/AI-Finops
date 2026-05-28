@@ -1,7 +1,7 @@
 """
 Open bug regression tests.
 
-Gap-16 (high):   BUG-02: _handle_membership_created uses .single() — if the parent
+Gap-16 (high):   BUG-02: _handle_membership_created uses .single() - if the parent
                  user/org row is missing, PostgREST raises an exception that propagates
                  as 500 from the wrong place (KeyError, not the explicit HTTPException).
 Gap-17 (medium): BUG-03: _get_slack_channel uses lstrip("\\x") instead of removeprefix.
@@ -56,11 +56,11 @@ def _post_webhook(payload: dict) -> MagicMock:
     )
 
 
-# ── Gap-16: BUG-02 — .single() on missing parent row ─────────────────────────
+# ── Gap-16: BUG-02 - .single() on missing parent row ─────────────────────────
 
 class TestMembershipCreatedSingleBug:
     """
-    Gap-16 (high): BUG-02 — _handle_membership_created uses .single().execute()
+    Gap-16 (high): BUG-02 - _handle_membership_created uses .single().execute()
     which raises postgrest.exceptions.APIError (or similar) when no row found.
     This exception propagates unhandled through the route, yielding 500 from a
     KeyError rather than the intended explicit HTTPException with a clear message.
@@ -78,7 +78,7 @@ class TestMembershipCreatedSingleBug:
 
     def test_missing_user_row_single_raises_returns_5xx(self) -> None:
         """
-        When .single().execute() raises (simulating PostgREST PGRST116 — no rows),
+        When .single().execute() raises (simulating PostgREST PGRST116 - no rows),
         the route must return 5xx so Svix retries the delivery.
 
         Current behavior: KeyError from user_resp.data["id"] → 500 (wrong place).
@@ -124,7 +124,7 @@ class TestMembershipCreatedSingleBug:
     def test_data_dict_with_error_code_not_caught_by_falsy_check(self) -> None:
         """
         If Supabase returns a PostgREST error as a dict (not a list), the check
-        'if not user_resp.data' is True for a non-empty error dict — the guard fails.
+        'if not user_resp.data' is True for a non-empty error dict - the guard fails.
         Document: the fix is to check for list type or use .limit(1).
         """
         # Simulate the case where execute() returns {error dict} not [] or [row]
@@ -148,11 +148,11 @@ class TestMembershipCreatedSingleBug:
         )
 
 
-# ── Gap-17: BUG-03 — lstrip vs removeprefix in _get_slack_channel ────────────
+# ── Gap-17: BUG-03 - lstrip vs removeprefix in _get_slack_channel ────────────
 
 class TestSlackTokenDecryptionLstrip:
     """
-    Gap-17 (medium): BUG-03 — notifications._get_slack_channel uses lstrip("\\x")
+    Gap-17 (medium): BUG-03 - notifications._get_slack_channel uses lstrip("\\x")
     to strip the Supabase bytea \\x prefix. lstrip strips individual CHARACTERS
     from the set {\\, x}, not the exact prefix string. For valid hex data (0-9, a-f)
     this is safe today. Regression test to ensure decryption still works correctly.
@@ -212,7 +212,7 @@ class TestSlackTokenDecryptionLstrip:
         via_removeprefix = malformed.removeprefix("\\x")  # no match → "xdeadbeef" (correct)
 
         assert via_lstrip != via_removeprefix, (
-            "BUG-03: Expected lstrip and removeprefix to differ for malformed prefix — "
+            "BUG-03: Expected lstrip and removeprefix to differ for malformed prefix - "
             "this test documents the semantic difference."
         )
         assert via_lstrip == "deadbeef"         # lstrip silently over-strips

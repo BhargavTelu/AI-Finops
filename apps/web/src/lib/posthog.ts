@@ -8,7 +8,7 @@ export function initPostHog(): void {
   }
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://app.posthog.com",
-    // App Router: disable auto-capture — client-side nav doesn't trigger
+    // App Router: disable auto-capture - client-side nav doesn't trigger
     // full page loads. Manual tracking via usePathname() wired in M4.
     capture_pageview: false,
     capture_pageleave: true,

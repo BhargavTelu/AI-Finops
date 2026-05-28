@@ -1,8 +1,8 @@
 """
-Ingestion worker gap tests — gap-analysis batch 2.
+Ingestion worker gap tests - gap-analysis batch 2.
 
 Gap-05 (critical): Concurrent refresh_integration race (no distributed lock).
-Gap-06 (critical): Partial batch insert failure — last_synced_at must NOT advance.
+Gap-06 (critical): Partial batch insert failure - last_synced_at must NOT advance.
 Gap-07 (high):     refresh_all_integrations enqueues exactly one task per active integration.
 """
 
@@ -55,7 +55,7 @@ def _mock_db() -> MagicMock:
 class TestConcurrentRefreshRace:
     """
     Gap-05 (critical): Two concurrent refresh_integration tasks for the same integration
-    both call _ingest_window independently — no distributed lock prevents double-execution.
+    both call _ingest_window independently - no distributed lock prevents double-execution.
     """
 
     def test_concurrent_refresh_documents_known_race(self) -> None:
@@ -114,7 +114,7 @@ class TestConcurrentRefreshRace:
         assert ingest_call_count[0] == 2, (
             f"Gap-05: Expected _ingest_window to be called twice (no lock). "
             f"Got {ingest_call_count[0]}. "
-            "If count == 1, a distributed lock was added — update assertion to count == 1."
+            "If count == 1, a distributed lock was added - update assertion to count == 1."
         )
 
 
@@ -123,7 +123,7 @@ class TestConcurrentRefreshRace:
 class TestPartialBatchInsertFailure:
     """
     Gap-06 (critical): If a mid-batch insert fails, last_synced_at must NOT be
-    updated — otherwise the next retry skips the failed window entirely.
+    updated - otherwise the next retry skips the failed window entirely.
     """
 
     def test_batch_failure_sets_error_status_not_last_synced(self) -> None:
@@ -211,7 +211,7 @@ class TestPartialBatchInsertFailure:
         # CRITICAL: last_synced_at must NOT appear in any update that also sets 'error'
         for update in error_updates:
             assert "last_synced_at" not in update, (
-                f"Gap-06: last_synced_at was set on the error update — "
+                f"Gap-06: last_synced_at was set on the error update - "
                 f"next retry will advance past the failed window. Update: {update}"
             )
 

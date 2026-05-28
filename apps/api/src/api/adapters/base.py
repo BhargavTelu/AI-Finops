@@ -27,7 +27,7 @@ class NormalizedUsageEvent:
 class UsageAdapter(Protocol):
     """
     Implement one file per provider. See adapters/openai.py for the reference.
-    Each adapter is stateless — encryption/decryption happens in the caller.
+    Each adapter is stateless - encryption/decryption happens in the caller.
     """
 
     provider: str

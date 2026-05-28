@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # =============================================================================
-# bootstrap.sh — First-time local dev environment setup.
+# bootstrap.sh - First-time local dev environment setup.
 # Run from the repo root: bash infra/scripts/bootstrap.sh
 # =============================================================================
 set -euo pipefail
 
 echo "==> Checking prerequisites..."
-command -v node   >/dev/null 2>&1 || { echo "node not found — install v20+"; exit 1; }
-command -v pnpm   >/dev/null 2>&1 || { echo "pnpm not found — run: npm install -g pnpm"; exit 1; }
-command -v python >/dev/null 2>&1 || { echo "python not found — install Python 3.11+"; exit 1; }
-command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker Desktop"; exit 1; }
+command -v node   >/dev/null 2>&1 || { echo "node not found - install v20+"; exit 1; }
+command -v pnpm   >/dev/null 2>&1 || { echo "pnpm not found - run: npm install -g pnpm"; exit 1; }
+command -v python >/dev/null 2>&1 || { echo "python not found - install Python 3.11+"; exit 1; }
+command -v docker >/dev/null 2>&1 || { echo "docker not found - install Docker Desktop"; exit 1; }
 
 echo "==> Installing Node.js dependencies..."
 pnpm install

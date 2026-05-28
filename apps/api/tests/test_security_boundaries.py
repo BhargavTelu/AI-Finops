@@ -22,7 +22,7 @@ BUDGET_ID_A = "bbbbbbbb-0000-0000-0000-000000000001"
 ANOMALY_ID_A = "cccccccc-0000-0000-0000-000000000001"
 NOW_ISO = datetime.now(timezone.utc).isoformat()
 
-# Default auth = Org A — set at import time and re-applied by the autouse fixture below.
+# Default auth = Org A - set at import time and re-applied by the autouse fixture below.
 _ORG_A_OVERRIDE = lambda: OrgContext(user_id="user_a", org_id=ORG_A)  # noqa: E731
 app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
@@ -123,7 +123,7 @@ class TestApiKeyNeverInResponse:
             assert "api_key_enc" not in item
 
 
-# ── TC-SEC-02: Org isolation — integrations ───────────────────────────────────
+# ── TC-SEC-02: Org isolation - integrations ───────────────────────────────────
 
 class TestOrgIsolationIntegrations:
     def test_org_b_cannot_access_org_a_integration(self) -> None:  # TC-SEC-02
@@ -135,7 +135,7 @@ class TestOrgIsolationIntegrations:
         assert resp.status_code == 404  # not 403 (no info leak)
 
 
-# ── TC-SEC-03: Org isolation — budgets ────────────────────────────────────────
+# ── TC-SEC-03: Org isolation - budgets ────────────────────────────────────────
 
 class TestOrgIsolationBudgets:
     def test_org_b_cannot_patch_org_a_budget(self) -> None:  # TC-SEC-03
@@ -148,7 +148,7 @@ class TestOrgIsolationBudgets:
         assert resp.status_code == 404
 
 
-# ── TC-SEC-04: Org isolation — anomalies ─────────────────────────────────────
+# ── TC-SEC-04: Org isolation - anomalies ─────────────────────────────────────
 
 class TestOrgIsolationAnomalies:
     def test_org_b_cannot_dismiss_org_a_anomaly(self) -> None:  # TC-SEC-04
@@ -298,7 +298,7 @@ class TestUnauthenticatedEndpoints:
     """M1-I-SEC-001: Routes protected by _require_org return 401 when no token is provided."""
 
     def test_usage_dashboard_requires_auth(self) -> None:
-        """GET without a Bearer token must return 401 — the dependency enforces it."""
+        """GET without a Bearer token must return 401 - the dependency enforces it."""
         resp = _auth_guard_client.get("/check")
         assert resp.status_code == 401, (
             f"Expected 401 without auth, got {resp.status_code}"
@@ -317,19 +317,19 @@ class TestInputValidation:
             json={
                 "provider": "openai",
                 "display_name": "Test",
-                "api_key": "sk-short",  # 8 chars — below min_length=10
+                "api_key": "sk-short",  # 8 chars - below min_length=10
             },
         )
         assert resp.status_code == 422
 
 
-# ── TC-SEC-09: GET /anomalies — org isolation (list) ──────────────────────────
+# ── TC-SEC-09: GET /anomalies - org isolation (list) ──────────────────────────
 
 class TestOrgIsolationAnomaliesList:
-    """TC-SEC-09 (CRITICAL) — Org B cannot see Org A's anomalies via GET /anomalies."""
+    """TC-SEC-09 (CRITICAL) - Org B cannot see Org A's anomalies via GET /anomalies."""
 
     def test_org_b_sees_empty_anomalies_list(self) -> None:
-        """TC-SEC-09 — DB filtered by Org B's org_id returns empty; 200 [] returned."""
+        """TC-SEC-09 - DB filtered by Org B's org_id returns empty; 200 [] returned."""
         # Switch to Org B context for this test
         app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
         try:
@@ -343,17 +343,17 @@ class TestOrgIsolationAnomaliesList:
 
         assert resp.status_code == 200
         assert resp.json() == [], (
-            "Org B must receive an empty list — not Org A's anomalies."
+            "Org B must receive an empty list - not Org A's anomalies."
         )
 
 
-# ── TC-SEC-10: GET /recommendations — org isolation (list) ────────────────────
+# ── TC-SEC-10: GET /recommendations - org isolation (list) ────────────────────
 
 class TestOrgIsolationRecommendationsList:
-    """TC-SEC-10 (CRITICAL) — Org B cannot see Org A's recommendations."""
+    """TC-SEC-10 (CRITICAL) - Org B cannot see Org A's recommendations."""
 
     def test_org_b_sees_empty_recommendations_list(self) -> None:
-        """TC-SEC-10 — DB filtered by Org B's org_id returns empty; 200 [] returned."""
+        """TC-SEC-10 - DB filtered by Org B's org_id returns empty; 200 [] returned."""
         app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
         try:
             db = _mock_db([])
@@ -364,17 +364,17 @@ class TestOrgIsolationRecommendationsList:
 
         assert resp.status_code == 200
         assert resp.json() == [], (
-            "Org B must receive an empty list — not Org A's recommendations."
+            "Org B must receive an empty list - not Org A's recommendations."
         )
 
 
-# ── TC-SEC-11: GET /usage/summary — org isolation ─────────────────────────────
+# ── TC-SEC-11: GET /usage/summary - org isolation ─────────────────────────────
 
 class TestOrgIsolationUsageSummary:
-    """TC-SEC-11 (HIGH) — Org B sees zero spend, not Org A's data."""
+    """TC-SEC-11 (HIGH) - Org B sees zero spend, not Org A's data."""
 
     def test_org_b_sees_zero_usage_summary(self) -> None:
-        """TC-SEC-11 — Org B's usage/summary returns zeros when DB filtered by Org B's org_id."""
+        """TC-SEC-11 - Org B's usage/summary returns zeros when DB filtered by Org B's org_id."""
         app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
         try:
             db = _mock_db([])  # no rows for Org B
@@ -390,13 +390,13 @@ class TestOrgIsolationUsageSummary:
         )
 
 
-# ── TC-SEC-12: GET /slack/status — org isolation ──────────────────────────────
+# ── TC-SEC-12: GET /slack/status - org isolation ──────────────────────────────
 
 class TestOrgIsolationSlackStatus:
-    """TC-SEC-12 (HIGH) — Org B sees {connected: false}, not Org A's Slack workspace_id."""
+    """TC-SEC-12 (HIGH) - Org B sees {connected: false}, not Org A's Slack workspace_id."""
 
     def test_org_b_sees_slack_disconnected(self) -> None:
-        """TC-SEC-12 — DB filtered by Org B's org_id returns empty; {connected: false}."""
+        """TC-SEC-12 - DB filtered by Org B's org_id returns empty; {connected: false}."""
         app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_b", org_id=ORG_B)
         try:
             db = _mock_db([])  # Org B has no Slack integration
@@ -407,5 +407,5 @@ class TestOrgIsolationSlackStatus:
 
         assert resp.status_code == 200
         assert resp.json()["connected"] is False, (
-            "Org B must see connected=false — not Org A's Slack workspace_id."
+            "Org B must see connected=false - not Org A's Slack workspace_id."
         )

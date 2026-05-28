@@ -108,7 +108,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
         cell: (info) => {
           const avg = info.getValue();
           if (avg === 0)
-            return <span className="text-mono text-muted-foreground">—</span>;
+            return <span className="text-mono text-muted-foreground">-</span>;
           return <span className="text-mono">${avg.toFixed(4)}</span>;
         },
       },
@@ -244,7 +244,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
                   ${((grandTotalCost / grandTotalTokens) * 1000).toFixed(4)}
                 </span>
               ) : (
-                <span className="text-mono text-muted-foreground">—</span>
+                <span className="text-mono text-muted-foreground">-</span>
               )}
             </td>
             <td className="px-4 py-3" />

@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Loading skeleton for the tags settings page — matches the Tags + Tag Rules table layout.
+// Loading skeleton for the tags settings page - matches the Tags + Tag Rules table layout.
 export default function TagsLoading() {
   return (
     <div className="space-y-10">

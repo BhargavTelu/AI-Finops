@@ -29,7 +29,7 @@ def _mtd_date_range() -> tuple[str, str]:
 def _compute_mtd_spend(db, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
     """
     Sum daily_cost_summaries for the current calendar month scoped to this budget.
-    Tag columns use empty string for unset — treat NULL and '' as 'unset'.
+    Tag columns use empty string for unset - treat NULL and '' as 'unset'.
     """
     first_day, today = _mtd_date_range()
 
@@ -42,7 +42,7 @@ def _compute_mtd_spend(db, org_id: str, scope_type: str, scope_value: str | None
     )
 
     if scope_type == "global":
-        pass  # no additional filter — sum everything
+        pass  # no additional filter - sum everything
     elif scope_type == "provider":
         q = q.eq("provider", scope_value)
     elif scope_type == "model":
@@ -108,7 +108,7 @@ async def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
     db = _get_supabase()
 
     # Uniqueness: one active budget per (org_id, scope_type, scope_value).
-    # The DB has no UNIQUE constraint for this — enforced in application layer.
+    # The DB has no UNIQUE constraint for this - enforced in application layer.
     dupe_q = (
         db.table("budgets")
         .select("id")

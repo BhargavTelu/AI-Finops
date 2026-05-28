@@ -1,7 +1,7 @@
 """
 Unit tests for Slack notification workers (Group C):
-  send_anomaly_alert  — real-time alert when anomaly is detected
-  send_budget_alert   — Slack branch of the budget alert task
+  send_anomaly_alert  - real-time alert when anomaly is detected
+  send_budget_alert   - Slack branch of the budget alert task
 
 All external calls (Supabase, Slack postMessage, EncryptionService) are mocked.
 """
@@ -242,13 +242,13 @@ class TestSendAnomalyAlert:
             patch("api.workers.notifications.EncryptionService", return_value=mock_cipher),
             patch("api.workers.notifications.post_message") as mock_post,
         ):
-            send_anomaly_alert(ANOMALY_ID)  # direct call — no Celery context needed
+            send_anomaly_alert(ANOMALY_ID)  # direct call - no Celery context needed
 
         # Verify channel_id from _slack_row() was passed as the second positional arg.
         assert mock_post.call_args[0][1] == "C01234567"
 
 
-# ── send_budget_alert — Slack branch ───────────────────────────────────────────
+# ── send_budget_alert - Slack branch ───────────────────────────────────────────
 
 class TestSendBudgetAlertSlack:
     """Tests for the Slack branch added in Group C.
@@ -315,7 +315,7 @@ class TestSendBudgetAlertSlack:
             patch("api.workers.notifications.resend"),
             patch("api.workers.notifications.post_message", side_effect=ValueError("token_revoked")),
         ):
-            # apply() must complete without raising — Slack failure is best-effort.
+            # apply() must complete without raising - Slack failure is best-effort.
             send_budget_alert.apply(args=[BUDGET_ID, 84, ORG_ID])
 
 
@@ -327,7 +327,7 @@ class TestDigestNotSuppressedWhenMuted:
     TC-M3-C05: send_slack_digest must post even when alerts_muted=True.
 
     The implementation explicitly discards the third tuple element:
-        bot_token, channel_id, _ = slack  # digest is not an alert — never suppressed
+        bot_token, channel_id, _ = slack  # digest is not an alert - never suppressed
     This test confirms that discard is honoured.
     """
 
@@ -340,7 +340,7 @@ class TestDigestNotSuppressedWhenMuted:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            # Return a muted tuple — third element True
+            # Return a muted tuple - third element True
             patch(
                 "api.workers.notifications._get_slack_channel",
                 return_value=("xoxb-token", "C01234567", True),

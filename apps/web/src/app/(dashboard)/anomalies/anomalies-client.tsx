@@ -74,11 +74,11 @@ function generateTitle(anomaly: AnomalyRead): string {
   };
   const label = labels[anomaly.scope_kind] ?? "Cost";
   const value = anomaly.scope_value ?? anomaly.scope_kind;
-  return `${label} cost spike — ${value}`;
+  return `${label} cost spike - ${value}`;
 }
 
 function generateDescription(anomaly: AnomalyRead): string {
-  return `Spend jumped +${anomaly.spike_pct}% vs 7-day average — ${fmtCost(anomaly.baseline_usd)}/day baseline → ${fmtCost(anomaly.actual_usd)} actual`;
+  return `Spend jumped +${anomaly.spike_pct}% vs 7-day average - ${fmtCost(anomaly.baseline_usd)}/day baseline → ${fmtCost(anomaly.actual_usd)} actual`;
 }
 
 function buildContextTags(context: Record<string, unknown> | null): string | null {
@@ -177,7 +177,7 @@ function AlertCard({
       )}
     >
       <div className="flex">
-        {/* Left severity strip — 4px, amber for low/medium, red for high */}
+        {/* Left severity strip - 4px, amber for low/medium, red for high */}
         <div className={cn("w-1 shrink-0", stripClass)} aria-hidden />
 
         {/* Card content */}
@@ -282,7 +282,7 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
         const token = await getToken();
         const api = createApiClient(token!);
         await api.patch(`/anomalies/${id}`, { status: newStatus });
-        // Remove from current tab — it now belongs in a different tab
+        // Remove from current tab - it now belongs in a different tab
         setAnomalies((prev) => prev.filter((a) => a.id !== id));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Update failed");
@@ -344,7 +344,7 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
         }
       />
 
-      {/* Critical summary banner — only for open, unacknowledged critical alerts */}
+      {/* Critical summary banner - only for open, unacknowledged critical alerts */}
       {criticalCount > 0 && status === "open" && (
         <div className="flex items-center gap-3 rounded-lg border border-critical/30 bg-critical-subtle px-4 py-3">
           <AlertTriangle className="h-4 w-4 shrink-0 text-critical" aria-hidden />
@@ -401,7 +401,7 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
             icon={status === "open" ? CheckCircle2 : Bell}
             title={
               status === "open"
-                ? "All clear — no open alerts"
+                ? "All clear - no open alerts"
                 : status === "acked"
                 ? "No acknowledged alerts"
                 : "No dismissed alerts"

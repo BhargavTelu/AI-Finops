@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Loading skeleton for the integrations page — matches the new card layout.
+// Loading skeleton for the integrations page - matches the new card layout.
 export default function IntegrationsLoading() {
   return (
     <div className="space-y-6">

@@ -1,4 +1,4 @@
-# Test Results — M0–M3 Batch 1
+# Test Results - M0–M3 Batch 1
 **Date:** 2026-05-21 | **Engineer:** QA / Claude Code | **Branch:** main
 
 ---
@@ -12,7 +12,7 @@
 | Failing | 0 | 0 |
 | Skipped | 2 | 2 |
 | Coverage | 74% | 86% |
-| New test cases added | — | 90 |
+| New test cases added | - | 90 |
 
 All 103 planned test cases from `docs/test-plan.md` were accounted for:
 - **90 new tests** written across 15 new test files
@@ -30,38 +30,38 @@ Result: **311 passed, 2 skipped, 0 failed** in 2.35 s
 
 ## Bugs Found and Fixed
 
-### BUG-01 (Critical) — Missing Anthropic beta header — FIXED
+### BUG-01 (Critical) - Missing Anthropic beta header - FIXED
 **File:** `apps/api/src/api/adapters/anthropic.py:178`
 **Symptom:** All calls to `GET /v1/organizations/usage_report/messages` would return 400 from Anthropic because the required `anthropic-beta: usage-report-2024-07-01` header was absent.
 **Fix:** Added `"anthropic-beta": "usage-report-2024-07-01"` to `AnthropicAdapter._headers()`.
-**Test:** TC-ANT-11 (`test_anthropic_header.py`) — PASS
+**Test:** TC-ANT-11 (`test_anthropic_header.py`) - PASS
 
-### BUG-SLK (High) — `exchange_code()` did not wrap network errors — FIXED
+### BUG-SLK (High) - `exchange_code()` did not wrap network errors - FIXED
 **File:** `apps/api/src/api/services/slack_client.py`
 **Symptom:** The docstring for `exchange_code()` states it raises `ValueError` on network errors, but `httpx.RequestError` was not caught and propagated raw to callers. TC-SLK-04 caught this.
 **Fix:** Wrapped the `httpx.Client.post()` call in a `try/except httpx.RequestError` that re-raises as `ValueError`.
-**Test:** TC-SLK-04 (`test_slack_client_service.py`) — PASS after fix
+**Test:** TC-SLK-04 (`test_slack_client_service.py`) - PASS after fix
 
-### BUG-TFIX (Low) — TC-SLACK-09 missing `state` field in test request — FIXED
+### BUG-TFIX (Low) - TC-SLACK-09 missing `state` field in test request - FIXED
 **File:** `apps/api/tests/test_slack_routes_extended.py`
 **Symptom:** Test sent `{"code": "..."}` to `/api/v1/slack/oauth/callback` which requires both `code` and `state` per `SlackOAuthCallbackBody`. Got 422 instead of 200.
 **Fix:** Updated test payload to `{"code": "valid_code", "state": ORG_ID}`.
-**Test:** TC-SLACK-09 — PASS after fix
+**Test:** TC-SLACK-09 - PASS after fix
 
 ---
 
-## Open Bugs (not fixed — scope deferred)
+## Open Bugs (not fixed - scope deferred)
 
 | Bug ID | Severity | File | Description |
 |--------|----------|------|-------------|
-| BUG-02 | High | `routers/webhooks.py:217` | `_handle_membership_created` uses `.single()` — if PostgREST raises on 0 rows, the `if not user_resp.data` guard is unreachable |
+| BUG-02 | High | `routers/webhooks.py:217` | `_handle_membership_created` uses `.single()` - if PostgREST raises on 0 rows, the `if not user_resp.data` guard is unreachable |
 | BUG-03 | Medium | `workers/notifications.py:82`, `routers/slack.py:173` | `lstrip("\\x")` strips any leading `\` or `x` chars; safer alternative is `[2:]` slice |
-| BUG-04 | Medium | `routers/budgets.py:111` | No DB UNIQUE constraint on `(org_id, scope_type, scope_value)` — application-layer check is race-condition-prone |
-| BUG-05 | Low | `services/anomaly.py:35` | Docstring says "len >= 15" but code checks `< 15` — 14 points returns None; off-by-one is documented but confusing |
+| BUG-04 | Medium | `routers/budgets.py:111` | No DB UNIQUE constraint on `(org_id, scope_type, scope_value)` - application-layer check is race-condition-prone |
+| BUG-05 | Low | `services/anomaly.py:35` | Docstring says "len >= 15" but code checks `< 15` - 14 points returns None; off-by-one is documented but confusing |
 
 ---
 
-## Layer 1 — Unit Tests: Core Services
+## Layer 1 - Unit Tests: Core Services
 **35 tests · 35 passed · 0 failed**
 
 ### EncryptionService (`test_encryption.py`)
@@ -125,7 +125,7 @@ Result: **311 passed, 2 skipped, 0 failed** in 2.35 s
 
 ---
 
-## Layer 2 — Route / API Integration Tests
+## Layer 2 - Route / API Integration Tests
 **21 tests · 21 passed · 0 failed**
 
 ### Integration Routes (`test_integration_routes.py`)
@@ -174,7 +174,7 @@ TC-BUD-01–10 (test_budget_routes.py), TC-SLACK-01–07 (test_slack_routes.py)
 
 ---
 
-## Layer 3 — Worker Tests
+## Layer 3 - Worker Tests
 **9 tests · 9 passed · 0 failed**
 
 ### Anomaly Detection Severity + Alerts (`test_detection_severity_alerts.py`)
@@ -206,7 +206,7 @@ TC-NOT-14–16 (test_notifications_slack.py), TC-NOT-19–21 (test_notifications
 
 ---
 
-## Layer 4 — Webhook Security Tests
+## Layer 4 - Webhook Security Tests
 **11 tests · 11 passed · 0 failed**
 
 ### Svix Signature Verification + Clerk Event Handlers (`test_webhooks_clerk.py`)
@@ -227,7 +227,7 @@ TC-NOT-14–16 (test_notifications_slack.py), TC-NOT-19–21 (test_notifications
 
 ---
 
-## Layer 5 — Security Boundary Tests
+## Layer 5 - Security Boundary Tests
 **9 tests · 9 passed · 0 failed**
 
 (`test_security_boundaries.py`)
@@ -245,7 +245,7 @@ TC-NOT-14–16 (test_notifications_slack.py), TC-NOT-19–21 (test_notifications
 
 ---
 
-## Layer 6 — Pricing Math Tests
+## Layer 6 - Pricing Math Tests
 **5 tests · 5 passed · 0 failed**
 
 (`test_pricing_new.py`)

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 class IntegrationCreate(BaseModel):
     provider: Literal["openai", "anthropic", "gemini"]
     display_name: str = Field(min_length=1, max_length=100)
-    api_key: str = Field(min_length=10, description="Raw Admin API key — encrypted immediately")
+    api_key: str = Field(min_length=10, description="Raw Admin API key - encrypted immediately")
 
 
 class IntegrationRead(BaseModel):

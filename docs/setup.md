@@ -1,7 +1,7 @@
-# Auth Setup — Clerk + Supabase JWT Bridge
+# Auth Setup - Clerk + Supabase JWT Bridge
 
 This document covers the one-time infra configuration required for the
-Clerk → Supabase → RLS chain to work. Nothing in this doc is code — it is
+Clerk → Supabase → RLS chain to work. Nothing in this doc is code - it is
 all dashboard clicks and env var values. Do this before running M0 feature
 work.
 
@@ -12,7 +12,7 @@ work.
 Supabase RLS policies check `auth.jwt()->>'org_id'`. That function reads
 the JWT that the Supabase client presents on each query. By default the
 Supabase client uses the **anon key**, which carries no user or org
-context — every RLS policy silently returns zero rows.
+context - every RLS policy silently returns zero rows.
 
 To fix this, Supabase must be told to accept JWTs issued by Clerk, and the
 frontend must present those Clerk-issued JWTs (not the anon key) when
@@ -23,11 +23,11 @@ secret). They must use the same signing secret.
 
 ---
 
-## Step 1 — Create the Supabase JWT template in Clerk
+## Step 1 - Create the Supabase JWT template in Clerk
 
 1. Open **Clerk Dashboard** → your application → **JWT Templates**.
 2. Click **New template** → choose **Supabase** (or blank).
-3. Set the template name to `supabase` (exact — the frontend code uses
+3. Set the template name to `supabase` (exact - the frontend code uses
    this name when calling `getToken({ template: 'supabase' })`).
 4. Set the **Signing algorithm** to `HS256`.
 5. Replace the default claims with:
@@ -47,7 +47,7 @@ secret). They must use the same signing secret.
    handler writes these UUIDs into `public_metadata.db_id` automatically
    when a user or org is first created.
 
-6. Click **Save**. Clerk will show a **Signing secret** — copy it. You
+6. Click **Save**. Clerk will show a **Signing secret** - copy it. You
    will paste it into Supabase in the next step.
 
 > **Important:** `{{org.public_metadata.db_id}}` is only populated after
@@ -60,24 +60,24 @@ secret). They must use the same signing secret.
 
 ---
 
-## Step 2 — Set the JWT secret in Supabase
+## Step 2 - Set the JWT secret in Supabase
 
 1. Open **Supabase Dashboard** → your project → **Settings** →
    **API** → scroll to **JWT Settings**.
 2. Paste the **Signing secret** from the Clerk template (Step 1) into
    the **JWT Secret** field.
-3. Click **Save**. The change takes effect immediately — no restart needed.
+3. Click **Save**. The change takes effect immediately - no restart needed.
 
 Supabase will now accept HS256 tokens signed by Clerk. Any token whose
 `org_id` claim matches the `org_id` column passes RLS.
 
 ---
 
-## Step 3 — Update the frontend Supabase client
+## Step 3 - Update the frontend Supabase client
 
 The Supabase client in `apps/web/src/lib/supabase/` must attach the
 Clerk-issued Supabase token (HS256, from the `supabase` template) on every
-request — **not** the anon key or the Clerk session JWT.
+request - **not** the anon key or the Clerk session JWT.
 
 The standard pattern using `@clerk/nextjs` and `@supabase/ssr`:
 
@@ -102,11 +102,11 @@ const supabase = createClient(
 
 `apps/web/src/lib/supabase/server.ts` needs to be updated to accept a
 token parameter and pass it via the `Authorization` header. This is M0
-feature work — the current cookie-based scaffold does not do this.
+feature work - the current cookie-based scaffold does not do this.
 
 ---
 
-## Step 4 — FastAPI: set `CLERK_ISSUER`
+## Step 4 - FastAPI: set `CLERK_ISSUER`
 
 The FastAPI backend (`deps.py`) verifies Clerk session JWTs (RS256) against
 Clerk's JWKS endpoint. The issuer URL is required.
@@ -136,7 +136,7 @@ other Clerk config is needed for the backend JWT check.
 
 ---
 
-## Step 5 — Two-tenant smoke test
+## Step 5 - Two-tenant smoke test
 
 Before shipping M0, run this against your staging Supabase instance to
 confirm RLS is actually isolating orgs:

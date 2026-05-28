@@ -61,7 +61,7 @@ def _history_rows(spike_on_last: bool = True) -> list[dict]:
 
 class TestAnomalyDetectionConcurrentRace:
     """
-    Gap-08 (critical): No lock on detect_org — two concurrent tasks both see an
+    Gap-08 (critical): No lock on detect_org - two concurrent tasks both see an
     empty dedup state and both insert the same anomaly.
     """
 
@@ -247,7 +247,7 @@ class TestBudgetCheckConcurrentRace:
         """
         Two threads run check_org simultaneously. Both read notified_80_at=None
         and both decide to alert (spend is 85% of limit). Both call
-        send_budget_alert.delay independently — two emails for one threshold crossing.
+        send_budget_alert.delay independently - two emails for one threshold crossing.
 
         When a SELECT FOR UPDATE or Redis lock is added, update assertion to count == 1.
         """

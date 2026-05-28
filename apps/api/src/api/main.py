@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="SpendOps AI API",
         version="0.1.0",
-        # Disable interactive docs in production — no dev tool exposure
+        # Disable interactive docs in production - no dev tool exposure
         docs_url="/docs" if settings.env != "production" else None,
         redoc_url="/redoc" if settings.env != "production" else None,
     )
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
     ]:
         app.include_router(router, prefix="/api/v1")
 
-    # Webhooks at /api (no auth — verified by signature)
+    # Webhooks at /api (no auth - verified by signature)
     app.include_router(webhooks.router, prefix="/api")
 
     @app.get("/health")

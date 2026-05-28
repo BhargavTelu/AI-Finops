@@ -1,7 +1,7 @@
 """
-Aggregation worker tests — gap-analysis batch 2.
+Aggregation worker tests - gap-analysis batch 2.
 
-Gap-01 (critical):  aggregate_org happy path — 0% direct coverage; verify the pipeline.
+Gap-01 (critical):  aggregate_org happy path - 0% direct coverage; verify the pipeline.
 Gap-02 (critical):  Concurrent aggregate_org race condition (no distributed lock).
 Gap-03 (high):      Pagination terminates correctly even when a partial page is returned.
 Gap-04 (medium):    NULL and empty-string tags coalesce into the same summary group.
@@ -64,7 +64,7 @@ def _event_row(model: str, cost: str, feature_tag: str = "") -> dict:
 # ── Gap-01: Happy path ──────────────────────────────────────────────────────────
 
 class TestAggregationHappyPath:
-    """Gap-01: aggregate_org has 0% direct coverage — verify the core pipeline."""
+    """Gap-01: aggregate_org has 0% direct coverage - verify the core pipeline."""
 
     def test_groups_events_and_upserts_correct_summaries(self) -> None:
         """
@@ -191,7 +191,7 @@ class TestAggregationHappyPath:
 class TestAggregationConcurrentRace:
     """
     Gap-02 (critical): No distributed lock on aggregate_org.
-    Two concurrent tasks both delete then upsert — second delete wipes first upsert.
+    Two concurrent tasks both delete then upsert - second delete wipes first upsert.
     This test documents the known race (does not assert correctness under concurrency).
     """
 
@@ -266,7 +266,7 @@ class TestAggregationConcurrentRace:
         assert delete_count[0] >= 2, (
             f"Expected both concurrent tasks to run delete independently (no lock). "
             f"delete_count={delete_count[0]}. "
-            "If this fails (count==1), a distributed lock was added — "
+            "If this fails (count==1), a distributed lock was added - "
             "update assertion to delete_count[0] == 1."
         )
 
@@ -336,8 +336,8 @@ class TestAggregationTagCoalescing:
     def test_null_and_empty_string_tags_coalesce_to_single_row(self) -> None:
         """
         aggregate_org normalizes feature_tag with `row.get("feature_tag") or ""`.
-        Two events — one with feature_tag=None (NULL from DB) and one with
-        feature_tag="" — must produce ONE summary row, not two.
+        Two events - one with feature_tag=None (NULL from DB) and one with
+        feature_tag="" - must produce ONE summary row, not two.
         """
         from api.workers.aggregation import aggregate_org
 
@@ -393,7 +393,7 @@ class TestAggregationRevokedExclusion:
         """
         aggregate_org first loads active (non-revoked) integration IDs, then filters
         usage_events with .in_("integration_id", active_ids). The in_() filter must
-        contain only the active integration's ID — not any revoked integration's ID.
+        contain only the active integration's ID - not any revoked integration's ID.
         """
         from api.workers.aggregation import aggregate_org
 
@@ -433,16 +433,16 @@ class TestAggregationRevokedExclusion:
 # ── TC-FAN-01 & TC-FAN-02: aggregate_all_orgs fan-out ──────────────────────────
 
 class TestAggregateAllOrgsFanOut:
-    """TC-FAN-01 and TC-FAN-02 — aggregate_all_orgs dispatches to unique org_ids."""
+    """TC-FAN-01 and TC-FAN-02 - aggregate_all_orgs dispatches to unique org_ids."""
 
     def test_dispatches_once_per_unique_org(self) -> None:
-        """TC-FAN-01 — 3 integrations across 2 orgs → aggregate_org.delay called twice."""
+        """TC-FAN-01 - 3 integrations across 2 orgs → aggregate_org.delay called twice."""
         from api.workers.aggregation import aggregate_all_orgs
 
         rows = [
             {"org_id": "org-aaa"},
             {"org_id": "org-bbb"},
-            {"org_id": "org-aaa"},  # duplicate — same org, different integration
+            {"org_id": "org-aaa"},  # duplicate - same org, different integration
         ]
         db = _mock_db()
         db.execute.return_value = MagicMock(data=rows)
@@ -462,7 +462,7 @@ class TestAggregateAllOrgsFanOut:
         assert called_org_ids == {"org-aaa", "org-bbb"}
 
     def test_empty_integrations_does_not_dispatch(self) -> None:
-        """TC-FAN-02 — no active integrations → aggregate_org.delay never called."""
+        """TC-FAN-02 - no active integrations → aggregate_org.delay never called."""
         from api.workers.aggregation import aggregate_all_orgs
 
         db = _mock_db()
@@ -481,7 +481,7 @@ class TestAggregateAllOrgsFanOut:
 # ── TC-AGG-10: Pagination with 2 pages ──────────────────────────────────────────
 
 class TestAggregationPaginationTwoPages:
-    """TC-AGG-10 — aggregate_org paginates and collects all rows across 2 pages."""
+    """TC-AGG-10 - aggregate_org paginates and collects all rows across 2 pages."""
 
     def test_two_page_pagination_aggregates_all_rows(self) -> None:
         """
@@ -535,7 +535,7 @@ class TestAggregationPaginationTwoPages:
 # ── TC-AGG-11: Revoked integration excluded from usage_events filter ──────────
 
 class TestAggregationRevokedIntegrationExcluded:
-    """TC-AGG-11 — revoked integrations must not appear in the IN_ filter."""
+    """TC-AGG-11 - revoked integrations must not appear in the IN_ filter."""
 
     def test_revoked_integration_ids_excluded_from_filter(self) -> None:
         from api.workers.aggregation import aggregate_org

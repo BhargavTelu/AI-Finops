@@ -1,4 +1,4 @@
-# Architecture — SpendOps AI
+# Architecture - SpendOps AI
 
 Companion to `project_spec.md`. How we build it.
 
@@ -9,14 +9,14 @@ Companion to `project_spec.md`. How we build it.
 | Frontend | Next.js 14 (App Router) + TS + Tailwind + shadcn/ui | Server components for dashboard |
 | Charts | Tremor (blocks) + Recharts (custom) | |
 | Tables | TanStack Table | Required for Cost Explorer pivot |
-| Backend | FastAPI (Python 3.11) | Separate from Next.js — ingestion needs persistent workers |
+| Backend | FastAPI (Python 3.11) | Separate from Next.js - ingestion needs persistent workers |
 | Jobs | Celery + Upstash Redis | Python parity with API |
 | DB | Supabase Postgres + RLS | ClickHouse only if `usage_events` > 50M rows |
 | Auth | Clerk | Multi-tenant orgs built-in |
 | Billing | Stripe Checkout + Customer Portal | No custom billing UI |
 | Email | Resend | |
 | Storage | Cloudflare R2 | PDFs |
-| AI | Claude Haiku 4.5 | Recs, narratives — capped $0.05/org/day |
+| AI | Claude Haiku 4.5 | Recs, narratives - capped $0.05/org/day |
 | Hosting | Vercel (web) + Railway (api + worker) | |
 | Errors | Sentry | |
 | Analytics | PostHog | Activation funnel |
@@ -218,15 +218,15 @@ class NormalizedUsageEvent:
 
 **OpenAI:** `GET /v1/organization/costs` + `/v1/organization/usage/completions`. Header `Authorization: Bearer sk-admin-...`. Two-pass cursor pagination: completions first (builds token lookup), costs second (yields events). `bucket_width=1d`, `limit=31` (OpenAI daily bucket max is 31; hourly is 168; minute is 1440). Refresh every 4h.
 
-**Anthropic:** `GET /v1/organizations/usage_report/messages`. Headers: `x-api-key: sk-ant-admin-...`, `anthropic-version: 2023-06-01`, `anthropic-beta: usage-report-2024-07-01`. Cursor pagination via `next_page` token. Cost computed from `pricing.yaml` (per-Mtok rates for input, output, cache-read). `cache_read_input_tokens` mapped to `cached_tokens`; `cache_creation_input_tokens` preserved in `raw_meta`. Standard Admin API — not Enterprise-gated.
+**Anthropic:** `GET /v1/organizations/usage_report/messages`. Headers: `x-api-key: sk-ant-admin-...`, `anthropic-version: 2023-06-01`, `anthropic-beta: usage-report-2024-07-01`. Cursor pagination via `next_page` token. Cost computed from `pricing.yaml` (per-Mtok rates for input, output, cache-read). `cache_read_input_tokens` mapped to `cached_tokens`; `cache_creation_input_tokens` preserved in `raw_meta`. Standard Admin API - not Enterprise-gated.
 
-**Gemini:** Key validation only (M2). `validate()` hits `GET https://generativelanguage.googleapis.com/v1beta/models?key={api_key}` — 200 = valid. `fetch_costs()` is a no-op generator: AI Studio API keys have no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account (different auth model from simple API keys). Cost collection deferred to V1. Integration status saves as `active` but zero events are inserted.
+**Gemini:** Key validation only (M2). `validate()` hits `GET https://generativelanguage.googleapis.com/v1beta/models?key={api_key}` - 200 = valid. `fetch_costs()` is a no-op generator: AI Studio API keys have no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account (different auth model from simple API keys). Cost collection deferred to V1. Integration status saves as `active` but zero events are inserted.
 
 **Pricing:** prefer provider Cost API values. `pricing.yaml` is fallback + used for Anthropic cost calculation and forecasts. Monthly review.
 
 ## Tag-Rule Engine
 
-Pure-function module at `api/services/tag_engine.py`. No DB access — fully unit-testable in isolation.
+Pure-function module at `api/services/tag_engine.py`. No DB access - fully unit-testable in isolation.
 
 ```python
 @dataclass(frozen=True)
@@ -246,24 +246,24 @@ def apply_rules(label: str | None, rules: list[CompiledRule]) -> dict[str, str |
 ```
 
 **Matching semantics:**
-- `exact` — full string equality, case-sensitive
-- `substring` — `pattern in label` (Python `in` operator)
-- `regex` — `re.search(pattern, label)`; invalid regex returns `False` (no exception propagation)
+- `exact` - full string equality, case-sensitive
+- `substring` - `pattern in label` (Python `in` operator)
+- `regex` - `re.search(pattern, label)`; invalid regex returns `False` (no exception propagation)
 
-**Ingestion wire-up:** `_ingest_window()` in `ingestion.py` calls `compile_rules()` once per window (before the event loop), then `apply_rules(event.api_key_label, compiled)` per event. Result dict is spread directly into the `usage_events` row via `**apply_rules(...)`. Tag assignments are denormalized at write time — zero query overhead at read time.
+**Ingestion wire-up:** `_ingest_window()` in `ingestion.py` calls `compile_rules()` once per window (before the event loop), then `apply_rules(event.api_key_label, compiled)` per event. Result dict is spread directly into the `usage_events` row via `**apply_rules(...)`. Tag assignments are denormalized at write time - zero query overhead at read time.
 
 **PostgREST join syntax:** `db.table("tag_rules").select("*, tags(type, name)")` returns `tags: {"type": ..., "name": ...}` embedded in each row. The `compile_rules()` function reads from this embedded key.
 
 ## Slack Client Service
 
-Pure-function module at `api/services/slack_client.py`. No heavy SDK — uses `httpx` directly (avoids ~5MB Slack SDK transitive dep chain). All functions raise `ValueError` on API error so Celery can retry.
+Pure-function module at `api/services/slack_client.py`. No heavy SDK - uses `httpx` directly (avoids ~5MB Slack SDK transitive dep chain). All functions raise `ValueError` on API error so Celery can retry.
 
 ```python
 def exchange_code(code, client_id, client_secret, redirect_uri) -> dict:
     """POST /api/oauth.v2.access → full Slack response dict. ValueError on ok=false."""
 
 def revoke_token(bot_token) -> None:
-    """POST /api/auth.revoke. Best-effort — logs warning, does not raise."""
+    """POST /api/auth.revoke. Best-effort - logs warning, does not raise."""
 
 def post_message(bot_token, channel_id, blocks, fallback_text) -> None:
     """POST /api/chat.postMessage. ValueError on ok=false (triggers Celery retry)."""
@@ -272,9 +272,9 @@ def post_message(bot_token, channel_id, blocks, fallback_text) -> None:
 **Bot token storage:** AES-256-GCM encrypted → stored as BYTEA (`\x`-prefixed hex) in `slack_integrations.bot_token_enc`. Same `EncryptionService` used for Admin API keys. Strip `\x` prefix before `bytes.fromhex()` on all decrypt paths.
 
 **Slack alert types:**
-- Anomaly alert — Block Kit with severity emoji (🟡 low / 🟠 medium / 🔴 high), spike %, baseline, actual, model name, tag context; dispatched by `detect_org` for severity ≥ medium; `max_retries=3`
-- Budget alert — Block Kit with `:warning:` (at threshold) or `:red_circle:` (100%+) header, scope label, limit, MTD spend, % used; best-effort after Resend email; failure does not retry
-- Daily digest — Block Kit with date header, yesterday spend, 7d avg, MoM delta, top-3 cost drivers, open anomaly count; idempotency via `slack_digests` table; `max_retries=2`
+- Anomaly alert - Block Kit with severity emoji (🟡 low / 🟠 medium / 🔴 high), spike %, baseline, actual, model name, tag context; dispatched by `detect_org` for severity ≥ medium; `max_retries=3`
+- Budget alert - Block Kit with `:warning:` (at threshold) or `:red_circle:` (100%+) header, scope label, limit, MTD spend, % used; best-effort after Resend email; failure does not retry
+- Daily digest - Block Kit with date header, yesterday spend, 7d avg, MoM delta, top-3 cost drivers, open anomaly count; idempotency via `slack_digests` table; `max_retries=2`
 
 ## Core Flows
 
@@ -365,7 +365,7 @@ For each budget in org:
       write notified_80_at = now()
 ```
 
-Idempotency: `notified_80_at` / `notified_100_at` timestamps are compared at `(year, month)` granularity — one alert per threshold per calendar month regardless of how many nightly runs execute.
+Idempotency: `notified_80_at` / `notified_100_at` timestamps are compared at `(year, month)` granularity - one alert per threshold per calendar month regardless of how many nightly runs execute.
 
 ## AI Layer
 
@@ -375,11 +375,11 @@ Idempotency: `notified_80_at` / `notified_100_at` timestamps are compared at `(y
 | Anomaly explainer | Haiku 4.5 | on creation, 24h cache | $0.01 |
 | Monthly narrative | Sonnet 4.6 | 1×/month/org | $0.05 |
 
-**Hard cap:** 3 AI calls/org/day enforced in Redis. Only aggregated summaries in prompts — never raw events, never PII. All outputs cached in DB.
+**Hard cap:** 3 AI calls/org/day enforced in Redis. Only aggregated summaries in prompts - never raw events, never PII. All outputs cached in DB.
 
 ## Engineering Reqs
 
-- **`celery_app.py` import order:** must be imported in `api/main.py` before any router that calls `.delay()`. `@shared_task` tasks bind to whichever Celery app is constructed first — without this import they bind to a default app with `broker_url=None` (AMQP fallback) instead of Redis.
+- **`celery_app.py` import order:** must be imported in `api/main.py` before any router that calls `.delay()`. `@shared_task` tasks bind to whichever Celery app is constructed first - without this import they bind to a default app with `broker_url=None` (AMQP fallback) instead of Redis.
 - **Lang:** TS strict in `/web`, no `any`. Python 3.11 with `ruff` + `mypy` + `black`.
 - **CI:** lint + typecheck + tests on every PR. No direct push to `main`.
 - **Tests:** unit-test pricing math, anomaly logic, tag-rule engine (target 80% on these). One e2e happy path per milestone. No frontend tests in MVP.
@@ -418,7 +418,7 @@ Set as `ENCRYPTION_KEY=<output>` in `.env` (local) or Railway env vars (producti
 
 ## Pre-deploy smoke
 
-1. RLS probe passes: run `infra/scripts/smoke-test.sql` — requires `SET LOCAL ROLE authenticated` before SELECT probes (the `postgres` superuser bypasses all RLS `USING` clauses).
+1. RLS probe passes: run `infra/scripts/smoke-test.sql` - requires `SET LOCAL ROLE authenticated` before SELECT probes (the `postgres` superuser bypasses all RLS `USING` clauses).
 2. Signup → org → connect → chart works on staging.
 3. Stripe test checkout completes; webhook updates `billing`.
 4. No new Sentry errors in last 1h.

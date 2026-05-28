@@ -35,7 +35,7 @@ dependencies = [
     "sentry-sdk[fastapi]>=2.8.0",
     "structlog>=24.2.0",
     # JWT verification for Clerk session tokens (RS256). Wraps the already-present
-    # cryptography package — no new transitive deps added.
+    # cryptography package - no new transitive deps added.
     "PyJWT[cryptography]>=2.8.0",
     # Utilities
     "python-dotenv>=1.0.0",

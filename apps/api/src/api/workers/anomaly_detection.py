@@ -1,5 +1,5 @@
 """
-Nightly anomaly detection — runs at 01:00 UTC (after aggregation).
+Nightly anomaly detection - runs at 01:00 UTC (after aggregation).
 Algorithm: rolling mean + 2σ over 7 days; $10 floor; ≥15 days of data required.
 See architecture.md § Anomaly Algorithm and services/anomaly.py.
 """
@@ -54,7 +54,7 @@ def detect_org(org_id: str) -> None:
     from_date = today - timedelta(days=_HISTORY_DAYS)
 
     # Pull all relevant daily rows for the period in one query.
-    # daily_cost_summaries uses '' (empty string) for unset tags — no nulls.
+    # daily_cost_summaries uses '' (empty string) for unset tags - no nulls.
     rows_result = (
         db.table("daily_cost_summaries")
         .select("day, model, feature_tag, team_tag, customer_tag, total_cost_usd")
@@ -69,7 +69,7 @@ def detect_org(org_id: str) -> None:
         return
 
     # Group rows by (model, feature_tag, team_tag, customer_tag).
-    # Sum costs per day within each group — multiple provider rows can share
+    # Sum costs per day within each group - multiple provider rows can share
     # the same model+tag combo on the same day.
     GroupKey = tuple[str, str, str, str]
     group_days: dict[GroupKey, dict[date, Decimal]] = defaultdict(dict)

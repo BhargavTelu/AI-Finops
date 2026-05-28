@@ -43,7 +43,7 @@ async def update_anomaly(
 ) -> AnomalyRead:
     db = _get_supabase()
 
-    # Ownership check — 404 if anomaly doesn't belong to this org.
+    # Ownership check - 404 if anomaly doesn't belong to this org.
     existing = (
         db.table("anomalies")
         .select("id")

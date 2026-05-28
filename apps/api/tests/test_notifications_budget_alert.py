@@ -96,10 +96,10 @@ class TestSendBudgetAlertEmail:
 # ── TC-NOT-22: Slack failure does not block email ─────────────────────────────
 
 class TestBudgetAlertSlackNonFatal:
-    """TC-NOT-22 (HIGH) — post_message exception caught; email already sent; task returns normally."""
+    """TC-NOT-22 (HIGH) - post_message exception caught; email already sent; task returns normally."""
 
     def test_slack_failure_does_not_block_email(self) -> None:
-        """TC-NOT-22 — Slack raises; email was already sent; task completes without re-raise."""
+        """TC-NOT-22 - Slack raises; email was already sent; task completes without re-raise."""
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[_budget_row()]),                     # budget fetch
@@ -126,7 +126,7 @@ class TestBudgetAlertSlackNonFatal:
             mock_settings.resend_api_key = "re_test_key"
             mock_settings.from_email = "noreply@test.com"
             mock_settings.encryption_key = ""
-            # Must NOT raise — Slack failure is non-fatal per the docstring
+            # Must NOT raise - Slack failure is non-fatal per the docstring
             send_budget_alert.apply(args=[BUDGET_ID, 82, ORG_ID])
 
         # Email was sent despite Slack failure

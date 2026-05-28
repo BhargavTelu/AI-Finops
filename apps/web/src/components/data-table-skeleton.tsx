@@ -10,7 +10,7 @@ interface DataTableSkeletonProps {
 }
 
 /**
- * Table-shaped loading skeleton — used on every data-table page while fetching.
+ * Table-shaped loading skeleton - used on every data-table page while fetching.
  * Matches the visual shape of the table so the layout doesn't shift on load.
  *
  * Usage:
@@ -46,9 +46,9 @@ export function DataTableSkeleton({
               className={cn(
                 "h-4",
                 colIndex === 0
-                  ? "w-36" // first column — dimension name, wider
+                  ? "w-36" // first column - dimension name, wider
                   : colIndex === columns - 1
-                    ? "w-16" // last column — action / status, narrower
+                    ? "w-16" // last column - action / status, narrower
                     : "flex-1"
               )}
             />

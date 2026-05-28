@@ -1,7 +1,7 @@
 """
 Webhook gap tests.
 
-Gap-27 (high): Svix multi-signature header — one invalid + one valid → 200.
+Gap-27 (high): Svix multi-signature header - one invalid + one valid → 200.
                All invalid → 400. No 'v1,' prefix → 400.
 """
 
@@ -61,7 +61,7 @@ def _post_with_signature(
 class TestSvixMultipleSignatures:
     """
     Gap-27 (high): Svix sends multiple space-separated signatures during key rotation.
-    _verify_svix_signature uses any(hmac.compare_digest(...)) — any single valid sig passes.
+    _verify_svix_signature uses any(hmac.compare_digest(...)) - any single valid sig passes.
     """
 
     def test_single_valid_signature_passes(self) -> None:
@@ -96,7 +96,7 @@ class TestSvixMultipleSignatures:
         ts_str = str(int(time.time()))
 
         valid_sig = _make_valid_signature("msg_gap27_test", ts_str, body)
-        invalid_sig = "v1,aGVsbG8gd29ybGQ="  # base64("hello world") — wrong
+        invalid_sig = "v1,aGVsbG8gd29ybGQ="  # base64("hello world") - wrong
 
         # Space-separated: invalid first, valid second
         combined = f"{invalid_sig} {valid_sig}"
@@ -122,7 +122,7 @@ class TestSvixMultipleSignatures:
         assert resp.json() == {"received": True}
 
     def test_three_sigs_only_last_valid_passes(self) -> None:
-        """Three sigs — first two wrong, third valid → 200."""
+        """Three sigs - first two wrong, third valid → 200."""
         payload = {"type": "user.updated", "data": {}}
         body = json.dumps(payload).encode()
         ts_str = str(int(time.time()))
@@ -175,7 +175,7 @@ class TestSvixMultipleSignatures:
         payload = {"type": "user.updated", "data": {}}
         body = json.dumps(payload).encode()
         ts_str = str(int(time.time()))
-        # All sigs use wrong prefix (v2,) — none match the v1, filter
+        # All sigs use wrong prefix (v2,) - none match the v1, filter
         non_v1_sigs = "v2,somesig v3,anothersig"
 
         resp = client.post(

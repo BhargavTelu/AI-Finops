@@ -183,7 +183,7 @@ class TestFetchCosts:
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
 
-        # Should still yield — token data is valuable even without pricing
+        # Should still yield - token data is valuable even without pricing
         assert len(events) == 1
         e = events[0]
         assert e.cost_usd == Decimal("0")

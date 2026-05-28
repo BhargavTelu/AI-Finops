@@ -1,5 +1,5 @@
 """
-Nightly budget checks — runs at 02:00 UTC (after aggregation + anomaly detection).
+Nightly budget checks - runs at 02:00 UTC (after aggregation + anomaly detection).
 Algorithm: compare MTD spend per scope against monthly_limit.
 Fires email alert at alert_at_pct (default 80%) and 100%.
 Idempotent: notified_80_at / notified_100_at guard prevents re-alerts within the same calendar month.

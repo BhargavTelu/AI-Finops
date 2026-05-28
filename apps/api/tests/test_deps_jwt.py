@@ -1,8 +1,8 @@
 """
 JWT authentication dependency gap tests.
 
-Gap-11 (high):   Algorithm confusion attack — non-RS256 alg rejected before JWKS lookup.
-Gap-12 (high):   JWKS cache concurrent refresh race — no lock on _JwksCache.
+Gap-11 (high):   Algorithm confusion attack - non-RS256 alg rejected before JWKS lookup.
+Gap-12 (high):   JWKS cache concurrent refresh race - no lock on _JwksCache.
 Gap-13 (high):   Unknown kid triggers exactly one cache refresh then 401.
 Gap-14 (high):   JWKS fetch timeout surfaces as non-200 (no clean 401/503 today).
 Gap-15 (medium): Malformed Clerk 'o' claim (not a dict) → 403 not 500.
@@ -106,7 +106,7 @@ class TestAlgorithmConfusion:
     def test_hs256_token_rejected_without_jwks_lookup(self) -> None:
         """
         An HS256-signed token must be rejected immediately with 401.
-        The alg check in _require_org fires before _get_jwks() — an attacker
+        The alg check in _require_org fires before _get_jwks() - an attacker
         cannot exploit RS256-public-key-as-HS256-secret confusion.
         """
         hs256_token = pyjwt.encode(
@@ -123,7 +123,7 @@ class TestAlgorithmConfusion:
         mock_jwks.assert_not_called()
 
     def test_alg_none_token_rejected(self) -> None:
-        """'none' algorithm (unsigned token) must be rejected — PyJWT raises DecodeError."""
+        """'none' algorithm (unsigned token) must be rejected - PyJWT raises DecodeError."""
         import base64 as _b64
 
         # Craft a manually assembled alg:none token (no signature)
@@ -213,7 +213,7 @@ class TestJwksConcurrentRefreshRace:
 # ── Gap-13: Unknown kid forces exactly one refresh ────────────────────────────
 
 class TestUnknownKidRefreshBehavior:
-    """Gap-13 (high): Unknown kid triggers one cache refresh then 401 — not infinite retries."""
+    """Gap-13 (high): Unknown kid triggers one cache refresh then 401 - not infinite retries."""
 
     def test_unknown_kid_triggers_exactly_one_refresh_then_401(self) -> None:
         """
@@ -274,7 +274,7 @@ class TestJwksFetchTimeout:
         with patch("api.deps._fetch_jwks", side_effect=timeout_fetch):
             resp = _authed_get(token)
 
-        # Must not be 200 — a timeout must not grant access
+        # Must not be 200 - a timeout must not grant access
         assert resp.status_code != 200, "Gap-14: JWKS timeout must not allow authentication"
         # Document current (broken) behavior: an unhandled exception becomes 500.
         # When a try/except is added around _get_jwks() in _require_org, change to:

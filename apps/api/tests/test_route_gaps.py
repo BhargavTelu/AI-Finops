@@ -1,9 +1,9 @@
 """
 Route-level gap tests.
 
-Gap-25 (high):   Slack OAuth callback — KeyError when Slack omits the 'team' field.
+Gap-25 (high):   Slack OAuth callback - KeyError when Slack omits the 'team' field.
                  Current: unhandled KeyError → 500. Expected: 400 with clear message.
-Gap-26 (medium): DELETE /integrations/{id} — cascade cleanup failure is logged,
+Gap-26 (medium): DELETE /integrations/{id} - cascade cleanup failure is logged,
                  not swallowed silently, and the response is still 204.
 """
 
@@ -193,7 +193,7 @@ class TestSlackOAuthCallbackMissingTeam:
 class TestDeleteIntegrationCascadeFailure:
     """
     Gap-26 (medium): delete_integration() wraps cascade cleanup in try/except.
-    A cascade failure must be logged (warning) and NOT cause a 500 response —
+    A cascade failure must be logged (warning) and NOT cause a 500 response -
     the integration is still marked revoked and the route returns 204.
     """
 

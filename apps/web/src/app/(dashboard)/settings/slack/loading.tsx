@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Loading skeleton for the Slack settings page — matches the slack-client.tsx card layout.
+// Loading skeleton for the Slack settings page - matches the slack-client.tsx card layout.
 export default function SlackLoading() {
   return (
     <div className="space-y-8">

@@ -18,7 +18,7 @@ import pytest
 # ── Gap-28: Encryption key validation ─────────────────────────────────────────
 
 class TestEncryptionKeyValidation:
-    """Gap-28 (medium): Settings silently accepts encryption_key="" — no startup guard."""
+    """Gap-28 (medium): Settings silently accepts encryption_key="" - no startup guard."""
 
     def test_empty_key_raises_at_service_instantiation(self) -> None:
         """
@@ -155,11 +155,11 @@ class TestCorsOriginsValidation:
         """
         from api.config import Settings
 
-        # parse_cors itself won't raise for valid JSON — it returns whatever json.loads gives
+        # parse_cors itself won't raise for valid JSON - it returns whatever json.loads gives
         result = Settings.parse_cors('{"origins": ["http://localhost:3000"]}')
         # Returns a dict, which Pydantic field validation would later reject
         assert isinstance(result, dict), (
-            "parse_cors returns a dict for a JSON object — Pydantic will reject it as list[str]"
+            "parse_cors returns a dict for a JSON object - Pydantic will reject it as list[str]"
         )
 
     def test_empty_json_array_produces_empty_list(self) -> None:

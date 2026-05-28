@@ -1,11 +1,11 @@
 """
-E2E tests for M2 features — multi-provider Cost Explorer.
+E2E tests for M2 features - multi-provider Cost Explorer.
 
 Require a live stack or skip via E2E env var. Run with:
 
     E2E=true E2E_API_URL=http://localhost:8000 E2E_TOKEN=<clerk_jwt> pytest tests/test_e2e_m2.py -v
 
-TC-E2E-02 — M2 milestone: multi-provider ingestion + tag rules + Cost Explorer.
+TC-E2E-02 - M2 milestone: multi-provider ingestion + tag rules + Cost Explorer.
 """
 
 import os
@@ -30,7 +30,7 @@ def headers() -> dict:
 
 class TestM2MultiProviderCostExplorer:
     """
-    TC-E2E-02 (High) — Connect two integrations, seed usage, apply tags, verify explorer.
+    TC-E2E-02 (High) - Connect two integrations, seed usage, apply tags, verify explorer.
 
     Scenario:
       1. Connect OpenAI + Anthropic integrations.
@@ -39,7 +39,7 @@ class TestM2MultiProviderCostExplorer:
       4. Verify GET /usage/explore?group_by=feature_tag returns a row with feature_tag="chat".
       5. Verify GET /usage/explore?group_by=provider returns both "openai" and "anthropic".
 
-    Notes: Uses pytest.mark.e2e — skipped in unit runs.
+    Notes: Uses pytest.mark.e2e - skipped in unit runs.
     """
 
     def test_multi_provider_explorer_returns_both_providers(self, headers: dict) -> None:

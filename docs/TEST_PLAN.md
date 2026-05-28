@@ -1,4 +1,4 @@
-# Test Plan — SpendOps AI (M0–M3 Pre-M4 Audit)
+# Test Plan - SpendOps AI (M0–M3 Pre-M4 Audit)
 
 **Prepared:** 2026-05-24
 **Scope:** Full audit of M0 through M3. This document covers the complete test surface:
@@ -21,7 +21,7 @@ Only gap tests (marked `NEW`) need to be written. Do not re-write existing tests
 
 ---
 
-## Part 1 — Existing Coverage Summary
+## Part 1 - Existing Coverage Summary
 
 The following areas have solid test coverage. These are **not** re-specified below.
 
@@ -65,7 +65,7 @@ The following areas have solid test coverage. These are **not** re-specified bel
 
 ---
 
-## Part 2 — Gap Test Cases (NEW — need to be written)
+## Part 2 - Gap Test Cases (NEW - need to be written)
 
 ### Section A · Stub / NotImplementedError Routes
 
@@ -145,7 +145,7 @@ the test assertion is updated from `!= 200` / `500` to the correct success code.
 | **Component** | `POST /webhooks/stripe` |
 | **Scenario** | POST to the endpoint with a mock Stripe-Signature header. Route raises `NotImplementedError`. |
 | **Expected Result** | Response is `500`. When implemented (M4): `200 {"received": true}` after verifying the signature and upserting the `billing` row. |
-| **Notes** | Stripe webhooks must be verified before processing. A missing or invalid `stripe-signature` must return `400`. This gap is **critical** — M4 launch depends on it. |
+| **Notes** | Stripe webhooks must be verified before processing. A missing or invalid `stripe-signature` must return `400`. This gap is **critical** - M4 launch depends on it. |
 
 ---
 
@@ -180,7 +180,7 @@ the fan-out layer is missing.
 | **File** | `tests/test_aggregation_worker.py` (add to existing) |
 | **Component** | `workers/aggregation.aggregate_all_orgs` |
 | **Scenario** | Mock Supabase to return 3 active integrations across 2 unique orgs. Call `aggregate_all_orgs()`. |
-| **Expected Result** | `aggregate_org.delay()` is called exactly twice — once per unique org_id. |
+| **Expected Result** | `aggregate_org.delay()` is called exactly twice - once per unique org_id. |
 
 ---
 
@@ -236,12 +236,12 @@ the fan-out layer is missing.
 | **File** | `tests/test_notifications_digest.py` (add to existing) |
 | **Component** | `workers/notifications.send_daily_digests` |
 | **Scenario** | Mock DB to return 2 Slack-connected orgs. Call `send_daily_digests()`. |
-| **Expected Result** | `send_digest.delay()` (or equivalent inner task) is called exactly twice — once per org. |
+| **Expected Result** | `send_digest.delay()` (or equivalent inner task) is called exactly twice - once per org. |
 | **Notes** | The per-org path is tested; this test covers the fan-out layer. |
 
 ---
 
-### Section C · Tag Routes — Missing PATCH Endpoints
+### Section C · Tag Routes - Missing PATCH Endpoints
 
 `PATCH /tags/:id` and `PATCH /tag-rules/:id` are implemented but have zero tests.
 
@@ -311,13 +311,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_tag_routes.py` |
-| **Component** | `PATCH /tag-rules/:id` — org isolation |
+| **Component** | `PATCH /tag-rules/:id` - org isolation |
 | **Scenario** | Org B attempts to PATCH a tag rule that belongs to Org A. DB `eq("org_id", ...)` filter returns no rows. |
-| **Expected Result** | `404` (not `403` — no info leak about the rule's existence). |
+| **Expected Result** | `404` (not `403` - no info leak about the rule's existence). |
 
 ---
 
-### Section D · Budget Routes — Untested Edge Cases
+### Section D · Budget Routes - Untested Edge Cases
 
 ---
 
@@ -329,9 +329,9 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_budget_routes.py` (add to existing) |
-| **Component** | `PATCH /budgets/:id` — `hard_cap` not patchable |
+| **Component** | `PATCH /budgets/:id` - `hard_cap` not patchable |
 | **Scenario** | PATCH a budget with only `{"hard_cap": true}` (no `monthly_limit`, no `alert_at_pct`). |
-| **Expected Result** | `422` with detail `"No fields to update"` — `hard_cap` is not in the patchable field set. |
+| **Expected Result** | `422` with detail `"No fields to update"` - `hard_cap` is not in the patchable field set. |
 | **Notes** | The current `BudgetUpdate` schema only allows `monthly_limit` and `alert_at_pct`. This tests that `hard_cap` is silently ignored and the empty-patch guard fires. |
 
 ---
@@ -344,7 +344,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_budget_routes.py` |
-| **Component** | `_compute_mtd_spend` — `env_tag` scope |
+| **Component** | `_compute_mtd_spend` - `env_tag` scope |
 | **Scenario** | Call `_compute_mtd_spend` with `scope_type="env_tag"` and `scope_value="production"`. Verify the query has `.eq("env_tag", "production")`. |
 | **Expected Result** | Query filters by `env_tag = "production"`. Returns the sum of matching rows. |
 | **Notes** | `customer_tag` and `env_tag` scopes are not individually unit-tested; the other tag scopes are. |
@@ -359,13 +359,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_budget_routes.py` |
-| **Component** | `_to_budget_read` — zero `monthly_limit` guard |
+| **Component** | `_to_budget_read` - zero `monthly_limit` guard |
 | **Scenario** | Call `_to_budget_read` with a row where `monthly_limit="0.00"` and `mtd_spend=Decimal("0")`. |
 | **Expected Result** | `spent_pct` = 0 (division by zero guard: `if limit else 0`). No `ZeroDivisionError` raised. |
 
 ---
 
-### Section E · Anomaly Detection — Context Field
+### Section E · Anomaly Detection - Context Field
 
 ---
 
@@ -377,7 +377,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_anomaly_detection.py` (add to existing) |
-| **Component** | `workers/anomaly_detection.detect_org` — `context` field population |
+| **Component** | `workers/anomaly_detection.detect_org` - `context` field population |
 | **Scenario** | Insert mock daily summaries with `feature_tag="chat"`, `team_tag="ml"`, `model="gpt-4o"`. A spike is triggered. Check the anomaly row inserted into the DB. |
 | **Expected Result** | The inserted row has a `context` dict containing at minimum `{"model": "gpt-4o", "feature_tag": "chat", "team_tag": "ml"}`. |
 | **Notes** | The anomaly explainer prompt uses `context` tags for specificity. If `context` is empty, the explanation is generic and unhelpful. |
@@ -392,13 +392,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_anomaly_detection.py` |
-| **Component** | `workers/anomaly_detection.detect_org` — `scope_value` field |
+| **Component** | `workers/anomaly_detection.detect_org` - `scope_value` field |
 | **Scenario** | A spike is detected for `scope_kind="model"` with `scope_value="gpt-4o"`. |
 | **Expected Result** | The inserted anomaly row has `scope_kind="model"` and `scope_value="gpt-4o"`. These are the fields used by `GET /anomalies` filters. |
 
 ---
 
-### Section F · Usage Routes — Edge Cases
+### Section F · Usage Routes - Edge Cases
 
 ---
 
@@ -410,7 +410,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_usage_routes.py` (add to existing) |
-| **Component** | `_parse_range` — zero-day window |
+| **Component** | `_parse_range` - zero-day window |
 | **Scenario** | Call `_parse_range("0d")`. `days=0`, so `period_start = period_end - timedelta(days=-1) = period_end + 1 day`. |
 | **Expected Result** | `period_start > period_end` (inverted range). The summary endpoint returns zeros because no days are in range. No crash. |
 | **Notes** | The regex `^\d+d$` accepts "0d". The dashboard should return empty data gracefully. |
@@ -425,7 +425,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_dashboard_endpoint.py` (add to existing) |
-| **Component** | `GET /usage/dashboard` — first day of month edge case |
+| **Component** | `GET /usage/dashboard` - first day of month edge case |
 | **Scenario** | Mock `datetime.now()` to return the first day of the current month. `yesterday` will be the last day of the previous month. |
 | **Expected Result** | `mtd_end = yesterday < mtd_start = first of current month`. `mtd` period returns `total_cost_usd=0` and `total_requests=0`. No `ZeroDivisionError` or `ValueError`. |
 | **Notes** | The `sum_range(start, end)` helper has a `if start > end: return zeros` guard. This test verifies it is exercised. |
@@ -440,7 +440,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_usage_routes.py` |
-| **Component** | `GET /usage/explore` — `pct_of_total` when all costs are zero AND `grand_total = 0` |
+| **Component** | `GET /usage/explore` - `pct_of_total` when all costs are zero AND `grand_total = 0` |
 | **Scenario** | DB returns rows but all have `total_cost_usd = 0`. |
 | **Expected Result** | `pct_of_total = 0.0` for all rows (denominator guard: `if grand_total else 0.0`). No `ZeroDivisionError`. |
 | **Notes** | The guard exists in the code but is not independently tested. `test_pct_of_total_zero_when_all_costs_zero` tests empty DB; this tests zero-cost rows. |
@@ -474,13 +474,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_health.py` |
-| **Component** | `GET /health` — route prefix |
+| **Component** | `GET /health` - route prefix |
 | **Scenario** | GET `/health` (no `/api/v1` prefix). Verify it is NOT behind the `/api/v1` router group. |
 | **Expected Result** | `200`. The health endpoint must remain accessible at the root path even if the API prefix changes. |
 
 ---
 
-### Section H · Webhook — Stripe Stub & Clerk Edge Cases
+### Section H · Webhook - Stripe Stub & Clerk Edge Cases
 
 ---
 
@@ -492,7 +492,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | CRITICAL |
 | **File** | `tests/test_webhooks_clerk.py` (add) or `tests/test_stub_routes.py` |
-| **Component** | `POST /webhooks/stripe` — stub behavior |
+| **Component** | `POST /webhooks/stripe` - stub behavior |
 | **Scenario** | POST with a mock `stripe-signature` header. Route currently raises `NotImplementedError`. |
 | **Expected Result** | `500`. Documents that this MUST NOT reach production in this state. When M4 implements the handler: `200 {"received": true}` after valid signature; `400` for invalid signature. |
 
@@ -506,7 +506,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_webhooks_clerk.py` (add to existing) |
-| **Component** | `POST /webhooks/clerk` — unhandled event types |
+| **Component** | `POST /webhooks/clerk` - unhandled event types |
 | **Scenario** | Send a valid Svix-signed payload with `type = "user.updated"` (not a handled event type). |
 | **Expected Result** | `200 {"received": true}`. The handler logs `clerk_webhook_unhandled_event` at DEBUG and does not raise. |
 
@@ -520,9 +520,9 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_webhooks_clerk.py` |
-| **Component** | `_write_clerk_metadata` — httpx network failure |
+| **Component** | `_write_clerk_metadata` - httpx network failure |
 | **Scenario** | `_write_clerk_metadata` is called but `httpx.AsyncClient.patch` raises `httpx.ConnectError`. |
-| **Expected Result** | Warning is logged (`clerk_metadata_write_error`). The webhook handler returns `200 {"received": true}` — the DB row is already committed and metadata write is non-fatal. |
+| **Expected Result** | Warning is logged (`clerk_metadata_write_error`). The webhook handler returns `200 {"received": true}` - the DB row is already committed and metadata write is non-fatal. |
 
 ---
 
@@ -534,14 +534,14 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_webhooks_clerk.py` |
-| **Component** | `_handle_org_created` — trial window set |
+| **Component** | `_handle_org_created` - trial window set |
 | **Scenario** | Process a `organization.created` event. Capture the `trial_ends_at` value in the upserted row. |
 | **Expected Result** | `trial_ends_at` is approximately 14 days from now (within 60 seconds of expected). |
 | **Notes** | The 14-day trial requirement is in FR-21. No test currently verifies the trial_ends_at computation. |
 
 ---
 
-### Section I · Recommendations Engine — Spec Completeness
+### Section I · Recommendations Engine - Spec Completeness
 
 ---
 
@@ -553,7 +553,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_recommendations.py` (add to existing) |
-| **Component** | `services/recommendations` — `input_compression` type |
+| **Component** | `services/recommendations` - `input_compression` type |
 | **Scenario** | FR-19 specifies four recommendation types: `model_swap`, `caching`, `batching`, and `input_compression`. Call `generate_recommendations` with stats that should trigger all applicable rules. |
 | **Expected Result** | Document current behavior: `input_compression` type is **NOT** returned (not yet implemented). This test acts as a spec-gap tracker. When `input_compression` is implemented, this test should be updated to assert its presence. |
 | **Notes** | This is a known scope item from FR-19. The test documents the gap and prevents silent regression. |
@@ -568,9 +568,9 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_recommendations.py` |
-| **Component** | `PATCH /recommendations/:id` — `resolved_at` timestamp |
+| **Component** | `PATCH /recommendations/:id` - `resolved_at` timestamp |
 | **Scenario** | PATCH a recommendation to `status=applied`. Capture the DB update payload. |
-| **Expected Result** | The update payload contains `resolved_at` set to a recent ISO timestamp (within 5 seconds of now). The router currently sets `resolved_at` on every PATCH — this test verifies that. |
+| **Expected Result** | The update payload contains `resolved_at` set to a recent ISO timestamp (within 5 seconds of now). The router currently sets `resolved_at` on every PATCH - this test verifies that. |
 
 ---
 
@@ -582,13 +582,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_recommendations.py` |
-| **Component** | `services/recommendations._check_model_swap` — `o1-mini` has no downgrade |
+| **Component** | `services/recommendations._check_model_swap` - `o1-mini` has no downgrade |
 | **Scenario** | Pass `ModelStats` for `model="o1-mini"` (not in `_MODEL_DOWNGRADE` as a key). |
 | **Expected Result** | Returns `[]`. No recommendation for models that have no cheaper alternative in the map. |
 
 ---
 
-### Section J · Integration Route — Audit Logging
+### Section J · Integration Route - Audit Logging
 
 ---
 
@@ -600,10 +600,10 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_integration_routes.py` (add to existing) |
-| **Component** | `POST /integrations` — audit_events row |
+| **Component** | `POST /integrations` - audit_events row |
 | **Scenario** | Create an integration successfully. Capture all `db.table(...)` calls. |
 | **Expected Result** | `audit_events.insert(...)` is called once with `action="integration.create"`, the correct `org_id`, `actor_user_id`, and `target_kind="integration"`. |
-| **Notes** | The existing test only checks `any("audit_events" in s for s in table_calls)` — it doesn't verify the payload content. |
+| **Notes** | The existing test only checks `any("audit_events" in s for s in table_calls)` - it doesn't verify the payload content. |
 
 ---
 
@@ -615,7 +615,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_integration_routes.py` |
-| **Component** | `DELETE /integrations/:id` — audit_events row |
+| **Component** | `DELETE /integrations/:id` - audit_events row |
 | **Scenario** | Delete an integration. Verify `audit_events.insert(...)` is called with `action="integration.delete"`. |
 | **Expected Result** | Audit event is logged with correct action, org_id, and target_id. |
 
@@ -629,7 +629,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_integration_routes.py` |
-| **Component** | `POST /integrations` — audit event failure is non-fatal |
+| **Component** | `POST /integrations` - audit event failure is non-fatal |
 | **Scenario** | `audit_events.insert().execute()` raises an exception. The integration creation completes. |
 | **Expected Result** | `201` response with the new integration. The failed audit write is logged (`audit_log_failed`) but does not cause a 500. |
 
@@ -643,13 +643,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_integration_routes.py` |
-| **Component** | `POST /integrations` — duplicate display_name returns 409 |
+| **Component** | `POST /integrations` - duplicate display_name returns 409 |
 | **Scenario** | DB `insert` raises with `"unique"` in the error message (simulating a unique constraint violation on `org_id + provider + display_name`). |
 | **Expected Result** | `409` with `"An integration with this name already exists"`. |
 
 ---
 
-### Section K · Slack Disconnect — Edge Cases
+### Section K · Slack Disconnect - Edge Cases
 
 ---
 
@@ -661,7 +661,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_slack_routes.py` (add to existing) |
-| **Component** | `POST /slack/disconnect` — DB delete always runs even when revoke fails |
+| **Component** | `POST /slack/disconnect` - DB delete always runs even when revoke fails |
 | **Scenario** | `revoke_token()` raises an exception (token expired). |
 | **Expected Result** | `204`. The exception is caught, logged as a warning, and `slack_integrations.delete()` is still called. The Slack row is removed from the DB regardless of revoke outcome. |
 
@@ -675,13 +675,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_slack_routes.py` |
-| **Component** | `POST /slack/disconnect` — already disconnected |
+| **Component** | `POST /slack/disconnect` - already disconnected |
 | **Scenario** | Call `POST /slack/disconnect` when no Slack integration exists for the org (DB returns empty). |
 | **Expected Result** | `404 "No Slack integration found"`. |
 
 ---
 
-### Section L · Ingestion / Aggregation — Pagination Loop
+### Section L · Ingestion / Aggregation - Pagination Loop
 
 ---
 
@@ -693,7 +693,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_aggregation_worker.py` (add to existing) |
-| **Component** | `workers/aggregation.aggregate_org` — pagination through `_PAGE_SIZE=1000` |
+| **Component** | `workers/aggregation.aggregate_org` - pagination through `_PAGE_SIZE=1000` |
 | **Scenario** | Mock DB to return 1000 rows on first page and 500 on second (triggering the `while True` loop to exit). |
 | **Expected Result** | All 1500 rows are aggregated. Loop exits when `len(result.data) < _PAGE_SIZE`. No data is dropped. |
 | **Notes** | The pagination loop guard is `if len(result.data) < _PAGE_SIZE: break`. Only one iteration is tested in existing tests. |
@@ -708,13 +708,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_aggregation_worker.py` |
-| **Component** | `workers/aggregation.aggregate_org` — revoked integration events excluded |
+| **Component** | `workers/aggregation.aggregate_org` - revoked integration events excluded |
 | **Scenario** | Two integrations exist: one `active`, one `revoked`. Both have `usage_events`. Call `aggregate_org`. |
 | **Expected Result** | Only events belonging to the `active` integration are in the `IN_` filter passed to the usage_events query. The revoked integration's data does not appear in `daily_cost_summaries`. |
 
 ---
 
-### Section M · Notification System — `send_budget_alert` Email Templates
+### Section M · Notification System - `send_budget_alert` Email Templates
 
 ---
 
@@ -754,14 +754,14 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_notifications_budget_alert.py` |
-| **Component** | `workers/notifications.send_budget_alert` — Slack failure does not block email |
+| **Component** | `workers/notifications.send_budget_alert` - Slack failure does not block email |
 | **Scenario** | Slack `post_message` raises an exception. Email (`resend`) is mocked to succeed. |
 | **Expected Result** | The exception from `post_message` is caught and logged. Email is still sent. The task does not raise. |
 | **Notes** | Existing test `test_slack_failure_does_not_retry_email` in `test_notification_gaps.py` covers this path; verify it tests the exception-catch branch explicitly (not just a no-op mock). |
 
 ---
 
-### Section N · Security — Additional Boundaries
+### Section N · Security - Additional Boundaries
 
 ---
 
@@ -773,9 +773,9 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | CRITICAL |
 | **File** | `tests/test_security_boundaries.py` (add to existing) |
-| **Component** | `GET /anomalies` — org isolation (list, not just patch) |
+| **Component** | `GET /anomalies` - org isolation (list, not just patch) |
 | **Scenario** | Org A has 3 open anomalies. Org B makes a `GET /anomalies` request. The DB mock filters by `org_id = Org B` and returns empty. |
-| **Expected Result** | `200 []`. Org B's response is empty — Org A's anomaly IDs are not revealed. |
+| **Expected Result** | `200 []`. Org B's response is empty - Org A's anomaly IDs are not revealed. |
 
 ---
 
@@ -787,7 +787,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | CRITICAL |
 | **File** | `tests/test_security_boundaries.py` |
-| **Component** | `GET /recommendations` — org isolation (list) |
+| **Component** | `GET /recommendations` - org isolation (list) |
 | **Scenario** | Org A has 5 open recommendations. Org B makes a `GET /recommendations` request. DB mock filters by `org_id = Org B` → empty. |
 | **Expected Result** | `200 []`. No data leakage. |
 
@@ -801,7 +801,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_security_boundaries.py` |
-| **Component** | `GET /usage/summary` — org isolation |
+| **Component** | `GET /usage/summary` - org isolation |
 | **Scenario** | Org A has spend data. Org B makes a `GET /usage/summary` request. DB mock returns empty for Org B's `org_id`. |
 | **Expected Result** | `200` with `total_cost_usd = 0`. Org B does not see Org A's data. |
 
@@ -815,13 +815,13 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_security_boundaries.py` |
-| **Component** | `GET /slack/status` — org isolation |
+| **Component** | `GET /slack/status` - org isolation |
 | **Scenario** | Org A has a connected Slack workspace. Org B calls `GET /slack/status`. DB mock returns empty for Org B's `org_id`. |
 | **Expected Result** | `200 {"connected": false}`. Org B cannot see Org A's Slack workspace_id. |
 
 ---
 
-### Section O · E2E Milestones — Missing M2 and M3 Tests
+### Section O · E2E Milestones - Missing M2 and M3 Tests
 
 ---
 
@@ -833,7 +833,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_e2e_m2.py` (new file) |
-| **Component** | M2 milestone — multi-provider + Cost Explorer |
+| **Component** | M2 milestone - multi-provider + Cost Explorer |
 | **Scenario** | Against a staging environment: (1) Connect two integrations (OpenAI + Anthropic). (2) Seed usage_events via `_ingest_window`. (3) Create tags + rules. (4) Verify `GET /usage/explore?group_by=feature_tag` returns at least one row tagged by the rules. (5) Verify `GET /usage/explore?group_by=provider` returns both providers. |
 | **Expected Result** | Explorer returns multi-provider data correctly attributed to feature tags. |
 | **Notes** | Uses the same mocked-provider pattern as `test_e2e_m1.py`. Uses `pytest.mark.e2e` to skip in unit runs. |
@@ -848,7 +848,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_e2e_m3.py` (new file) |
-| **Component** | M3 milestone — anomaly + budget + alert |
+| **Component** | M3 milestone - anomaly + budget + alert |
 | **Scenario** | Against a staging/mocked environment: (1) Seed `daily_cost_summaries` with 15 days of baseline data followed by a 5× spike. (2) Run `detect_org`. (3) Verify anomaly row inserted with `severity="high"`. (4) Create a budget at $100. Seed MTD spend at $85. Run `check_org`. (5) Verify `send_budget_alert.delay(budget_id, 80)` is called. |
 | **Expected Result** | Anomaly is detected and at 80% budget threshold a budget alert is triggered within the same run. |
 | **Notes** | Tests the three M3 subsystems (anomaly, budget, alert) end-to-end without a real Slack or email service. |
@@ -867,7 +867,7 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_config_gaps.py` (add to existing) |
-| **Component** | `api/config.Settings` — `ai_calls_per_org_per_day` default |
+| **Component** | `api/config.Settings` - `ai_calls_per_org_per_day` default |
 | **Scenario** | Instantiate Settings without setting `AI_CALLS_PER_ORG_PER_DAY`. |
 | **Expected Result** | `settings.ai_calls_per_org_per_day == 3`. This is the cost cap default from CLAUDE.md. |
 | **Notes** | If the default changes, the anomaly explainer rate limiter behavior changes silently. |
@@ -882,14 +882,14 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | MEDIUM |
 | **File** | `tests/test_config_gaps.py` |
-| **Component** | `api/config.Settings` — CORS wildcard rejected |
+| **Component** | `api/config.Settings` - CORS wildcard rejected |
 | **Scenario** | Attempt to set `CORS_ORIGINS = '["*"]'`. |
 | **Expected Result** | Either the setting is accepted (and this is documented as a known insecure config) or a `ValidationError` is raised at startup. Document the actual behavior. |
 | **Notes** | A wildcard CORS policy in production would allow any origin to call the API. |
 
 ---
 
-### Section Q · Pricing YAML — Sync with Recommendations
+### Section Q · Pricing YAML - Sync with Recommendations
 
 ---
 
@@ -922,7 +922,7 @@ the fan-out layer is missing.
 
 ---
 
-### Section R · Clerk Webhook — Membership Race Condition (BUG-02 Follow-up)
+### Section R · Clerk Webhook - Membership Race Condition (BUG-02 Follow-up)
 
 ---
 
@@ -934,17 +934,17 @@ the fan-out layer is missing.
 | **Status** | **NEW** |
 | **Priority** | HIGH |
 | **File** | `tests/test_webhooks_clerk.py` (add to existing) |
-| **Component** | `_handle_membership_created` — data dict error (BUG-02 additional case) |
-| **Scenario** | Supabase returns `MagicMock(data={"id": "user-uuid"})` (a dict, not a list). The existing guard `isinstance(user_resp.data, dict) and "id" not in user_resp.data` passes because `"id"` IS in the dict — but this is a success. Test the genuine error case: `data={"code": "PGRST116"}`. |
+| **Component** | `_handle_membership_created` - data dict error (BUG-02 additional case) |
+| **Scenario** | Supabase returns `MagicMock(data={"id": "user-uuid"})` (a dict, not a list). The existing guard `isinstance(user_resp.data, dict) and "id" not in user_resp.data` passes because `"id"` IS in the dict - but this is a success. Test the genuine error case: `data={"code": "PGRST116"}`. |
 | **Expected Result** | `500` is returned (triggering Svix retry). The `isinstance(user_resp.data, dict) or "id" not in user_resp.data` guard correctly classifies a PostgREST error dict as missing. |
 | **Notes** | `test_open_bugs.py::test_data_dict_with_error_code_not_caught_by_falsy_check` documents this bug. This companion test verifies the POST-FIX behavior once `_handle_membership_created` is updated to use `.limit(1)`. |
 
 ---
 
-## Part 3 — Bugs Surfaced During Audit
+## Part 3 - Bugs Surfaced During Audit
 
 The following issues were identified during the code review. They are separate from the test gaps
-above — they require code fixes, not just new tests.
+above - they require code fixes, not just new tests.
 
 ### BUG-04 (HIGH): `_check_model_swap` uses hardcoded `_INPUT_PRICE_PER_MTOK` map not synced to `pricing.yaml`
 
@@ -1007,7 +1007,7 @@ that the two maps agree.
 
 ---
 
-## Part 4 — Summary Table of New Tests
+## Part 4 - Summary Table of New Tests
 
 | TC-ID | Layer | Priority | Component | Status |
 |-------|-------|----------|-----------|--------|
@@ -1018,54 +1018,54 @@ that the two maps agree.
 | TC-STUB-05 | INTG | CRITICAL | `POST /webhooks/stripe` (stub) | NEW |
 | TC-STUB-06 | INTG | HIGH | Reports routes ×3 (stubs) | NEW |
 | TC-FAN-01 | UNIT | HIGH | `aggregate_all_orgs` fan-out | NEW |
-| TC-FAN-02 | UNIT | HIGH | `aggregate_all_orgs` — empty DB | NEW |
+| TC-FAN-02 | UNIT | HIGH | `aggregate_all_orgs` - empty DB | NEW |
 | TC-FAN-03 | UNIT | HIGH | `check_all_orgs` fan-out | NEW |
-| TC-FAN-04 | UNIT | HIGH | `check_all_orgs` — empty DB | NEW |
+| TC-FAN-04 | UNIT | HIGH | `check_all_orgs` - empty DB | NEW |
 | TC-FAN-05 | UNIT | MEDIUM | `send_daily_digests` fan-out | NEW |
-| TC-TAG-10 | INTG | HIGH | `PATCH /tags/:id` — success | NEW |
-| TC-TAG-11 | INTG | HIGH | `PATCH /tags/:id` — 404 | NEW |
-| TC-TAG-12 | INTG | HIGH | `PATCH /tag-rules/:id` — success | NEW |
-| TC-TAG-13 | INTG | HIGH | `PATCH /tag-rules/:id` — 404 | NEW |
-| TC-TAG-14 | INTG | MEDIUM | `PATCH /tag-rules/:id` — cross-org 404 | NEW |
+| TC-TAG-10 | INTG | HIGH | `PATCH /tags/:id` - success | NEW |
+| TC-TAG-11 | INTG | HIGH | `PATCH /tags/:id` - 404 | NEW |
+| TC-TAG-12 | INTG | HIGH | `PATCH /tag-rules/:id` - success | NEW |
+| TC-TAG-13 | INTG | HIGH | `PATCH /tag-rules/:id` - 404 | NEW |
+| TC-TAG-14 | INTG | MEDIUM | `PATCH /tag-rules/:id` - cross-org 404 | NEW |
 | TC-BUD-20 | INTG | MEDIUM | Budget PATCH with `hard_cap` only → 422 | NEW |
-| TC-BUD-21 | UNIT | MEDIUM | `_compute_mtd_spend` — `env_tag` scope | NEW |
-| TC-BUD-22 | UNIT | MEDIUM | `_to_budget_read` — zero monthly_limit | NEW |
-| TC-ANO-20 | UNIT | HIGH | `detect_org` — `context` field content | NEW |
-| TC-ANO-21 | UNIT | MEDIUM | `detect_org` — `scope_value` field | NEW |
+| TC-BUD-21 | UNIT | MEDIUM | `_compute_mtd_spend` - `env_tag` scope | NEW |
+| TC-BUD-22 | UNIT | MEDIUM | `_to_budget_read` - zero monthly_limit | NEW |
+| TC-ANO-20 | UNIT | HIGH | `detect_org` - `context` field content | NEW |
+| TC-ANO-21 | UNIT | MEDIUM | `detect_org` - `scope_value` field | NEW |
 | TC-USG-20 | UNIT | MEDIUM | `_parse_range("0d")` edge case | NEW |
-| TC-USG-21 | INTG | MEDIUM | Dashboard — first day of month MTD | NEW |
-| TC-USG-22 | INTG | MEDIUM | Explorer — `pct_of_total` when all zero | NEW |
-| TC-HLTH-01 | INTG | CRITICAL | `GET /health` — 200, no auth | NEW |
-| TC-HLTH-02 | INTG | HIGH | `GET /health` — not under `/api/v1` | NEW |
-| TC-WH-20 | INTG | CRITICAL | `POST /webhooks/stripe` — stub 500 | NEW |
-| TC-WH-21 | UNIT | HIGH | Clerk webhook — unhandled event type | NEW |
-| TC-WH-22 | UNIT | HIGH | `_write_clerk_metadata` — httpx failure | NEW |
-| TC-WH-23 | UNIT | MEDIUM | `_handle_org_created` — trial_ends_at | NEW |
+| TC-USG-21 | INTG | MEDIUM | Dashboard - first day of month MTD | NEW |
+| TC-USG-22 | INTG | MEDIUM | Explorer - `pct_of_total` when all zero | NEW |
+| TC-HLTH-01 | INTG | CRITICAL | `GET /health` - 200, no auth | NEW |
+| TC-HLTH-02 | INTG | HIGH | `GET /health` - not under `/api/v1` | NEW |
+| TC-WH-20 | INTG | CRITICAL | `POST /webhooks/stripe` - stub 500 | NEW |
+| TC-WH-21 | UNIT | HIGH | Clerk webhook - unhandled event type | NEW |
+| TC-WH-22 | UNIT | HIGH | `_write_clerk_metadata` - httpx failure | NEW |
+| TC-WH-23 | UNIT | MEDIUM | `_handle_org_created` - trial_ends_at | NEW |
 | TC-REC-20 | UNIT | HIGH | `input_compression` not yet implemented | NEW |
-| TC-REC-21 | INTG | MEDIUM | Recommendation PATCH — `resolved_at` set | NEW |
-| TC-REC-22 | UNIT | MEDIUM | `_check_model_swap` — no-downgrade model | NEW |
+| TC-REC-21 | INTG | MEDIUM | Recommendation PATCH - `resolved_at` set | NEW |
+| TC-REC-22 | UNIT | MEDIUM | `_check_model_swap` - no-downgrade model | NEW |
 | TC-INT-10 | INTG | MEDIUM | Audit event payload on integration create | NEW |
 | TC-INT-11 | INTG | MEDIUM | Audit event payload on integration delete | NEW |
 | TC-INT-12 | INTG | MEDIUM | Audit event failure is non-fatal | NEW |
-| TC-INT-13 | INTG | HIGH | Integration create — duplicate 409 | NEW |
-| TC-SLK-20 | INTG | MEDIUM | Disconnect — revoke failure → DB still deleted | NEW |
-| TC-SLK-21 | INTG | MEDIUM | Disconnect — not connected → 404 | NEW |
-| TC-AGG-10 | UNIT | HIGH | `aggregate_org` — pagination (2 pages) | NEW |
-| TC-AGG-11 | UNIT | HIGH | `aggregate_org` — revoked integration excluded | NEW |
+| TC-INT-13 | INTG | HIGH | Integration create - duplicate 409 | NEW |
+| TC-SLK-20 | INTG | MEDIUM | Disconnect - revoke failure → DB still deleted | NEW |
+| TC-SLK-21 | INTG | MEDIUM | Disconnect - not connected → 404 | NEW |
+| TC-AGG-10 | UNIT | HIGH | `aggregate_org` - pagination (2 pages) | NEW |
+| TC-AGG-11 | UNIT | HIGH | `aggregate_org` - revoked integration excluded | NEW |
 | TC-NOT-20 | UNIT | MEDIUM | `_warning_email_html` structure | NEW |
 | TC-NOT-21 | UNIT | MEDIUM | `_exceeded_email_html` structure | NEW |
-| TC-NOT-22 | UNIT | HIGH | Budget alert — Slack fail does not block email | NEW |
-| TC-SEC-09 | INTG | CRITICAL | `GET /anomalies` — org isolation | NEW |
-| TC-SEC-10 | INTG | CRITICAL | `GET /recommendations` — org isolation | NEW |
-| TC-SEC-11 | INTG | HIGH | `GET /usage/summary` — org isolation | NEW |
-| TC-SEC-12 | INTG | HIGH | `GET /slack/status` — org isolation | NEW |
-| TC-E2E-02 | E2E | HIGH | M2 e2e — multi-provider + Cost Explorer | NEW |
-| TC-E2E-03 | E2E | HIGH | M3 e2e — anomaly + budget + alert | NEW |
+| TC-NOT-22 | UNIT | HIGH | Budget alert - Slack fail does not block email | NEW |
+| TC-SEC-09 | INTG | CRITICAL | `GET /anomalies` - org isolation | NEW |
+| TC-SEC-10 | INTG | CRITICAL | `GET /recommendations` - org isolation | NEW |
+| TC-SEC-11 | INTG | HIGH | `GET /usage/summary` - org isolation | NEW |
+| TC-SEC-12 | INTG | HIGH | `GET /slack/status` - org isolation | NEW |
+| TC-E2E-02 | E2E | HIGH | M2 e2e - multi-provider + Cost Explorer | NEW |
+| TC-E2E-03 | E2E | HIGH | M3 e2e - anomaly + budget + alert | NEW |
 | TC-CFG-05 | UNIT | MEDIUM | `ai_calls_per_org_per_day` default = 3 | NEW |
 | TC-CFG-06 | UNIT | MEDIUM | CORS wildcard behavior documented | NEW |
 | TC-PRI-10 | UNIT | HIGH | `pricing.yaml` ↔ `_INPUT_PRICE_PER_MTOK` sync | NEW |
 | TC-PRI-11 | UNIT | HIGH | `pricing.yaml` ↔ `_CACHE_SAVINGS_PER_MTOK` sync | NEW |
-| TC-WH-24 | UNIT | HIGH | Membership race — error dict guard post-fix | NEW |
+| TC-WH-24 | UNIT | HIGH | Membership race - error dict guard post-fix | NEW |
 
 **Total new test cases: 53**
 **Total existing tests: 559**
@@ -1073,19 +1073,19 @@ that the two maps agree.
 
 ---
 
-## Part 5 — Pre-M4 Gate Checklist
+## Part 5 - Pre-M4 Gate Checklist
 
 Before opening any M4 work, the following must be true:
 
 - [ ] All CRITICAL new tests above pass (TC-STUB-04, TC-STUB-05, TC-HLTH-01, TC-WH-20, TC-SEC-09, TC-SEC-10)
-- [ ] Stub routes return `501` (not `500`) — BUG-06 and BUG-07 fixed
+- [ ] Stub routes return `501` (not `500`) - BUG-06 and BUG-07 fixed
 - [ ] `GET /health` is confirmed public and returns `200`
 - [ ] `PATCH /tags/:id` and `PATCH /tag-rules/:id` have tests (TC-TAG-10 through TC-TAG-14)
 - [ ] Fan-out workers tested (TC-FAN-01 through TC-FAN-05)
 - [ ] `pricing.yaml` ↔ recommendations price sync verified (TC-PRI-10, TC-PRI-11)
 - [ ] Stripe webhook stub acknowledged and scheduled for M4 implementation
 - [ ] All HIGH new tests pass
-- [ ] `pytest apps/api/tests/` passes with `--tb=short` — no new failures introduced
+- [ ] `pytest apps/api/tests/` passes with `--tb=short` - no new failures introduced
 
 ---
 

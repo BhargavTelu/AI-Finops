@@ -23,7 +23,7 @@ EVENT_ID = "eeeeeeee-0000-0000-0000-000000000001"
 
 _org_ctx = OrgContext(user_id=USER_ID, org_id=ORG_ID)
 
-# Override both auth dependencies — tests exercise admin paths
+# Override both auth dependencies - tests exercise admin paths
 app.dependency_overrides[_require_org] = lambda: _org_ctx
 app.dependency_overrides[_require_admin_org] = lambda: _org_ctx
 

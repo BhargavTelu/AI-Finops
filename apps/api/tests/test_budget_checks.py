@@ -4,7 +4,7 @@ Covers:
   - _same_calendar_month: idempotency guard helper
   - _compute_scope_spend: correct DB filtering per scope_type
   - check_org: threshold detection, alert firing, notified_at guard
-All Supabase calls are mocked — no network, no DB.
+All Supabase calls are mocked - no network, no DB.
 """
 
 from datetime import datetime, timezone
@@ -163,7 +163,7 @@ class TestCheckOrg:
         return db, mock_alert
 
     def test_below_threshold_no_alert(self) -> None:
-        """70% spent — below default 80% threshold, no alert."""
+        """70% spent - below default 80% threshold, no alert."""
         _, mock_alert = self._run(_budget_row(), Decimal("700"))
         mock_alert.delay.assert_not_called()
 
@@ -211,7 +211,7 @@ class TestCheckOrg:
         mock_alert.delay.assert_called_once_with(BUDGET_ID, 80, ORG_ID)
 
     def test_no_budgets_returns_early(self) -> None:
-        """Org with no budgets — no alerts, no crash."""
+        """Org with no budgets - no alerts, no crash."""
         db = _mock_db()
         empty_result = MagicMock()
         empty_result.data = []
@@ -256,10 +256,10 @@ class TestCheckOrg:
 # ── TC-FAN-03 & TC-FAN-04: check_all_orgs fan-out ────────────────────────────
 
 class TestCheckAllOrgsFanOut:
-    """TC-FAN-03 and TC-FAN-04 — check_all_orgs dispatches to unique org_ids."""
+    """TC-FAN-03 and TC-FAN-04 - check_all_orgs dispatches to unique org_ids."""
 
     def test_dispatches_once_per_unique_org(self) -> None:
-        """TC-FAN-03 — budgets from 3 distinct org_ids → check_org.delay called 3 times."""
+        """TC-FAN-03 - budgets from 3 distinct org_ids → check_org.delay called 3 times."""
         from api.workers.budget_checks import check_all_orgs
 
         rows = [
@@ -287,7 +287,7 @@ class TestCheckAllOrgsFanOut:
         assert called_ids == {"org-111", "org-222", "org-333"}
 
     def test_no_budgets_does_not_dispatch(self) -> None:
-        """TC-FAN-04 — no budgets in DB → check_org.delay never called."""
+        """TC-FAN-04 - no budgets in DB → check_org.delay never called."""
         from api.workers.budget_checks import check_all_orgs
 
         db = MagicMock()

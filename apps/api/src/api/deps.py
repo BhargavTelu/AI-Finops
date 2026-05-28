@@ -15,7 +15,7 @@ log = structlog.get_logger()
 
 # ── JWKS cache ────────────────────────────────────────────────────────────────
 # Simple in-memory cache keyed by kid. Each FastAPI worker process maintains
-# its own copy — fine at this scale. Refreshed every hour or on unknown kid
+# its own copy - fine at this scale. Refreshed every hour or on unknown kid
 # (handles Clerk key rotation without a restart).
 class _JwksCache:
     def __init__(self) -> None:
@@ -33,7 +33,7 @@ async def _fetch_jwks() -> dict[str, dict[str, Any]]:
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(url)
         resp.raise_for_status()
-    # Any is unavoidable here — JWKS is untyped JSON from an external endpoint.
+    # Any is unavoidable here - JWKS is untyped JSON from an external endpoint.
     keys: list[dict[str, Any]] = resp.json().get("keys", [])  # type: ignore[assignment]
     return {k["kid"]: k for k in keys}
 
@@ -108,7 +108,7 @@ async def _require_org(
 
     token = authorization.removeprefix("Bearer ")
 
-    # Read the header without verifying the signature — we need kid to look
+    # Read the header without verifying the signature - we need kid to look
     # up the right public key before we can verify anything.
     try:
         header = jwt.get_unverified_header(token)
@@ -139,11 +139,11 @@ async def _require_org(
         )
 
     # RSAAlgorithm.from_jwk returns a union of key types; Any is the correct
-    # annotation here — PyJWT does not expose a narrower public type.
+    # annotation here - PyJWT does not expose a narrower public type.
     public_key: Any = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))  # type: ignore[attr-defined]
 
     try:
-        # Clerk session tokens don't carry an aud claim — disable that check.
+        # Clerk session tokens don't carry an aud claim - disable that check.
         claims: dict[str, Any] = jwt.decode(  # type: ignore[assignment]
             token,
             public_key,
@@ -169,7 +169,7 @@ async def _require_org(
     if not org_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No active organization — activate an org in the Clerk session",
+            detail="No active organization - activate an org in the Clerk session",
         )
 
     return OrgContext(user_id=user_id, org_id=org_id)

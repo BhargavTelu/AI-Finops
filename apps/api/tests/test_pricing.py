@@ -1,7 +1,7 @@
 """
 Unit tests for pricing calculation helpers.
 These run against packages/pricing/pricing.yaml via a simple loader.
-Placeholder — implement alongside the pricing loader in M1.
+Placeholder - implement alongside the pricing loader in M1.
 """
 
 import pytest

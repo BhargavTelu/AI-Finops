@@ -1,10 +1,10 @@
 """
 Slack OAuth routes.
 
-GET   /slack/status           — check whether Slack is connected for the org
-POST  /slack/oauth/callback   — exchange authorization code for bot token
-PATCH /slack/settings         — update mute preferences
-POST  /slack/disconnect       — revoke token and remove integration
+GET   /slack/status           - check whether Slack is connected for the org
+POST  /slack/oauth/callback   - exchange authorization code for bot token
+PATCH /slack/settings         - update mute preferences
+POST  /slack/disconnect       - revoke token and remove integration
 """
 
 import structlog
@@ -63,7 +63,7 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
 
     The frontend receives the code from Slack's redirect and passes it here.
     We exchange it, encrypt the bot token (AES-256-GCM), and upsert a row in
-    slack_integrations. One Slack workspace per org — upsert overwrites any
+    slack_integrations. One Slack workspace per org - upsert overwrites any
     prior install, allowing re-install to a different channel.
     """
     if not settings.slack_client_id or not settings.slack_client_secret:
@@ -118,7 +118,7 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
     )
     db_user_id: str | None = user_result.data[0]["id"] if user_result.data else None
 
-    # Upsert — one row per org; re-install to a new channel replaces the old row.
+    # Upsert - one row per org; re-install to a new channel replaces the old row.
     try:
         db.table("slack_integrations").upsert(
             {
@@ -191,7 +191,7 @@ async def slack_disconnect(org: OrgDep) -> None:
     """
     Revoke the Slack bot token and remove the integration.
 
-    Token revocation is best-effort — the DB row is always deleted even if
+    Token revocation is best-effort - the DB row is always deleted even if
     Slack returns an error (token already expired, workspace deleted, etc.).
     """
     db = _get_supabase()
@@ -207,7 +207,7 @@ async def slack_disconnect(org: OrgDep) -> None:
     if not result.data:
         raise HTTPException(status_code=404, detail="No Slack integration found")
 
-    # Decrypt and revoke — best-effort, non-fatal on failure.
+    # Decrypt and revoke - best-effort, non-fatal on failure.
     raw_hex: str = result.data[0]["bot_token_enc"]
     try:
         cipher = EncryptionService(settings.encryption_key)

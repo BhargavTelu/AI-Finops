@@ -1,15 +1,15 @@
 """
-Slack API helpers — thin wrappers over the Slack REST API using httpx.
+Slack API helpers - thin wrappers over the Slack REST API using httpx.
 
 No Slack SDK to stay within the no-new-large-deps constraint. The four
 endpoints we need are simple JSON POST/GET calls:
-  oauth.v2.access   — exchange auth code for bot token
-  auth.revoke       — revoke token on disconnect
-  chat.postMessage  — send a message to a channel
+  oauth.v2.access   - exchange auth code for bot token
+  auth.revoke       - revoke token on disconnect
+  chat.postMessage  - send a message to a channel
 
 All functions are synchronous, matching the Celery worker context. Calling
 them from async FastAPI routes is acceptable for low-frequency admin ops
-(OAuth install, disconnect) — the minimal blocking is not a concern at
+(OAuth install, disconnect) - the minimal blocking is not a concern at
 this traffic level.
 """
 
@@ -75,7 +75,7 @@ def revoke_token(bot_token: str) -> None:
         if not body.get("ok"):
             log.warning("slack_revoke_failed", error=body.get("error"))
     except Exception as exc:
-        # Non-fatal — Slack unreachable, token already expired, etc.
+        # Non-fatal - Slack unreachable, token already expired, etc.
         log.warning("slack_revoke_error", error=str(exc))
 
 

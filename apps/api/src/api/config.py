@@ -55,10 +55,10 @@ class Settings(BaseSettings):
 
     # ── Encryption ────────────────────────────────────────────────────────────
     # 32-byte AES-256-GCM key, base64-encoded.
-    # Generated via Supabase Vault in production — never in env vars.
+    # Generated via Supabase Vault in production - never in env vars.
     encryption_key: str = ""
 
-    # ── Internal AI (platform's own key — not customer keys) ──────────────────
+    # ── Internal AI (platform's own key - not customer keys) ──────────────────
     # Used by Celery workers for rule-based → AI recommendation upgrade (V1),
     # anomaly explainer narratives, and the monthly CFO narrative (M4).
     # Empty in M0–M2 while recommendations are rule-based.
@@ -77,5 +77,5 @@ class Settings(BaseSettings):
         return v
 
 
-# Singleton — import this everywhere.
+# Singleton - import this everywhere.
 settings = Settings()

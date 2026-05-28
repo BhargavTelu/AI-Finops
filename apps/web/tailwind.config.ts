@@ -89,11 +89,11 @@ const config: Config = {
 
       // ── Border radius ───────────────────────────────────────────────
       // Based on --radius: 0.5rem (8px):
-      //   rounded-sm  = 4px  — badges, micro elements
-      //   rounded-md  = 6px  — form inputs
-      //   rounded-lg  = 8px  — buttons (base radius = var(--radius))
-      //   rounded-xl  = 12px — cards
-      //   rounded-2xl = 16px — avoid (too rounded for financial SaaS)
+      //   rounded-sm  = 4px  - badges, micro elements
+      //   rounded-md  = 6px  - form inputs
+      //   rounded-lg  = 8px  - buttons (base radius = var(--radius))
+      //   rounded-xl  = 12px - cards
+      //   rounded-2xl = 16px - avoid (too rounded for financial SaaS)
       borderRadius: {
         sm: "calc(var(--radius) - 4px)",
         md: "calc(var(--radius) - 2px)",

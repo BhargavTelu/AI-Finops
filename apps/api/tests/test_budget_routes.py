@@ -264,7 +264,7 @@ class TestDeleteBudget:
 # ── TC-BUD-20: PATCH /budgets/:id with hard_cap only ─────────────────────────
 
 class TestBudgetPatchHardCapNotPatchable:
-    """TC-BUD-20 — PATCH with only hard_cap (not in patchable set) → 422."""
+    """TC-BUD-20 - PATCH with only hard_cap (not in patchable set) → 422."""
 
     def test_patch_with_hard_cap_only_returns_422(self) -> None:
         """
@@ -292,7 +292,7 @@ class TestBudgetPatchHardCapNotPatchable:
 # ── TC-BUD-21: _compute_mtd_spend with env_tag scope ─────────────────────────
 
 class TestComputeMtdSpendEnvTagScope:
-    """TC-BUD-21 — _compute_mtd_spend filters by env_tag when scope_type='env_tag'."""
+    """TC-BUD-21 - _compute_mtd_spend filters by env_tag when scope_type='env_tag'."""
 
     def test_env_tag_scope_filters_by_env_tag(self) -> None:
         from api.routers.budgets import _compute_mtd_spend
@@ -320,7 +320,7 @@ class TestComputeMtdSpendEnvTagScope:
 # ── TC-BUD-22: _to_budget_read with zero monthly_limit ───────────────────────
 
 class TestToBudgetReadZeroMonthlyLimit:
-    """TC-BUD-22 — _to_budget_read with monthly_limit=0.00 must not raise ZeroDivisionError."""
+    """TC-BUD-22 - _to_budget_read with monthly_limit=0.00 must not raise ZeroDivisionError."""
 
     def test_zero_monthly_limit_returns_zero_spent_pct(self) -> None:
         from decimal import Decimal

@@ -1,12 +1,12 @@
 """
-Rule-based recommendations engine (M3 — no AI).
+Rule-based recommendations engine (M3 - no AI).
 
 Rules applied in priority order:
-  1. model_swap  — expensive model with a cheaper same-family alternative
-  2. caching     — high-volume model+tag group that can benefit from prompt caching
-  3. batch       — high request count at low tokens/request, eligible for Batch API
+  1. model_swap  - expensive model with a cheaper same-family alternative
+  2. caching     - high-volume model+tag group that can benefit from prompt caching
+  3. batch       - high request count at low tokens/request, eligible for Batch API
 
-All rules are pure functions over ModelStats — no DB access, fully testable in isolation.
+All rules are pure functions over ModelStats - no DB access, fully testable in isolation.
 Confidence is numeric (0.0–1.0): 0.85 = high, 0.60 = medium.
 """
 
@@ -27,7 +27,7 @@ _MODEL_DOWNGRADE: dict[str, str] = {
     "claude-3-5-sonnet-20241022": "claude-3-5-haiku-20241022",
 }
 
-# Input price per million tokens — used to compute the savings ratio between models.
+# Input price per million tokens - used to compute the savings ratio between models.
 # Kept in sync with packages/pricing/pricing.yaml; update both when prices change.
 _INPUT_PRICE_PER_MTOK: dict[str, Decimal] = {
     "gpt-4o": Decimal("2.50"),
@@ -111,7 +111,7 @@ def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
     This overstates savings slightly (output tokens may have a different ratio) but
     is the right order of magnitude for a rule-based signal.
     """
-    # Aggregate across feature_tags — the recommendation is per model, not per tag.
+    # Aggregate across feature_tags - the recommendation is per model, not per tag.
     by_model: dict[str, dict] = {}
     for s in stats:
         if s.model not in by_model:
@@ -243,7 +243,7 @@ def _check_batch_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     OpenAI Batch API delivers a 50% cost reduction in exchange for ≤24h turnaround.
     Suitable for offline workloads: evals, bulk classification, data extraction pipelines.
     """
-    # Aggregate across feature_tags — batch eligibility is per model, not per tag.
+    # Aggregate across feature_tags - batch eligibility is per model, not per tag.
     by_model: dict[str, dict] = {}
     for s in stats:
         if s.model not in _BATCH_ELIGIBLE:

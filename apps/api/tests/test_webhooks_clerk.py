@@ -263,10 +263,10 @@ class TestUnhandledEvent:
 # ── TC-WH-21: Unhandled event logs at DEBUG ───────────────────────────────────
 
 class TestUnhandledEventLogging:
-    """TC-WH-21 — Clerk webhook logs clerk_webhook_unhandled_event at DEBUG for unknown events."""
+    """TC-WH-21 - Clerk webhook logs clerk_webhook_unhandled_event at DEBUG for unknown events."""
 
     def test_unhandled_event_logs_debug_message(self) -> None:
-        """TC-WH-21 — Unhandled event type: 200 returned, debug log emitted."""
+        """TC-WH-21 - Unhandled event type: 200 returned, debug log emitted."""
         db = MagicMock()
         db.table.return_value = db
 
@@ -287,10 +287,10 @@ class TestUnhandledEventLogging:
 # ── TC-WH-22: _write_clerk_metadata httpx failure is non-fatal ───────────────
 
 class TestWriteClerkMetadataHttpxFailure:
-    """TC-WH-22 — httpx.ConnectError in _write_clerk_metadata is caught; webhook still returns 200."""
+    """TC-WH-22 - httpx.ConnectError in _write_clerk_metadata is caught; webhook still returns 200."""
 
     def test_httpx_connect_error_is_non_fatal(self) -> None:
-        """TC-WH-22 — ConnectError logged as warning, webhook handler returns 200."""
+        """TC-WH-22 - ConnectError logged as warning, webhook handler returns 200."""
         import httpx
 
         db = MagicMock()
@@ -325,10 +325,10 @@ class TestWriteClerkMetadataHttpxFailure:
         assert resp.json() == {"received": True}
 
 
-# ── TC-WH-24: Membership race condition — PostgREST error dict returns 500 ────
+# ── TC-WH-24: Membership race condition - PostgREST error dict returns 500 ────
 
 class TestMembershipErrorDictGuard:
-    """TC-WH-24 — PostgREST error dict ({"code": "PGRST116"}) triggers 500 for Svix retry."""
+    """TC-WH-24 - PostgREST error dict ({"code": "PGRST116"}) triggers 500 for Svix retry."""
 
     def _make_db_with_error_dict(self) -> MagicMock:
         """
@@ -357,7 +357,7 @@ class TestMembershipErrorDictGuard:
         }
 
     def test_pgrst116_error_dict_returns_500(self) -> None:
-        """TC-WH-24 — PostgREST error dict lacking "id" key causes 500 (triggers Svix retry)."""
+        """TC-WH-24 - PostgREST error dict lacking "id" key causes 500 (triggers Svix retry)."""
         db = self._make_db_with_error_dict()
         with patch("api.routers.webhooks._service_db", return_value=db):
             resp = _post_webhook(self._membership_payload())

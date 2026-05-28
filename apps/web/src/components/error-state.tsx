@@ -12,7 +12,7 @@ interface ErrorStateProps {
 }
 
 /**
- * Standard error state — shown when a data fetch fails.
+ * Standard error state - shown when a data fetch fails.
  * Always provides a retry path so the user isn't stuck.
  *
  * Usage:

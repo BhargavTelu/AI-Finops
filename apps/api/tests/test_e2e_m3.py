@@ -1,11 +1,11 @@
 """
-E2E tests for M3 features — anomaly detection + budget alerts.
+E2E tests for M3 features - anomaly detection + budget alerts.
 
 Require a live stack or skip via E2E env var. Run with:
 
     E2E=true E2E_API_URL=http://localhost:8000 E2E_TOKEN=<clerk_jwt> pytest tests/test_e2e_m3.py -v
 
-TC-E2E-03 — M3 milestone: anomaly detection + budget threshold alert.
+TC-E2E-03 - M3 milestone: anomaly detection + budget threshold alert.
 """
 
 import os
@@ -31,7 +31,7 @@ def headers() -> dict:
 
 class TestM3AnomalyBudgetAlertPipeline:
     """
-    TC-E2E-03 (High) — M3 subsystems end-to-end without real Slack or email.
+    TC-E2E-03 (High) - M3 subsystems end-to-end without real Slack or email.
 
     Scenario:
       1. Seed daily_cost_summaries with 15 days of baseline + a 5× spike.
@@ -41,7 +41,7 @@ class TestM3AnomalyBudgetAlertPipeline:
     """
 
     def test_anomaly_detected_at_5x_spike(self, headers: dict) -> None:
-        """TC-E2E-03 part 1 — anomaly detection pipeline end-to-end."""
+        """TC-E2E-03 part 1 - anomaly detection pipeline end-to-end."""
         from datetime import date, timedelta
         from unittest.mock import MagicMock, patch
 
@@ -107,7 +107,7 @@ class TestM3AnomalyBudgetAlertPipeline:
         # Full anomaly insert assertion requires deep mock integration
 
     def test_budget_alert_triggered_at_85_pct(self, headers: dict) -> None:
-        """TC-E2E-03 part 2 — budget check fires alert at 85% spend."""
+        """TC-E2E-03 part 2 - budget check fires alert at 85% spend."""
         import httpx
         from unittest.mock import MagicMock, patch
 
@@ -137,7 +137,7 @@ class TestM3AnomalyBudgetAlertPipeline:
                 ) as mock_alert,
             ):
                 mock_alert.delay = MagicMock(side_effect=lambda *a, **kw: alert_calls.append(a))
-                # org_id comes from the JWT — skip if not accessible
+                # org_id comes from the JWT - skip if not accessible
                 pytest.skip("TC-E2E-03 part 2 requires direct org_id access from JWT; deferred")
 
         finally:

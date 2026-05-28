@@ -1,6 +1,6 @@
 """
 Unit tests for the tag-rule engine.
-No DB access — all pure function tests.
+No DB access - all pure function tests.
 """
 
 import pytest
@@ -102,7 +102,7 @@ class TestCompileRules:
         assert result[1].tag_type == "env"
 
 
-# ── apply_rules — no rules ────────────────────────────────────────────────────
+# ── apply_rules - no rules ────────────────────────────────────────────────────
 
 class TestApplyRulesNoRules:
     def test_no_rules_returns_all_none(self) -> None:
@@ -112,7 +112,7 @@ class TestApplyRulesNoRules:
         assert apply_rules(None, []) == _EMPTY_TAGS
 
 
-# ── apply_rules — exact matching ──────────────────────────────────────────────
+# ── apply_rules - exact matching ──────────────────────────────────────────────
 
 class TestExactMatching:
     def test_exact_match_assigns_tag(self) -> None:
@@ -136,7 +136,7 @@ class TestExactMatching:
         assert result["env_tag"] is None
 
 
-# ── apply_rules — substring matching ─────────────────────────────────────────
+# ── apply_rules - substring matching ─────────────────────────────────────────
 
 class TestSubstringMatching:
     def test_substring_match_anywhere_in_label(self) -> None:
@@ -161,7 +161,7 @@ class TestSubstringMatching:
         assert result["env_tag"] == "default"
 
 
-# ── apply_rules — regex matching ──────────────────────────────────────────────
+# ── apply_rules - regex matching ──────────────────────────────────────────────
 
 class TestRegexMatching:
     def test_regex_match(self) -> None:
@@ -187,7 +187,7 @@ class TestRegexMatching:
         assert result["team_tag"] == "ml"
 
 
-# ── apply_rules — priority and multi-type ────────────────────────────────────
+# ── apply_rules - priority and multi-type ────────────────────────────────────
 
 class TestApplyRulesPriority:
     def test_lower_priority_number_wins(self) -> None:

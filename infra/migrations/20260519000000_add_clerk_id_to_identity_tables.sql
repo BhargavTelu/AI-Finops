@@ -4,7 +4,7 @@
 --   1. Upsert rows idempotently on Clerk events.
 --   2. Look up DB UUIDs by Clerk ID when creating memberships.
 --   3. Write those UUIDs back to Clerk public_metadata so the Supabase JWT
---      template can embed a real UUID as org_id — required for the ::uuid cast
+--      template can embed a real UUID as org_id - required for the ::uuid cast
 --      in every RLS policy.
 --
 -- NULL is allowed so existing rows (if any) aren't blocked; the webhook sets

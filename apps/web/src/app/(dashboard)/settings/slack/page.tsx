@@ -4,14 +4,14 @@ import type { SlackStatus } from "@/lib/types";
 
 import { SlackClient } from "./slack-client";
 
-// Build Slack OAuth URL server-side — SLACK_CLIENT_ID is not a secret
+// Build Slack OAuth URL server-side - SLACK_CLIENT_ID is not a secret
 // but we avoid exposing it as a NEXT_PUBLIC_ var unnecessarily.
 function buildOAuthUrl(state: string): string {
   const clientId = process.env.SLACK_CLIENT_ID ?? "";
   const redirectUri =
     process.env.SLACK_REDIRECT_URI ?? "http://localhost:3000/settings/slack/callback";
 
-  if (!clientId) return ""; // server not configured — show unconfigured state in UI
+  if (!clientId) return ""; // server not configured - show unconfigured state in UI
 
   const params = new URLSearchParams({
     client_id: clientId,

@@ -1,8 +1,8 @@
 """
 Notification workers:
-  send_daily_digests  — Slack digest at 09:00 UTC (Group C)
-  send_anomaly_alert  — real-time Slack alert on new anomaly (Group C)
-  send_budget_alert   — email at alert_at_pct / 100% of budget (Group B)
+  send_daily_digests  - Slack digest at 09:00 UTC (Group C)
+  send_anomaly_alert  - real-time Slack alert on new anomaly (Group C)
+  send_budget_alert   - email at alert_at_pct / 100% of budget (Group B)
                         + Slack (Group C)
 """
 
@@ -197,7 +197,7 @@ def _anomaly_slack_blocks(anomaly: dict[str, Any]) -> list[dict[str, Any]]:
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"{emoji} *Cost Anomaly Detected* — `{scope_value}`",
+                "text": f"{emoji} *Cost Anomaly Detected* - `{scope_value}`",
             },
         },
         {
@@ -231,9 +231,9 @@ def _budget_slack_blocks(
 ) -> list[dict[str, Any]]:
     """Build Slack Block Kit payload for a budget alert."""
     if is_exceeded:
-        header = f":red_circle: *Budget Exceeded* — {pct}% of limit used"
+        header = f":red_circle: *Budget Exceeded* - {pct}% of limit used"
     else:
-        header = f":warning: *Budget Warning* — {pct}% of limit used"
+        header = f":warning: *Budget Warning* - {pct}% of limit used"
 
     return [
         {
@@ -261,7 +261,7 @@ def _fetch_digest_data(db, org_id: str, yesterday: date) -> dict[str, Any]:
     yesterday_str = yesterday.isoformat()
     week_ago_str = (yesterday - timedelta(days=6)).isoformat()
 
-    # 7 days of data (includes yesterday) — drives three metrics at once.
+    # 7 days of data (includes yesterday) - drives three metrics at once.
     week_rows: list[dict[str, Any]] = (
         db.table("daily_cost_summaries")
         .select("day, model, total_cost_usd")
@@ -361,7 +361,7 @@ def _digest_slack_blocks(
     blocks: list[dict[str, Any]] = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": f"AI Cost Digest — {date_str}"},
+            "text": {"type": "plain_text", "text": f"AI Cost Digest - {date_str}"},
         },
         {
             "type": "section",
@@ -376,7 +376,7 @@ def _digest_slack_blocks(
 
     if top_drivers:
         driver_lines = "\n".join(
-            f"• `{d['label']}` — ${d['usd']:,.2f}" for d in top_drivers
+            f"• `{d['label']}` - ${d['usd']:,.2f}" for d in top_drivers
         )
         blocks.append(
             {
@@ -434,7 +434,7 @@ def send_slack_digest(self, org_id: str) -> None:  # type: ignore[misc]
     if slack is None:
         return
 
-    bot_token, channel_id, _ = slack  # digest is not an alert — never suppressed by mute
+    bot_token, channel_id, _ = slack  # digest is not an alert - never suppressed by mute
     data = _fetch_digest_data(db, org_id, yesterday)
     blocks = _digest_slack_blocks(
         digest_date=yesterday,
@@ -456,7 +456,7 @@ def send_slack_digest(self, org_id: str) -> None:  # type: ignore[misc]
         log.error("digest_send_failed", org_id=org_id, error=str(exc))
         raise self.retry(exc=exc)
 
-    # Record successful send; failure here is non-fatal — digest is already posted.
+    # Record successful send; failure here is non-fatal - digest is already posted.
     try:
         db.table("slack_digests").insert(
             {
@@ -481,7 +481,7 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
     """
     Post a real-time Slack alert when a new anomaly with severity ≥ medium is
     inserted. Called directly from anomaly_detection.detect_org for qualifying
-    anomalies — the wire is live; only this task body was a stub.
+    anomalies - the wire is live; only this task body was a stub.
     """
     db = _get_supabase()
 
@@ -501,7 +501,7 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
 
     slack = _get_slack_channel(db, org_id)
     if slack is None:
-        # Org hasn't connected Slack — silently skip (common case pre-install).
+        # Org hasn't connected Slack - silently skip (common case pre-install).
         log.debug("anomaly_alert_no_slack", org_id=org_id, anomaly_id=anomaly_id)
         return
 
@@ -531,7 +531,7 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
         channel_id=channel_id,
     )
 
-    # Record when the Slack alert was sent — non-fatal if the DB write fails.
+    # Record when the Slack alert was sent - non-fatal if the DB write fails.
     # The alert was already delivered; this is audit data only.
     try:
         db.table("anomalies").update(
@@ -545,10 +545,10 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
 def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # type: ignore[misc]
     """
     Send email via Resend when spend crosses alert_at_pct (warning) or 100% (exceeded).
-    Also posts to Slack if the org has a connected integration (best-effort — email
+    Also posts to Slack if the org has a connected integration (best-effort - email
     is not retried on Slack failure).
     The notified_*_at guard in budget_checks.py ensures this fires at most once per
-    threshold per calendar month — this task is idempotent by design.
+    threshold per calendar month - this task is idempotent by design.
     """
     db = _get_supabase()
 
@@ -612,7 +612,7 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
         log.error("budget_alert_send_failed", org_id=org_id, budget_id=budget_id, error=str(exc))
         raise self.retry(exc=exc)
 
-    # ── Slack notification (best-effort — failure does not retry the email) ───
+    # ── Slack notification (best-effort - failure does not retry the email) ───
     slack = _get_slack_channel(db, org_id)
     if slack is None:
         return
@@ -635,5 +635,5 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
             channel_id=channel_id,
         )
     except Exception as exc:
-        # Non-fatal — email already sent; Slack failure is logged but not retried.
+        # Non-fatal - email already sent; Slack failure is logged but not retried.
         log.warning("budget_slack_alert_failed", org_id=org_id, budget_id=budget_id, error=str(exc))

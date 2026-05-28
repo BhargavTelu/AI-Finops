@@ -18,7 +18,7 @@ services:
         value: https://dev.spendopsai.com/settings/slack/callback
       - key: FROM_EMAIL
         value: noreply@spendopsai.com
-      # Secrets — fill these in Render Dashboard → Environment after first deploy
+      # Secrets - fill these in Render Dashboard → Environment after first deploy
       - key: DATABASE_URL
         sync: false
       - key: SUPABASE_URL

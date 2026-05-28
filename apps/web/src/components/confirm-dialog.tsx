@@ -21,8 +21,8 @@ interface ConfirmDialogProps {
   /** Label for the cancel button (default: "Cancel") */
   cancelLabel?: string
   /**
-   * "destructive" — red confirm button (for delete/revoke/remove actions).
-   * "default"     — primary blue confirm button.
+   * "destructive" - red confirm button (for delete/revoke/remove actions).
+   * "default"     - primary blue confirm button.
    */
   variant?: "destructive" | "default"
   /** Disable confirm button while an async action is in flight */

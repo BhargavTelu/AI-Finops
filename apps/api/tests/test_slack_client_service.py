@@ -1,6 +1,6 @@
 """
 Unit tests for Slack client service (services/slack_client.py).
-TC-SLK-01 to TC-SLK-09 — no real HTTP calls, all mocked via httpx.Client patch.
+TC-SLK-01 to TC-SLK-09 - no real HTTP calls, all mocked via httpx.Client patch.
 """
 
 from unittest.mock import MagicMock, patch

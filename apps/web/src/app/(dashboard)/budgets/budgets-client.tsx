@@ -363,7 +363,7 @@ function BudgetCard({
             </div>
           </div>
 
-          {/* Days left — urgent when ≤5 days remain and budget is not on track */}
+          {/* Days left - urgent when ≤5 days remain and budget is not on track */}
           <p
             className={cn(
               "text-xs",
@@ -603,7 +603,7 @@ export function BudgetsClient({
             <span className="font-semibold">
               {overBudgetCount} budget{overBudgetCount > 1 ? "s" : ""}
             </span>{" "}
-            exceeded this month — review your spend or raise the limit.
+            exceeded this month - review your spend or raise the limit.
           </p>
         </div>
       )}

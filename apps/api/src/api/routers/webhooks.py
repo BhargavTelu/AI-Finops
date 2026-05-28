@@ -19,7 +19,7 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 # Svix replays webhooks for up to 5 days, but the timestamp check here only
-# defends against replay attacks from stale requests — not legitimate retries
+# defends against replay attacks from stale requests - not legitimate retries
 # (Svix sends a fresh timestamp on each delivery attempt).
 _SVIX_TOLERANCE_SECONDS = 300  # 5 minutes
 
@@ -102,7 +102,7 @@ async def _write_clerk_metadata(resource: str, clerk_id: str, db_id: UUID) -> No
     template can include {{user.public_metadata.db_id}} / {{org.public_metadata.db_id}}.
     This makes the org_id claim a real UUID, satisfying the ::uuid RLS cast.
 
-    Failures are logged but do not fail the webhook — the DB row already exists.
+    Failures are logged but do not fail the webhook - the DB row already exists.
     The metadata can be patched manually if this call fails.
     """
     url = f"{_CLERK_API_BASE}/{resource}/{clerk_id}"
@@ -202,7 +202,7 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
     """
     Insert an organization_members row from a Clerk organizationMembership.created event.
 
-    Raises 500 (so Svix retries) if the parent user or org row is missing —
+    Raises 500 (so Svix retries) if the parent user or org row is missing -
     this handles the rare race where user.created / organization.created hasn't
     been processed yet.
     """
@@ -239,7 +239,7 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
             detail="Parent user or org row not found; webhook will be retried",
         )
 
-    # PostgREST can return an error dict instead of a row dict — validate both.
+    # PostgREST can return an error dict instead of a row dict - validate both.
     if not isinstance(user_resp.data, dict) or "id" not in user_resp.data:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -278,7 +278,7 @@ async def stripe_webhook(
     Updates the billing table on checkout.session.completed,
     customer.subscription.updated, and customer.subscription.deleted.
     """
-    raise HTTPException(status_code=501, detail="Not yet implemented — available in M4")
+    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
 
 
 @router.post("/clerk")

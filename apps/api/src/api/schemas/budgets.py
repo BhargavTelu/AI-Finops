@@ -39,7 +39,7 @@ class BudgetRead(BaseModel):
     hard_cap: bool
     created_at: datetime
     updated_at: datetime
-    # Computed at read time by the route handler — not stored in DB
+    # Computed at read time by the route handler - not stored in DB
     current_spend_mtd: Decimal = Decimal("0")
     spent_pct: int = 0
 

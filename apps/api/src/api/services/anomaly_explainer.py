@@ -3,7 +3,7 @@ Generate a plain-language explanation for a detected cost anomaly using
 Claude claude-3-haiku-20241022. Respects the platform-wide 3-calls/org/day
 Redis rate limit defined in settings.ai_calls_per_org_per_day.
 
-Pure function — no DB access here. Side effects belong in the Celery task.
+Pure function - no DB access here. Side effects belong in the Celery task.
 """
 
 from datetime import date, timezone

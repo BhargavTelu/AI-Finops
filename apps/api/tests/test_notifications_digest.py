@@ -1,9 +1,9 @@
 """
 Unit tests for Slack daily digest workers (Group C):
-  _fetch_digest_data  — collects metrics from daily_cost_summaries + anomalies
-  _digest_slack_blocks — builds Slack Block Kit payload
-  send_daily_digests  — fan-out task (enqueues per-org)
-  send_slack_digest   — per-org digest task with idempotency guard
+  _fetch_digest_data  - collects metrics from daily_cost_summaries + anomalies
+  _digest_slack_blocks - builds Slack Block Kit payload
+  send_daily_digests  - fan-out task (enqueues per-org)
+  send_slack_digest   - per-org digest task with idempotency guard
 
 All external calls (Supabase, Slack postMessage, EncryptionService) are mocked.
 """
@@ -63,17 +63,17 @@ def _week_rows() -> list[dict]:
 def _db_for_digest(slack_row: dict | None = None) -> MagicMock:
     """
     Pre-wired mock for send_slack_digest. Executes in this order:
-      1. slack_digests idempotency check  — empty (not yet sent)
-      2. slack_integrations fetch         — slack_row (or empty)
-      3. daily_cost_summaries week        — _week_rows()
-      4. daily_cost_summaries MTD         — 25.00 total
-      5. daily_cost_summaries last month  — 20.00 total
-      6. anomalies open count             — 2 anomalies
-      7. slack_digests insert             — empty (success)
+      1. slack_digests idempotency check  - empty (not yet sent)
+      2. slack_integrations fetch         - slack_row (or empty)
+      3. daily_cost_summaries week        - _week_rows()
+      4. daily_cost_summaries MTD         - 25.00 total
+      5. daily_cost_summaries last month  - 20.00 total
+      6. anomalies open count             - 2 anomalies
+      7. slack_digests insert             - empty (success)
     """
     db = _mock_db()
     db.execute.side_effect = [
-        MagicMock(data=[]),                              # 1. idempotency — no prior digest
+        MagicMock(data=[]),                              # 1. idempotency - no prior digest
         MagicMock(data=[slack_row] if slack_row else []),  # 2. slack_integrations
         MagicMock(data=_week_rows()),                    # 3. week data
         MagicMock(data=[{"total_cost_usd": "25.00"}]),  # 4. MTD
@@ -278,8 +278,8 @@ class TestSendSlackDigest:
     def test_skips_when_no_slack_integration(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),   # idempotency check — no prior digest
-            MagicMock(data=[]),   # slack_integrations — not connected
+            MagicMock(data=[]),   # idempotency check - no prior digest
+            MagicMock(data=[]),   # slack_integrations - not connected
         ]
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
@@ -351,7 +351,7 @@ class TestSendSlackDigest:
 # ── TC-FAN-05: send_daily_digests fan-out ──────────────────────────────────────
 
 class TestSendDailyDigestsFanOut:
-    """TC-FAN-05 — send_daily_digests enqueues send_slack_digest once per connected org."""
+    """TC-FAN-05 - send_daily_digests enqueues send_slack_digest once per connected org."""
 
     def test_dispatches_once_per_slack_connected_org(self) -> None:
         """

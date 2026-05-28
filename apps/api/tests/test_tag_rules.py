@@ -1,7 +1,7 @@
 """
 Unit tests for the tag-rule engine.
 Target: 80% coverage on the rule matching logic.
-Placeholder — implement alongside the tag-rule engine in M2.
+Placeholder - implement alongside the tag-rule engine in M2.
 """
 
 import pytest

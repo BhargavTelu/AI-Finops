@@ -1,4 +1,4 @@
-# Project Spec — SpendOps AI
+# Project Spec - SpendOps AI
 
 ## What
 
@@ -10,9 +10,9 @@ SaaS that gives AI startups per-feature/team/customer cost attribution, anomaly 
 
 ## Principles (decision filters)
 
-1. No customer traffic through our servers in MVP — pull from Admin APIs only.
+1. No customer traffic through our servers in MVP - pull from Admin APIs only.
 2. Time-to-first-chart < 10 min from signup.
-3. CFO is a hidden buyer — every screen defensible to finance.
+3. CFO is a hidden buyer - every screen defensible to finance.
 4. Statistics before ML (anomalies = rolling mean + 2σ).
 5. No-code where possible: Clerk, Stripe Checkout, Resend, Supabase.
 6. Slack is mobile. No native app.
@@ -82,13 +82,13 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 
 ### M2 · Multi-Provider + Attribution Wedge (11 days) ✅ COMPLETE (2026-05-20)
 
-- Anthropic adapter — `/v1/organizations/usage_report/messages` with cursor pagination; cost computed from `pricing.yaml`; `cache_read_input_tokens` mapped to `cached_tokens`
-- Gemini adapter — key validation only (`/v1beta/models?key=`); `fetch_costs()` is a no-op (AI Studio has no billing endpoint; Cloud Billing API requires OAuth2 — deferred to V1)
-- Tag CRUD + tag-rules engine (`services/tag_engine.py`) — pure functions; exact/substring/regex match on `api_key_label`; rules applied at ingestion time; denormalized into `usage_events` columns
-- `POST /tag-rules/preview` — dry-run a rule against last 7 days of events
-- `GET /usage/explore` — pivot data for Cost Explorer grouped by provider/model/tag, with `pct_of_total`
-- Cost Explorer UI (`/cost-explorer`) — TanStack Table; group_by + range + provider filter dropdowns
-- `/settings/tags` UI — tag CRUD + rule CRUD + preview
+- Anthropic adapter - `/v1/organizations/usage_report/messages` with cursor pagination; cost computed from `pricing.yaml`; `cache_read_input_tokens` mapped to `cached_tokens`
+- Gemini adapter - key validation only (`/v1beta/models?key=`); `fetch_costs()` is a no-op (AI Studio has no billing endpoint; Cloud Billing API requires OAuth2 - deferred to V1)
+- Tag CRUD + tag-rules engine (`services/tag_engine.py`) - pure functions; exact/substring/regex match on `api_key_label`; rules applied at ingestion time; denormalized into `usage_events` columns
+- `POST /tag-rules/preview` - dry-run a rule against last 7 days of events
+- `GET /usage/explore` - pivot data for Cost Explorer grouped by provider/model/tag, with `pct_of_total`
+- Cost Explorer UI (`/cost-explorer`) - TanStack Table; group_by + range + provider filter dropdowns
+- `/settings/tags` UI - tag CRUD + rule CRUD + preview
 - Fixed: `integrations.py` `_ADAPTERS` missing Anthropic and Gemini entries
 - **117 tests passing, 2 skipped. 0 TypeScript errors.**
 
@@ -110,7 +110,7 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 - Onboarding wizard (connect → tag → Slack → budget)
 - Landing page at `/` with pricing + signup
 
-**Done:** Stranger lands on `/`, signs up, connects OpenAI, sets budget, gets Slack alert, pays $299 — without you touching anything.
+**Done:** Stranger lands on `/`, signs up, connects OpenAI, sets budget, gets Slack alert, pays $299 - without you touching anything.
 
 ## Post-MVP (don't build now)
 
@@ -146,8 +146,8 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 ## Open Questions
 
 **Resolved:**
-1. ~~Anthropic Enterprise Analytics API — Enterprise-tier-gated?~~ → Standard Admin API, not Enterprise-gated. Shipped in M2.
-2. ~~Gemini billing granularity — verify in week 1~~ → AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account. Key validation ships M2, cost collection deferred to V1.
+1. ~~Anthropic Enterprise Analytics API - Enterprise-tier-gated?~~ → Standard Admin API, not Enterprise-gated. Shipped in M2.
+2. ~~Gemini billing granularity - verify in week 1~~ → AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account. Key validation ships M2, cost collection deferred to V1.
 
 **Active (resolve before M4):**
 3. Stripe trial: 14 days vs none? Decide after first 5 design partner pricing conversations. (M4)

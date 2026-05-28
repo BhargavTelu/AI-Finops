@@ -1,6 +1,6 @@
 """
-GET  /recommendations?status=new|applied|dismissed  — list for the org, ordered by savings
-PATCH /recommendations/:id                          — mark applied or dismissed
+GET  /recommendations?status=new|applied|dismissed  - list for the org, ordered by savings
+PATCH /recommendations/:id                          - mark applied or dismissed
 """
 
 from datetime import datetime, timezone
@@ -49,7 +49,7 @@ async def update_recommendation(
 ) -> RecommendationRead:
     db = _get_supabase()
 
-    # Ownership check — 404 if rec doesn't belong to this org.
+    # Ownership check - 404 if rec doesn't belong to this org.
     existing = (
         db.table("recommendations")
         .select("id")

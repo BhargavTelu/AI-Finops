@@ -1,5 +1,5 @@
 """
-Stub route regression tests — Section A and TC-WH-20.
+Stub route regression tests - Section A and TC-WH-20.
 
 These routes are not yet implemented (M4) and return 501 Not Implemented.
 BUG-06 / BUG-07 fixed: NotImplementedError → HTTPException(501) so the
@@ -13,7 +13,7 @@ TC-STUB-03  GET  /usage/export.csv
 TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
 TC-STUB-05  POST /webhooks/stripe
 TC-STUB-06  GET/GET/POST /reports, /reports/:id/download, /reports/generate
-TC-WH-20    POST /webhooks/stripe — duplicate stub behavior check
+TC-WH-20    POST /webhooks/stripe - duplicate stub behavior check
 """
 
 from unittest.mock import MagicMock, patch
@@ -34,7 +34,7 @@ client = TestClient(app, raise_server_exceptions=False)
 # ── TC-STUB-01: POST /integrations/:id/test ────────────────────────────────────
 
 class TestIntegrationTestStub:
-    """TC-STUB-01 — POST /integrations/:id/test returns 501 Not Implemented."""
+    """TC-STUB-01 - POST /integrations/:id/test returns 501 Not Implemented."""
 
     def test_stub_returns_500(self) -> None:
         resp = client.post("/api/v1/integrations/some-id/test")
@@ -47,7 +47,7 @@ class TestIntegrationTestStub:
 # ── TC-STUB-02: GET /usage/forecast ───────────────────────────────────────────
 
 class TestUsageForecastStub:
-    """TC-STUB-02 — GET /usage/forecast returns 501 Not Implemented."""
+    """TC-STUB-02 - GET /usage/forecast returns 501 Not Implemented."""
 
     def test_stub_returns_500(self) -> None:
         resp = client.get("/api/v1/usage/forecast")
@@ -60,7 +60,7 @@ class TestUsageForecastStub:
 # ── TC-STUB-03: GET /usage/export.csv ─────────────────────────────────────────
 
 class TestUsageExportCsvStub:
-    """TC-STUB-03 — GET /usage/export.csv returns 501 Not Implemented."""
+    """TC-STUB-03 - GET /usage/export.csv returns 501 Not Implemented."""
 
     def test_stub_returns_500(self) -> None:
         resp = client.get("/api/v1/usage/export.csv")
@@ -74,7 +74,7 @@ class TestUsageExportCsvStub:
 
 class TestBillingStubs:
     """
-    TC-STUB-04 — GET /billing, POST /billing/checkout, GET /billing/portal.
+    TC-STUB-04 - GET /billing, POST /billing/checkout, GET /billing/portal.
     All raise NotImplementedError → 500. Critical M4 monetization gate.
     """
 
@@ -104,7 +104,7 @@ class TestBillingStubs:
 
 class TestStripeWebhookStub:
     """
-    TC-STUB-05 / TC-WH-20 — POST /webhooks/stripe returns 501 Not Implemented.
+    TC-STUB-05 / TC-WH-20 - POST /webhooks/stripe returns 501 Not Implemented.
     CRITICAL: Stripe retries on non-2xx. A 500 causes indefinite retries.
     When M4 implements: return 200 {"received": true} after valid signature.
     An invalid stripe-signature must return 400.
@@ -127,7 +127,7 @@ class TestStripeWebhookStub:
 
 class TestReportStubs:
     """
-    TC-STUB-06 — GET /reports, GET /reports/:id/download, POST /reports/generate.
+    TC-STUB-06 - GET /reports, GET /reports/:id/download, POST /reports/generate.
     All raise NotImplementedError → 500.
     """
 
