@@ -149,9 +149,18 @@ export function ExploreTable({ rows, groupBy }: Props) {
             <tr key={hg.id}>
               {hg.headers.map((header, idx) => {
                 const isNumeric = idx > 0;
+                const sortDir = header.column.getIsSorted();
                 return (
                   <th
                     key={header.id}
+                    scope="col"
+                    aria-sort={
+                      sortDir === "asc"
+                        ? "ascending"
+                        : sortDir === "desc"
+                        ? "descending"
+                        : "none"
+                    }
                     className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
                       isNumeric ? "text-right" : "text-left"
                     }`}
@@ -162,6 +171,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
                           isNumeric ? "ml-auto" : ""
                         }`}
                         onClick={header.column.getToggleSortingHandler()}
+                        aria-label={`Sort by ${typeof header.column.columnDef.header === "string" ? header.column.columnDef.header : header.id}${sortDir === "asc" ? ", currently ascending" : sortDir === "desc" ? ", currently descending" : ""}`}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
                         <SortIcon direction={header.column.getIsSorted()} />
@@ -202,9 +212,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
                   return (
                     <td
                       key={cell.id}
-                      className={`px-4 py-3 ${
-                        isNumeric ? "text-right" : isPct ? "" : "text-left"
-                      }`}
+                      className={`px-4 py-3 ${isNumeric ? "whitespace-nowrap text-right" : isPct ? "" : "text-left"}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
@@ -221,16 +229,16 @@ export function ExploreTable({ rows, groupBy }: Props) {
             <td className="px-4 py-3 text-sm font-semibold text-foreground">
               Grand Total
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="whitespace-nowrap px-4 py-3 text-right">
               <span className="text-mono font-semibold">{fmtCost(grandTotalCost.toString())}</span>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="whitespace-nowrap px-4 py-3 text-right">
               <span className="text-mono font-semibold">{fmtNumber(grandTotalRequests)}</span>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="whitespace-nowrap px-4 py-3 text-right">
               <span className="text-mono font-semibold">{fmtNumber(grandTotalTokens)}</span>
             </td>
-            <td className="px-4 py-3 text-right">
+            <td className="whitespace-nowrap px-4 py-3 text-right">
               {grandTotalTokens > 0 ? (
                 <span className="text-mono font-semibold">
                   ${((grandTotalCost / grandTotalTokens) * 1000).toFixed(4)}

@@ -43,10 +43,10 @@ const TAG_TYPE_LABELS: Record<TagType, string> = {
 };
 
 const TAG_TYPE_COLORS: Record<TagType, string> = {
-  feature: "bg-blue-100 text-blue-700 border-blue-200",
-  team: "bg-purple-100 text-purple-700 border-purple-200",
-  customer: "bg-emerald-100 text-emerald-700 border-emerald-200",
-  env: "bg-orange-100 text-orange-700 border-orange-200",
+  feature: "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/40",
+  team: "bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800/40",
+  customer: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40",
+  env: "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-800/40",
 };
 
 const MATCH_TYPE_LABELS: Record<MatchType, string> = {
@@ -241,10 +241,10 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Color</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th scope="col" className="px-4 py-3">Name</th>
+                  <th scope="col" className="px-4 py-3">Type</th>
+                  <th scope="col" className="px-4 py-3">Color</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -264,6 +264,8 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
                           className="inline-block h-4 w-4 rounded-full border border-border/40 shadow-sm"
                           style={{ backgroundColor: tag.color }}
                           title={tag.color}
+                          aria-label={`Color: ${tag.color}`}
+                          role="img"
                         />
                       ) : (
                         <span className="text-muted-foreground">—</span>
@@ -331,12 +333,12 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <th className="px-4 py-3 w-20">Priority</th>
-                  <th className="px-4 py-3">Tag</th>
-                  <th className="px-4 py-3 w-24">Match</th>
-                  <th className="px-4 py-3">Pattern</th>
-                  <th className="px-4 py-3 w-12 text-center">On</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th scope="col" className="px-4 py-3 w-20">Priority</th>
+                  <th scope="col" className="px-4 py-3">Tag</th>
+                  <th scope="col" className="px-4 py-3 w-24">Match</th>
+                  <th scope="col" className="px-4 py-3">Pattern</th>
+                  <th scope="col" className="px-4 py-3 w-12 text-center">On</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -477,7 +479,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             </div>
 
             {tagError && (
-              <p className="text-sm text-destructive">{tagError}</p>
+              <p className="text-sm text-destructive" role="alert">{tagError}</p>
             )}
 
             <DialogFooter className="pt-2">
@@ -639,7 +641,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             </div>
 
             {ruleError && (
-              <p className="text-sm text-destructive">{ruleError}</p>
+              <p className="text-sm text-destructive" role="alert">{ruleError}</p>
             )}
 
             <DialogFooter className="pt-2">

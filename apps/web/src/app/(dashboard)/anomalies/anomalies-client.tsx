@@ -123,10 +123,12 @@ const STATUS_TABS: { label: string; value: AnomalyStatus }[] = [
 function StatusTabs({ current }: { current: AnomalyStatus }) {
   const router = useRouter();
   return (
-    <div className="flex gap-1 rounded-lg bg-muted/60 p-1 w-fit">
+    <div role="tablist" className="flex gap-1 rounded-lg bg-muted/60 p-1 w-fit">
       {STATUS_TABS.map((tab) => (
         <button
           key={tab.value}
+          role="tab"
+          aria-selected={current === tab.value}
           onClick={() => router.push(`/anomalies?status=${tab.value}`)}
           className={cn(
             "rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150",
@@ -371,7 +373,10 @@ export function AnomaliesClient({ initialAnomalies, status }: Props) {
 
       {/* Error banner for action failures */}
       {error && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div
+          role="alert"
+          className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        >
           <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
           {error}
           <button className="ml-auto underline" onClick={() => setError(null)}>

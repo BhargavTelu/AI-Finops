@@ -8,13 +8,13 @@ import {
   AlertTriangle,
   AlertCircle,
   Pencil,
-  CheckCircle2,
 } from "lucide-react";
 import { useAuth } from "@clerk/nextjs";
 
 import { createApiClient } from "@/lib/api-client";
 import type { BudgetRead, BudgetScopeType } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,41 +85,16 @@ function getBudgetStatus(budget: BudgetRead): BudgetStatus {
   return "on-track";
 }
 
-const STATUS_CONFIG: Record<
-  BudgetStatus,
-  { label: string; Icon: React.ElementType; className: string }
-> = {
-  "on-track": {
-    label: "On Track",
-    Icon: CheckCircle2,
-    className: "bg-success-subtle text-success border-success/20",
-  },
-  caution: {
-    label: "Caution",
-    Icon: AlertTriangle,
-    className: "bg-warning-subtle text-warning border-warning/20",
-  },
-  "over-budget": {
-    label: "Over Budget",
-    Icon: AlertCircle,
-    className: "bg-critical-subtle text-critical border-critical/20",
-  },
+const BUDGET_STATUS_MAP: Record<BudgetStatus, { type: "active" | "warning" | "critical"; label: string }> = {
+  "on-track": { type: "active", label: "On Track" },
+  caution: { type: "warning", label: "Caution" },
+  "over-budget": { type: "critical", label: "Over Budget" },
 };
 
 function BudgetStatusBadge({ budget }: { budget: BudgetRead }) {
-  const status = getBudgetStatus(budget);
-  const { label, Icon, className } = STATUS_CONFIG[status];
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-        className
-      )}
-    >
-      <Icon className="h-3 w-3" />
-      {label}
-    </span>
-  );
+  const budgetStatus = getBudgetStatus(budget);
+  const { type, label } = BUDGET_STATUS_MAP[budgetStatus];
+  return <StatusBadge status={type} label={label} />;
 }
 
 // ── Spend progress bar ────────────────────────────────────────────────────────
@@ -448,8 +423,8 @@ function BudgetCard({
               scopeLocked
             />
             {editError && (
-              <p className="flex items-center gap-1.5 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
+              <p role="alert" className="flex items-center gap-1.5 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
                 {editError}
               </p>
             )}
@@ -556,8 +531,8 @@ function CreateBudgetDialog({
             onChange={(updates) => setForm((f) => ({ ...f, ...updates }))}
           />
           {error && (
-            <p className="flex items-center gap-1.5 text-sm text-destructive">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
+            <p role="alert" className="flex items-center gap-1.5 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
               {error}
             </p>
           )}

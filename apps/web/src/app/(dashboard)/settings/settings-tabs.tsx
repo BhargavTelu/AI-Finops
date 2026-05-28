@@ -54,6 +54,7 @@ export function SettingsSidebar() {
                   <Link
                     key={href}
                     href={href}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors duration-150",
                       isActive

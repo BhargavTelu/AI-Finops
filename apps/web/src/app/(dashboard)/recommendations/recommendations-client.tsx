@@ -168,6 +168,7 @@ function EffortFilterPills({
           <button
             key={level}
             onClick={() => toggle(level)}
+            aria-pressed={isActive}
             className={cn(
               "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
               isActive ? styles.active : cn("bg-background", styles.base)
@@ -209,10 +210,12 @@ const TABS: { label: string; value: RecommendationStatus }[] = [
 function StatusTabs({ current }: { current: RecommendationStatus }) {
   const router = useRouter();
   return (
-    <div className="flex gap-1 rounded-lg bg-muted/60 p-1 w-fit">
+    <div role="tablist" className="flex gap-1 rounded-lg bg-muted/60 p-1 w-fit">
       {TABS.map((tab) => (
         <button
           key={tab.value}
+          role="tab"
+          aria-selected={current === tab.value}
           onClick={() =>
             router.push(`/recommendations?status=${tab.value}`, { scroll: false })
           }
@@ -482,7 +485,7 @@ export function RecommendationsClient({ initialRecs, status }: Props) {
 
       {/* Error banner */}
       {error && (
-        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div role="alert" className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}

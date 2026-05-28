@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { createApiClient } from "@/lib/api-client";
 import type { Tag, UsageEventRead } from "@/lib/types";
+import { PageHeader } from "@/components/page-header";
 import { UsageEventsClient } from "./usage-events-client";
 
 export default async function UsageEventsPage() {
@@ -15,13 +16,10 @@ export default async function UsageEventsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Usage Events</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Admin view of raw ingestion events. Use tag overrides to manually correct
-          attribution that the tag-rule engine missed.
-        </p>
-      </div>
+      <PageHeader
+        title="Usage Events"
+        description="Admin view of raw ingestion events. Use tag overrides to manually correct attribution that the tag-rule engine missed."
+      />
       <UsageEventsClient events={events} tags={tags} />
     </div>
   );

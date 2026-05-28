@@ -1,12 +1,12 @@
 # UI/UX Redesign Implementation Plan
 ## SpendOps AI — Analyst-Grade SaaS Platform
 
-**Document version:** 1.2
+**Document version:** 1.3
 **Based on brief:** `docs/ai_finops_ui_redesign_general_prompt.md`
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage — minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
-**Last updated:** 2026-05-27 (M-P5 + M-P6 + M-P7 added)
+**Last updated:** 2026-05-28 (M-QA complete)
 
 ---
 
@@ -23,7 +23,7 @@
 | **M-P5** Alerts & Anomalies Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P6** Recommendations Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P7** Budgets Redesign | ✅ COMPLETE | 2026-05-27 |
-| **M-QA** Polish & QA Pass | ⏳ NOT STARTED | — |
+| **M-QA** Polish & QA Pass | ✅ COMPLETE | 2026-05-28 |
 
 ---
 
@@ -264,6 +264,41 @@ Design patterns applied:
 - `BudgetFormFields` shared component used by both create and edit dialogs
 - Stagger animation (0.07s delay per card) for polished entrance
 - All destructive actions gated by `ConfirmDialog`
+
+---
+
+## M-QA Completion Notes
+
+**Completed 2026-05-28.**
+
+Changes shipped:
+
+**Mobile Navigation:**
+- `apps/web/src/components/dashboard-shell.tsx` — **NEW** client component; extracted sidebar, top bar, and nav from server layout into a client shell that owns a `sidebarOpen` boolean; hamburger button (`Menu` icon) appears on `<lg` screens in the header; sidebar uses `fixed + translate-x` approach (`-translate-x-full` → `translate-x-0` on mobile, `lg:static lg:translate-x-0` on desktop) with 200ms ease-in-out transition; semi-transparent overlay (`bg-black/50`) covers content when sidebar is open on mobile; Close (`X`) button inside sidebar header dismisses on mobile; `aria-expanded` on hamburger button, `aria-label="Main navigation"` on aside
+- `apps/web/src/app/(dashboard)/layout.tsx` — **Simplified**: removed inline sidebar/header/nav JSX; now a minimal server component that guards auth and renders `<DashboardShell>{children}</DashboardShell>`
+
+**Usage Events Page (unresigned page catch-up):**
+- `apps/web/src/app/(dashboard)/usage-events/page.tsx` — **Updated**: replaced raw `<h1>/<p>` with `PageHeader` component (consistent with all other pages)
+- `apps/web/src/app/(dashboard)/usage-events/usage-events-client.tsx` — **Redesigned**: replaced bare `rounded-lg border` empty-state div with `EmptyState` component (List icon, CTA to integrations); table restyled to match design system — `rounded-xl border-border/60`, `bg-muted/30` thead, `divide-border/40` tbody rows; `scope="col"` on all `<th>` elements; `text-right text-mono` on Cost and Requests columns; `whitespace-nowrap` on Time, Provider, Cost, Requests cells; `hover:bg-muted/40 transition-colors duration-150` on rows; `PageMotion` wrapper for entrance animation; `role="alert"` on override dialog error message
+
+**Accessibility Fixes (all pages):**
+- `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` — Added `scope="col"` on all `<th>` elements; `aria-sort` (`ascending`/`descending`/`none`) on each sortable column header; `aria-label` on sort buttons describing column and current sort direction; `whitespace-nowrap` on all numeric `<td>` cells and grand total footer cells
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — Added `scope="col"` to all `<th>` in Tags and Tag Rules tables; `role="alert"` on tag creation error and rule creation error paragraphs; `role="img"` + `aria-label="Color: #hex"` on color swatch span
+- `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` — Added `role="alert"` on the action-error banner div; `role="tablist"` on the status tabs container, `role="tab"` + `aria-selected` on each tab button
+- `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` — Added `role="alert"` on the error banner; `role="tablist"` + `role="tab"` + `aria-selected` on status tabs; `aria-pressed` on effort filter pill buttons (toggle buttons)
+- `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` — Added `role="alert"` + `aria-hidden` on error paragraphs in Create and Edit dialogs
+- `apps/web/src/components/integrations-page.tsx` — Added `role="alert"` + `aria-hidden` on the connection-error state div
+- `apps/web/src/components/nav-links.tsx` — Added `aria-current="page"` on the active nav link
+- `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` — Added `aria-current="page"` on the active settings sidebar link
+
+**Dark Mode Fixes:**
+- `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` — `TAG_TYPE_COLORS` updated with dark mode variants for all 4 tag types: `dark:bg-*-950/40 dark:text-*-400 dark:border-*-800/40` (blue/purple/emerald/orange); previously used light-only Tailwind classes that rendered incorrect contrast on dark backgrounds
+
+Design patterns enforced:
+- Mobile sidebar: `fixed` positioning + `z-50` ensures it overlays content correctly; overlay div is `z-40` (below sidebar, above page content)
+- `whitespace-nowrap` on all numeric cells prevents wrapping on narrow viewports; tables retain `overflow-x-auto` for horizontal scroll
+- `role="alert"` is appropriate for dynamically appearing error messages (screen readers announce without focus change); used instead of `aria-live` to keep markup concise
+- `aria-current="page"` on nav links is the ARIA spec-correct pattern for navigation (vs `aria-selected` which is for listbox/tabs)
 
 ---
 
@@ -1362,7 +1397,19 @@ CREDIBILITY:
 | `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` | M-P7 | Full card redesign + edit dialog |
 | `apps/web/src/app/(dashboard)/budgets/page.tsx` | M-P7 | Remove inline header |
 | `apps/web/src/app/(dashboard)/budgets/loading.tsx` | M-P7 | Card grid skeleton |
+| `apps/web/src/components/dashboard-shell.tsx` | M-QA | New client component for mobile sidebar toggle |
+| `apps/web/src/app/(dashboard)/layout.tsx` | M-QA | Simplified to server auth guard + DashboardShell |
+| `apps/web/src/app/(dashboard)/usage-events/page.tsx` | M-QA | PageHeader adoption |
+| `apps/web/src/app/(dashboard)/usage-events/usage-events-client.tsx` | M-QA | EmptyState, table design system, accessibility |
+| `apps/web/src/app/(dashboard)/cost-explorer/explore-table.tsx` | M-QA | aria-sort, scope, whitespace-nowrap |
+| `apps/web/src/app/(dashboard)/settings/tags/tags-client.tsx` | M-QA | Dark mode badge colors, scope, role=alert, aria-label |
+| `apps/web/src/app/(dashboard)/anomalies/anomalies-client.tsx` | M-QA | role=alert, role=tablist/tab, aria-selected |
+| `apps/web/src/app/(dashboard)/recommendations/recommendations-client.tsx` | M-QA | role=alert, role=tablist/tab, aria-selected, aria-pressed |
+| `apps/web/src/app/(dashboard)/budgets/budgets-client.tsx` | M-QA | role=alert on dialog errors |
+| `apps/web/src/components/integrations-page.tsx` | M-QA | role=alert on connection error |
+| `apps/web/src/components/nav-links.tsx` | M-QA | aria-current="page" on active link |
+| `apps/web/src/app/(dashboard)/settings/settings-tabs.tsx` | M-QA | aria-current="page" on active link |
 
 ---
 
-*Last updated: 2026-05-27 · Version 1.3 · Based on UI/UX Redesign Brief v1.0*
+*Last updated: 2026-05-28 · Version 1.3 · Based on UI/UX Redesign Brief v1.0*

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { List } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { EmptyState } from "@/components/empty-state";
+import { PageMotion } from "@/components/motion-wrapper";
 import { createApiClient } from "@/lib/api-client";
 import type { Tag, UsageEventRead } from "@/lib/types";
 
@@ -42,7 +45,7 @@ function fmtDate(iso: string): string {
 
 const TAG_NONE = "__none__";
 
-// ── Tag override drawer ────────────────────────────────────────────────────────
+// ── Tag override dialog ────────────────────────────────────────────────────────
 
 interface OverrideDrawerProps {
   event: UsageEventRead | null;
@@ -155,7 +158,7 @@ function OverrideDrawer({ event, tags, onClose, onSaved }: OverrideDrawerProps) 
         </div>
 
         {error && (
-          <p className="text-sm text-destructive">{error}</p>
+          <p className="text-sm text-destructive" role="alert">{error}</p>
         )}
 
         <div className="flex gap-2">
@@ -188,34 +191,43 @@ export function UsageEventsClient({ events: initialEvents, tags }: Props) {
 
   if (events.length === 0) {
     return (
-      <div className="rounded-lg border bg-card p-12 text-center text-sm text-muted-foreground">
-        No usage events found. Connect an integration and wait for the first sync.
-      </div>
+      <EmptyState
+        icon={List}
+        title="No usage events yet"
+        description="Connect an integration and wait for the first sync. Events appear after data is ingested from your provider."
+        action={{ label: "Go to integrations", href: "/settings/integrations" }}
+      />
     );
   }
 
   return (
-    <>
-      <div className="overflow-x-auto rounded-lg border">
+    <PageMotion>
+      <div className="overflow-x-auto rounded-xl border border-border/60 scrollbar-thin">
         <table className="w-full text-sm">
-          <thead className="border-b bg-muted/40">
+          <thead className="border-b border-border/60 bg-muted/30">
             <tr>
-              {["Time (UTC)", "Provider", "Model", "Key label", "Tags", "Cost", "Requests", ""].map(
+              {(["Time (UTC)", "Provider", "Model", "Key label", "Tags", "Cost", "Requests", ""] as const).map(
                 (h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  <th
+                    key={h}
+                    scope="col"
+                    className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${
+                      h === "Cost" || h === "Requests" ? "text-right" : "text-left"
+                    }`}
+                  >
                     {h}
                   </th>
                 )
               )}
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-border/40">
             {events.map((ev) => (
-              <tr key={ev.id} className="hover:bg-muted/20">
-                <td className="px-4 py-3 tabular-nums text-xs text-muted-foreground whitespace-nowrap">
+              <tr key={ev.id} className="transition-colors duration-150 hover:bg-muted/40">
+                <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground text-mono">
                   {fmtDate(ev.bucket_hour)}
                 </td>
-                <td className="px-4 py-3">{ev.provider}</td>
+                <td className="whitespace-nowrap px-4 py-3">{ev.provider}</td>
                 <td className="px-4 py-3 font-mono text-xs">{ev.model}</td>
                 <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
                   {ev.api_key_label ?? <span className="italic">(none)</span>}
@@ -240,12 +252,16 @@ export function UsageEventsClient({ events: initialEvents, tags }: Props) {
                       <span className="rounded-full border px-2 py-0.5 text-xs">{ev.env_tag}</span>
                     )}
                     {!ev.feature_tag && !ev.team_tag && !ev.customer_tag && !ev.env_tag && (
-                      <span className="italic text-muted-foreground text-xs">(untagged)</span>
+                      <span className="italic text-xs text-muted-foreground">(untagged)</span>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 tabular-nums">{fmtCost(ev.cost_usd)}</td>
-                <td className="px-4 py-3 tabular-nums">{ev.request_count.toLocaleString()}</td>
+                <td className="whitespace-nowrap px-4 py-3 text-right text-mono">
+                  {fmtCost(ev.cost_usd)}
+                </td>
+                <td className="whitespace-nowrap px-4 py-3 text-right text-mono">
+                  {ev.request_count.toLocaleString()}
+                </td>
                 <td className="px-4 py-3">
                   <Button
                     size="sm"
@@ -267,7 +283,7 @@ export function UsageEventsClient({ events: initialEvents, tags }: Props) {
         onClose={() => setEditing(null)}
         onSaved={handleSaved}
       />
-    </>
+    </PageMotion>
   );
 }
 
