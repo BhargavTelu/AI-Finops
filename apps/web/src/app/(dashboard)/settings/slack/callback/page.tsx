@@ -25,13 +25,20 @@ export default async function SlackCallbackPage({
     redirect("/settings/slack?error=missing_code");
   }
 
+  // redirect() works by throwing - it must stay OUTSIDE the try block,
+  // otherwise the catch swallows the control-flow exception and the success
+  // path lands on the error banner.
+  let failure: string | null = null;
   try {
     const { getToken } = await auth();
     const token = await getToken();
     await createApiClient(token!).post<SlackStatus>("/slack/oauth/callback", { code, state });
-    redirect("/settings/slack?connected=true");
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "connection_failed";
-    redirect(`/settings/slack?error=${encodeURIComponent(msg)}`);
+    failure = err instanceof Error ? err.message : "connection_failed";
   }
+
+  if (failure) {
+    redirect(`/settings/slack?error=${encodeURIComponent(failure)}`);
+  }
+  redirect("/settings/slack?connected=true");
 }

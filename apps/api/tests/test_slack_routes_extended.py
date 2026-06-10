@@ -99,7 +99,11 @@ class TestSlackDisconnectExtended:
             mock_settings.slack_client_secret = "test_client_secret"
             mock_settings.slack_redirect_uri = "http://localhost:3000/callback"
             mock_settings.encryption_key = test_key
-            resp = client.post("/api/v1/slack/oauth/callback", json={"code": "valid_code", "state": ORG_ID})
+            from api.services.slack_state import generate_state
+            resp = client.post(
+                "/api/v1/slack/oauth/callback",
+                json={"code": "valid_code", "state": generate_state(ORG_ID, test_key)},
+            )
 
         assert resp.status_code == 200
         # The captured upsert must have bot_token_enc that is NOT the plaintext

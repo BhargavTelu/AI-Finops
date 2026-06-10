@@ -27,14 +27,21 @@ export default async function SettingsSlackPage({
 }: {
   searchParams: { connected?: string; error?: string };
 }) {
-  const { getToken, orgId } = await auth();
+  const { getToken } = await auth();
   const token = await getToken();
+  const api = createApiClient(token!);
 
-  const status = await createApiClient(token!)
+  const status = await api
     .get<SlackStatus>("/slack/status")
     .catch(() => ({ connected: false }) as SlackStatus);
 
-  const oauthUrl = buildOAuthUrl(orgId ?? "unknown");
+  // Signed CSRF state from the API - the OAuth callback rejects any code
+  // exchange whose state was not issued for this org.
+  const { state } = await api
+    .get<{ state: string }>("/slack/oauth/state")
+    .catch(() => ({ state: "" }));
+
+  const oauthUrl = state ? buildOAuthUrl(state) : "";
 
   return (
     <SlackClient
