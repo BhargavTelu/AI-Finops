@@ -43,6 +43,7 @@ def _mock_db() -> MagicMock:
     db.lte.return_value = db
     db.order.return_value = db
     db.limit.return_value = db
+    db.in_.return_value = db
     db.range.return_value = db
     empty = MagicMock()
     empty.data = []
@@ -302,8 +303,13 @@ class TestRefreshAllIntegrations:
         assert (INT_ID, ORG_ID) in dispatched
         assert (INT_ID_2, ORG_ID) in dispatched
 
-    def test_filters_by_active_status(self) -> None:
-        """refresh_all_integrations must query with status='active' filter."""
+    def test_sweeps_active_and_errored_but_not_revoked(self) -> None:
+        """
+        BUG-H3: the sweep previously selected status='active' only, so one
+        exhausted-retries failure permanently (and silently) stopped sync.
+        It must include 'error' so transient failures self-heal; 'revoked'
+        stays terminal.
+        """
         from api.workers.ingestion import refresh_all_integrations
 
         db = _mock_db()
@@ -315,10 +321,9 @@ class TestRefreshAllIntegrations:
         ):
             refresh_all_integrations()
 
-        # Verify .eq("status", "active") was called
-        eq_calls = [str(c) for c in db.eq.call_args_list]
-        assert any("active" in call for call in eq_calls), (
-            "Expected refresh_all_integrations to filter integrations by status='active'"
+        in_args = [c.args for c in db.in_.call_args_list]
+        assert ("status", ["active", "error"]) in in_args, (
+            f"Expected .in_('status', ['active', 'error']). Got: {in_args}"
         )
         assert mock_refresh.delay.call_count == 1
 

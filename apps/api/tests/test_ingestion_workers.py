@@ -424,3 +424,63 @@ class TestIngestWindowDayFloorsDeleteWindow:
         floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat()
         gte_args = [c.args for c in db.gte.call_args_list]
         assert ("bucket_hour", floored_iso) in gte_args
+
+
+# ── BUG-H3: errored integrations recover on successful refresh ──────────────────
+
+class TestRefreshRecoversErroredIntegration:
+    def test_success_resets_status_to_active(self) -> None:
+        """
+        A refresh that succeeds after a prior failure must set status back to
+        'active' - otherwise the integration stays in 'error' and (before the
+        sweep fix) was silently excluded from all future refreshes.
+        """
+        import base64
+        from api.services.encryption import EncryptionService
+
+        key_b64 = base64.b64encode(b"\xcc" * 32).decode()
+        cipher = EncryptionService(key_b64)
+        encrypted = cipher.encrypt(b"sk-test-key")
+
+        db = _mock_db()
+        db.execute.return_value = MagicMock(
+            data=[
+                {
+                    "provider": "openai",
+                    "api_key_enc": "\\x" + encrypted.hex(),
+                    "last_synced_at": None,
+                    "status": "error",  # previously failed
+                }
+            ]
+        )
+
+        update_payloads: list[dict] = []
+
+        def capture_update(payload: dict) -> MagicMock:
+            update_payloads.append(payload)
+            m = MagicMock()
+            m.eq.return_value = m
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.update.side_effect = capture_update
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter([])
+
+        with (
+            patch("api.workers.ingestion._get_supabase", return_value=db),
+            patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
+            patch("api.workers.ingestion.EncryptionService", return_value=cipher),
+            patch("api.workers.ingestion.settings") as mock_settings,
+            patch("api.workers.ingestion.compile_rules", return_value=[]),
+        ):
+            mock_settings.encryption_key = key_b64
+            refresh_integration.apply(args=[INT_ID, ORG_ID])
+
+        success_updates = [p for p in update_payloads if "last_synced_at" in p]
+        assert success_updates, f"Expected a success update. Got: {update_payloads}"
+        assert success_updates[-1].get("status") == "active", (
+            "Successful refresh must reset status to 'active' so a previously "
+            f"errored integration recovers. Got: {success_updates[-1]}"
+        )

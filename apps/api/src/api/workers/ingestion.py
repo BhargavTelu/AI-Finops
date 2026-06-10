@@ -272,11 +272,21 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
 @shared_task
 def refresh_all_integrations() -> None:
     """
-    Enqueue a refresh job for every active integration.
+    Enqueue a refresh job for every refreshable integration.
     Runs every 4 hours via Celery beat.
+
+    status='error' is included so a transient provider failure self-heals on
+    the next sweep - excluding it permanently (and silently) stopped sync for
+    any integration that exhausted its task retries once. Only 'revoked' is
+    terminal.
     """
     db = _get_supabase()
-    result = db.table("integrations").select("id, org_id").eq("status", "active").execute()
+    result = (
+        db.table("integrations")
+        .select("id, org_id")
+        .in_("status", ["active", "error"])
+        .execute()
+    )
 
     for row in result.data:
         refresh_integration.delay(row["id"], row["org_id"])
@@ -324,8 +334,10 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
 
         count = _ingest_window(db, integration_id, org_id, row["provider"], key_bytes, start, now)
 
+        # status back to 'active': a previously errored integration that
+        # refreshes successfully has recovered.
         db.table("integrations").update(
-            {"last_synced_at": now.isoformat(), "last_error": None}
+            {"last_synced_at": now.isoformat(), "last_error": None, "status": "active"}
         ).eq("id", integration_id).eq("org_id", org_id).execute()
 
         log.info(
