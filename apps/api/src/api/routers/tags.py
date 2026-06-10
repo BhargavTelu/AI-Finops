@@ -1,8 +1,6 @@
-import structlog
 from fastapi import APIRouter, HTTPException
-from supabase import create_client
+import structlog
 
-from api.config import settings
 from api.deps import OrgDep
 from api.schemas.tags import (
     PreviewMatch,
@@ -12,6 +10,7 @@ from api.schemas.tags import (
     TagRulePreview,
     TagRuleRead,
 )
+from api.services.db import get_supabase
 from api.services.tag_engine import CompiledRule, _matches
 
 log = structlog.get_logger()
@@ -21,13 +20,13 @@ tag_rules_router = APIRouter(prefix="/tag-rules", tags=["tags"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 # ── Tags CRUD ─────────────────────────────────────────────────────────────────
 
 @router.get("")
-async def list_tags(org: OrgDep) -> list[TagRead]:
+def list_tags(org: OrgDep) -> list[TagRead]:
     db = _get_supabase()
     result = (
         db.table("tags")
@@ -41,7 +40,7 @@ async def list_tags(org: OrgDep) -> list[TagRead]:
 
 
 @router.post("", status_code=201)
-async def create_tag(body: TagCreate, org: OrgDep) -> TagRead:
+def create_tag(body: TagCreate, org: OrgDep) -> TagRead:
     db = _get_supabase()
     try:
         result = (
@@ -70,7 +69,7 @@ async def create_tag(body: TagCreate, org: OrgDep) -> TagRead:
 
 
 @router.patch("/{tag_id}")
-async def update_tag(tag_id: str, body: TagCreate, org: OrgDep) -> TagRead:
+def update_tag(tag_id: str, body: TagCreate, org: OrgDep) -> TagRead:
     db = _get_supabase()
     result = (
         db.table("tags")
@@ -85,7 +84,7 @@ async def update_tag(tag_id: str, body: TagCreate, org: OrgDep) -> TagRead:
 
 
 @router.delete("/{tag_id}", status_code=204)
-async def delete_tag(tag_id: str, org: OrgDep) -> None:
+def delete_tag(tag_id: str, org: OrgDep) -> None:
     db = _get_supabase()
     # tag_rules cascade-delete via FK ON DELETE CASCADE
     result = (
@@ -102,7 +101,7 @@ async def delete_tag(tag_id: str, org: OrgDep) -> None:
 # ── Tag rules ─────────────────────────────────────────────────────────────────
 
 @tag_rules_router.get("")
-async def list_tag_rules(org: OrgDep) -> list[TagRuleRead]:
+def list_tag_rules(org: OrgDep) -> list[TagRuleRead]:
     db = _get_supabase()
     result = (
         db.table("tag_rules")
@@ -115,7 +114,7 @@ async def list_tag_rules(org: OrgDep) -> list[TagRuleRead]:
 
 
 @tag_rules_router.post("", status_code=201)
-async def create_tag_rule(body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
+def create_tag_rule(body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
     db = _get_supabase()
 
     # Verify tag_id belongs to this org before creating the rule
@@ -147,7 +146,7 @@ async def create_tag_rule(body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
 
 
 @tag_rules_router.patch("/{rule_id}")
-async def update_tag_rule(rule_id: str, body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
+def update_tag_rule(rule_id: str, body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
     db = _get_supabase()
     result = (
         db.table("tag_rules")
@@ -169,7 +168,7 @@ async def update_tag_rule(rule_id: str, body: TagRuleCreate, org: OrgDep) -> Tag
 
 
 @tag_rules_router.delete("/{rule_id}", status_code=204)
-async def delete_tag_rule(rule_id: str, org: OrgDep) -> None:
+def delete_tag_rule(rule_id: str, org: OrgDep) -> None:
     db = _get_supabase()
     result = (
         db.table("tag_rules")
@@ -183,7 +182,7 @@ async def delete_tag_rule(rule_id: str, org: OrgDep) -> None:
 
 
 @tag_rules_router.post("/preview")
-async def preview_tag_rule(body: TagRulePreview, org: OrgDep) -> list[PreviewMatch]:
+def preview_tag_rule(body: TagRulePreview, org: OrgDep) -> list[PreviewMatch]:
     """
     Dry-run a tag rule against recent usage_events without persisting.
     Returns up to 20 matching (api_key_label, provider, model) tuples from the

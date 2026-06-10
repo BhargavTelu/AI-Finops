@@ -8,21 +8,20 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
-from supabase import create_client
 
-from api.config import settings
 from api.deps import OrgDep
 from api.schemas.recommendations import RecommendationRead, RecommendationUpdate
+from api.services.db import get_supabase
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 @router.get("", response_model=list[RecommendationRead])
-async def list_recommendations(
+def list_recommendations(
     org: OrgDep,
     status: Literal["new", "applied", "dismissed"] = Query(default="new"),
 ) -> list[RecommendationRead]:
@@ -42,7 +41,7 @@ async def list_recommendations(
 
 
 @router.patch("/{recommendation_id}", response_model=RecommendationRead)
-async def update_recommendation(
+def update_recommendation(
     recommendation_id: str,
     body: RecommendationUpdate,
     org: OrgDep,

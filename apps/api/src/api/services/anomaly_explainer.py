@@ -6,7 +6,7 @@ Redis rate limit defined in settings.ai_calls_per_org_per_day.
 Pure function - no DB access here. Side effects belong in the Celery task.
 """
 
-from datetime import date, timezone
+from datetime import date
 from typing import Any
 
 import anthropic

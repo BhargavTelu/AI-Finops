@@ -6,6 +6,7 @@ import httpx
 import jwt
 import structlog
 from fastapi import Depends, Header, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 from supabase import create_client
 
 from api.config import settings
@@ -161,8 +162,12 @@ async def _require_org(
 
     user_id: str | None = claims.get("sub")
     # Prefer the custom session-token claim (Supabase UUID); fall back to
-    # resolving via Clerk v6's compressed 'o' claim if not present.
-    org_id: str | None = claims.get("org_id") or _resolve_org_id_from_clerk_claim(claims.get("o"))
+    # resolving via Clerk v6's compressed 'o' claim if not present. The
+    # fallback does a synchronous DB lookup - run it in the threadpool so it
+    # can't stall the event loop for every concurrent request.
+    org_id: str | None = claims.get("org_id")
+    if not org_id:
+        org_id = await run_in_threadpool(_resolve_org_id_from_clerk_claim, claims.get("o"))
 
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing sub claim")
@@ -179,7 +184,7 @@ async def _require_org(
 OrgDep = Annotated[OrgContext, Depends(_require_org)]
 
 
-async def _require_admin_org(org: OrgDep) -> OrgContext:
+def _require_admin_org(org: OrgDep) -> OrgContext:
     """
     Extends _require_org with an admin role check.
 
@@ -189,6 +194,10 @@ async def _require_admin_org(org: OrgDep) -> OrgContext:
     We check the DB rather than a JWT claim to avoid requiring a Clerk session
     template change. The query is a single indexed primary-key lookup
     (UNIQUE on org_id, user_id) so it adds one fast round-trip.
+
+    Deliberately sync (def, not async def): the Supabase calls block, and
+    FastAPI runs sync dependencies in its threadpool instead of on the
+    event loop.
     """
     db = create_client(settings.supabase_url, settings.supabase_service_role_key)
 
