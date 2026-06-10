@@ -768,3 +768,199 @@ class TestInputCompressionNotImplemented:
             "input_compression rule was unexpectedly implemented. "
             "Update this test to assert it IS returned (see FR-19, BUG-08)."
         )
+
+
+# ── Boundary condition tests ─────────────────────────────────────────────────
+
+
+class TestModelSwapBoundaries:
+    """Boundary conditions at exact threshold values for model_swap."""
+
+    def test_exactly_100_requests_triggers(self):
+        recs = _check_model_swap([
+            _stats("gpt-4o", total_requests=100, total_cost_usd="50.00")
+        ])
+        assert len(recs) == 1
+
+    def test_avg_cost_just_above_threshold_triggers(self):
+        # avg = 10.01 / 1000 = $0.01001 → above $0.01 threshold
+        recs = _check_model_swap([
+            _stats("gpt-4o", total_cost_usd="10.01", total_requests=1000)
+        ])
+        assert len(recs) == 1
+
+    def test_unknown_model_not_in_price_map_skipped(self):
+        recs = _check_model_swap([
+            _stats("gpt-5-ultra", total_cost_usd="100.00", total_requests=500)
+        ])
+        assert recs == []
+
+    def test_zero_requests_skipped(self):
+        recs = _check_model_swap([
+            _stats("gpt-4o", total_cost_usd="0.00", total_requests=0)
+        ])
+        assert recs == []
+
+
+class TestCachingBoundaries:
+    """Boundary conditions for caching rule."""
+
+    def test_exactly_200_requests_triggers(self):
+        recs = _check_caching_opportunity([
+            _stats("gpt-4o", total_requests=200, total_tokens=10_000_000, total_cost_usd="50.00")
+        ])
+        assert len(recs) == 1
+
+    def test_zero_tokens_does_not_trigger(self):
+        recs = _check_caching_opportunity([
+            _stats("gpt-4o", total_requests=500, total_tokens=0)
+        ])
+        assert recs == []
+
+
+class TestBatchBoundaries:
+    """Boundary conditions for batch rule."""
+
+    def test_exactly_500_requests_triggers(self):
+        recs = _check_batch_opportunity([
+            _stats("gpt-4o", total_requests=500, total_tokens=500_000, total_cost_usd="50.00")
+        ])
+        assert len(recs) == 1
+
+    def test_avg_tokens_exactly_2000_skipped(self):
+        # avg = 1_000_000 / 500 = 2000.0 → exactly at threshold → skip (>= 2000)
+        recs = _check_batch_opportunity([
+            _stats("gpt-4o", total_requests=500, total_tokens=1_000_000, total_cost_usd="50.00")
+        ])
+        assert recs == []
+
+    def test_zero_requests_does_not_crash(self):
+        recs = _check_batch_opportunity([
+            _stats("gpt-4o", total_requests=0, total_tokens=0, total_cost_usd="0.00")
+        ])
+        assert recs == []
+
+
+# ── Router edge case tests ───────────────────────────────────────────────────
+
+
+class TestRecommendationsRouterEdgeCases:
+    def test_patch_sets_resolved_at_timestamp(self):
+        """Verify resolved_at is populated when marking a rec as applied."""
+        resolved_row = _rec_row(status="applied")
+        resolved_row["resolved_at"] = NOW_ISO
+
+        db = _mock_db_router()
+        db.execute.side_effect = [
+            MagicMock(data=[_rec_row()]),       # ownership check
+            MagicMock(data=[resolved_row]),      # update result
+        ]
+
+        with patch("api.routers.recommendations._get_supabase", return_value=db):
+            resp = client.patch(f"/api/v1/recommendations/{REC_ID}", json={"status": "applied"})
+
+        assert resp.status_code == 200
+        assert resp.json()["resolved_at"] is not None
+
+        # Verify the update payload sent to Supabase includes resolved_at
+        update_calls = db.update.call_args_list
+        assert len(update_calls) >= 1
+        update_payload = update_calls[0][0][0]
+        assert "resolved_at" in update_payload
+        assert "status" in update_payload
+
+    def test_list_multiple_recs_returned_in_order(self):
+        """Verify multiple recommendations are returned correctly."""
+        rows = [
+            _rec_row(rec_id="rec-1", savings="100.00"),
+            _rec_row(rec_id="rec-2", savings="50.00"),
+            _rec_row(rec_id="rec-3", savings="25.00"),
+        ]
+        with patch("api.routers.recommendations._get_supabase", return_value=_mock_db_router(rows)):
+            resp = client.get("/api/v1/recommendations?status=new")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 3
+        # API orders by savings DESC (mocked order preserved)
+        assert float(data[0]["projected_savings_usd"]) >= float(data[1]["projected_savings_usd"])
+
+    def test_patch_invalid_rec_id_format_returns_404(self):
+        db = _mock_db_router([])
+        with patch("api.routers.recommendations._get_supabase", return_value=db):
+            resp = client.patch("/api/v1/recommendations/nonexistent-id", json={"status": "applied"})
+        assert resp.status_code == 404
+
+    def test_patch_without_body_returns_422(self):
+        with patch("api.routers.recommendations._get_supabase", return_value=_mock_db_router()):
+            resp = client.patch(f"/api/v1/recommendations/{REC_ID}")
+        assert resp.status_code == 422
+
+
+# ── Beat schedule verification ───────────────────────────────────────────────
+
+
+class TestRecommendationsBeatSchedule:
+    """Verify the Celery beat schedule includes the recommendation task."""
+
+    def test_generate_recommendations_in_beat_schedule(self):
+        from api.workers.celery_app import celery_app
+        schedule = celery_app.conf.beat_schedule
+        assert "generate-recommendations" in schedule
+        entry = schedule["generate-recommendations"]
+        assert entry["task"] == "api.workers.recommendations.generate_all_org_recommendations"
+
+    def test_runs_at_0230_utc(self):
+        from api.workers.celery_app import celery_app
+        entry = celery_app.conf.beat_schedule["generate-recommendations"]
+        cron = entry["schedule"]
+        assert cron.hour == {2}
+        assert cron.minute == {30}
+
+
+# ── Worker mixed-provider test ───────────────────────────────────────────────
+
+
+class TestWorkerMixedProviders:
+    """Verify the worker correctly handles stats from multiple providers."""
+
+    def test_mixed_providers_generate_separate_recs(self):
+        from api.workers.recommendations import generate_org_recommendations
+
+        summaries = [
+            {
+                "provider": "openai", "model": "gpt-4o", "feature_tag": None,
+                "total_cost_usd": "100.00", "total_requests": 1000, "total_tokens": 500_000,
+            },
+            {
+                "provider": "anthropic", "model": "claude-opus-4-5", "feature_tag": None,
+                "total_cost_usd": "200.00", "total_requests": 500, "total_tokens": 1_000_000,
+            },
+        ]
+
+        captured: list = []
+
+        def _capture(stats):
+            captured.extend(stats)
+            return []  # no inserts
+
+        with (
+            patch("api.workers.recommendations._get_supabase") as mock_sup,
+            patch("api.workers.recommendations.generate_recommendations", side_effect=_capture),
+        ):
+            db = MagicMock()
+            db.table.return_value = db
+            db.select.return_value = db
+            db.eq.return_value = db
+            db.gte.return_value = db
+            db.execute.side_effect = [
+                MagicMock(data=summaries),
+                MagicMock(data=[]),
+            ]
+            mock_sup.return_value = db
+            generate_org_recommendations("org-test")
+
+        # Two distinct (provider, model) groups → two ModelStats
+        assert len(captured) == 2
+        models = {s.model for s in captured}
+        assert "gpt-4o" in models
+        assert "claude-opus-4-5" in models

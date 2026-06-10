@@ -163,7 +163,7 @@ function AlertCard({
 }: AlertCardProps) {
   const contextTags = buildContextTags(anomaly.context);
   const title = generateTitle(anomaly);
-  const description = anomaly.explanation ?? generateDescription(anomaly);
+  const statsDescription = generateDescription(anomaly);
   const stripClass = SEVERITY_STRIP[anomaly.severity] ?? "bg-muted-foreground/40";
   const badgeStatus = SEVERITY_BADGE_STATUS[anomaly.severity as keyof typeof SEVERITY_BADGE_STATUS] ?? "warning";
   const badgeLabel = SEVERITY_BADGE_LABEL[anomaly.severity] ?? anomaly.severity;
@@ -241,8 +241,15 @@ function AlertCard({
             )}
           </div>
 
-          {/* Description */}
-          <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+          {/* Statistical description - always shown for numerical context */}
+          <p className="text-sm text-muted-foreground leading-relaxed">{statsDescription}</p>
+
+          {/* AI explanation - supplementary narrative when available */}
+          {anomaly.explanation && (
+            <p className="text-sm italic text-muted-foreground/80 leading-relaxed">
+              {anomaly.explanation}
+            </p>
+          )}
 
           {/* Footer link */}
           <Link

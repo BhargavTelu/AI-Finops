@@ -116,10 +116,11 @@ class TestCreateBudget:
 
     def test_create_global_budget(self) -> None:
         db = _mock_db()
-        # First call (dupe check) returns empty; second call (insert) returns the row
+        # Calls: (1) dupe check, (2) user lookup for created_by, (3) insert
         db.execute.side_effect = [
-            MagicMock(data=[]),          # dupe check → none found
-            MagicMock(data=[_budget_row()]),  # insert result
+            MagicMock(data=[]),                              # dupe check → none found
+            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup → resolve clerk_id to UUID
+            MagicMock(data=[_budget_row()]),                  # insert result
         ]
         resp = self._post(
             {"scope_type": "global", "monthly_limit": 1000, "alert_at_pct": 80},
@@ -139,7 +140,8 @@ class TestCreateBudget:
     def test_create_model_budget_with_scope_value(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),  # dupe check
+            MagicMock(data=[]),                              # dupe check
+            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
             MagicMock(data=[_budget_row(scope_type="model", scope_value="gpt-4o")]),  # insert
         ]
         resp = self._post(
@@ -178,8 +180,9 @@ class TestCreateBudget:
     def test_alert_at_pct_defaults_to_80(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),
-            MagicMock(data=[_budget_row()]),
+            MagicMock(data=[]),                              # dupe check
+            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
+            MagicMock(data=[_budget_row()]),                  # insert
         ]
         resp = self._post({"scope_type": "global", "monthly_limit": 1000}, db)
         # If no alert_at_pct provided, the budget row has 80
@@ -193,8 +196,9 @@ class TestCreateBudget:
         for st in scope_types:
             db = _mock_db()
             db.execute.side_effect = [
-                MagicMock(data=[]),
-                MagicMock(data=[_budget_row(scope_type=st, scope_value="test")]),
+                MagicMock(data=[]),                              # dupe check
+                MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
+                MagicMock(data=[_budget_row(scope_type=st, scope_value="test")]),  # insert
             ]
             resp = self._post(
                 {"scope_type": st, "scope_value": "test", "monthly_limit": 100},

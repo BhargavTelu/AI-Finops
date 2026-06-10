@@ -2,7 +2,7 @@
 
 ## Current Milestone: M3 - Intelligence Layer
 
-**Status:** M3 Group A (Anomaly Detection) complete 2026-05-21. M3 Group B (Budgets + Email Alerts) complete 2026-05-21. M3 Group C (Slack Integration) complete 2026-05-21. Starting Group D.
+**Status:** M3 COMPLETE ✅. Group A (Anomaly Detection) complete 2026-05-21. Group B (Budgets + Email Alerts) complete 2026-05-21. Group C (Slack Integration) complete 2026-05-21. Group D (Recommendations Engine) complete 2026-06-10. Ready for M4.
 
 ---
 
@@ -99,18 +99,21 @@ A systematic gap analysis identified 29 untested code paths across 11 categories
 - [x] `SLACK_CLIENT_ID` + `SLACK_REDIRECT_URI` added to `.env.local.example`
 - [x] 50 new tests: 9 in `test_slack_routes.py` (routes CRUD + error cases) + 19 in `test_notifications_slack.py` (block builders, alert dispatch) + 22 in `test_notifications_digest.py` (digest data, blocks, idempotency, retry)
 
-### Group D - Recommendations Engine
+### Group D - Recommendations Engine ✅ (complete 2026-06-10)
 
-- [ ] `generate_recommendations(org_id)` Celery task - runs nightly after aggregation; rule-based (no AI in M3)
-- [ ] Rule 1 - **Model downgrade**: detect models with avg cost/request > $0.01 and request count > 100; recommend switching to a cheaper model in the same family; compute projected savings
-- [ ] Rule 2 - **Prompt caching**: detect repeated calls (same model, same feature_tag, high request count); recommend enabling prompt caching; estimate savings based on cache-read price vs input price
-- [ ] Rule 3 - **Batch API**: detect high request_count with small token counts (avg < 2K tokens); recommend Batch API for applicable models (OpenAI `gpt-4o`, `gpt-4o-mini`); 50% cost reduction estimate
-- [ ] Deduplication: `UNIQUE(org_id, type, scope_value)` for `status=new` recs - don't re-insert if already open
-- [ ] `GET /recommendations?status=new|applied|dismissed` - list recs ordered by `projected_savings_usd DESC`
-- [ ] `PATCH /recommendations/:id` - mark `applied` or `dismissed`; sets `resolved_at`
-- [ ] `RecommendationRead` Pydantic schema: `id`, `type`, `title`, `description`, `projected_savings_usd`, `confidence`, `status`, `generated_at`
-- [ ] `/recommendations` frontend page - rec cards with title, savings badge, evidence summary, apply/dismiss buttons; filter by status; empty state "No recommendations yet - data needed"
-- [ ] Unit tests: each recommendation rule logic; deduplication; savings calculation
+**603 tests passing, 2 skipped. 0 TypeScript errors.**
+
+- [x] `generate_all_org_recommendations()` / `generate_org_recommendations(org_id)` Celery tasks - runs nightly at 02:30 UTC after budget checks; dispatches per-org; pulls 30d `daily_cost_summaries`, groups by (provider, model, feature_tag), runs rule engine
+- [x] Rule 1 - **Model downgrade** (`_check_model_swap`): avg cost/request > $0.01 AND ≥100 requests; downgrade map (gpt-4o→mini, claude-opus-4-5→sonnet-4-5, etc.); savings via input price ratio; confidence 0.85 (>500 req) or 0.60
+- [x] Rule 2 - **Prompt caching** (`_check_caching_opportunity`): model supports caching AND ≥200 requests; 30% cache-hit rate on 70% input tokens estimate; confidence 0.60; scope `{model}:{feature_tag or 'all'}`
+- [x] Rule 3 - **Batch API** (`_check_batch_opportunity`): model in {gpt-4o, gpt-4o-mini} AND ≥500 requests AND avg tokens < 2000; 50% cost reduction; confidence 0.80
+- [x] Deduplication: partial unique index `UNIQUE(org_id, type, scope_value) WHERE status='new'` + explicit query before insert in worker; migration `20260524000000_recommendations_scope_and_dedup.sql`
+- [x] `GET /recommendations?status=new|applied|dismissed` - list recs ordered by `projected_savings_usd DESC`; `PATCH /recommendations/:id` - mark `applied` or `dismissed`; sets `resolved_at`; ownership check
+- [x] `RecommendationRead` / `RecommendationUpdate` Pydantic schemas with type enum (model_swap, caching, batch, other), evidence dict, scope_value, confidence
+- [x] `/recommendations` frontend page - rec cards with savings badge (`$Xk/mo`), type badge (Model swap / Prompt caching / Batch API), effort badge (Easy/Medium/Hard), confidence bar, description, apply/dismiss buttons; status tabs (New/Applied/Dismissed); effort filter pills; total savings summary; empty state with CTA; loading skeleton; error state; Framer Motion stagger animation
+- [x] `RecommendationRead` / `RecommendationType` / `RecommendationStatus` types in `apps/web/src/lib/types.ts`
+- [x] Beat schedule wired: `generate-recommendations` at 02:30 UTC in `celery_app.py`
+- [x] 40+ unit tests in `test_recommendations.py` covering all three rules, edge cases, savings math, confidence thresholds
 
 ### M3 Done-condition
 
