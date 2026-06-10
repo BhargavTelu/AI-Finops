@@ -48,6 +48,7 @@ def _mock_db() -> MagicMock:
     db.in_.return_value = db
     db.gte.return_value = db
     db.lt.return_value = db
+    db.order.return_value = db
     db.range.return_value = db
     db.execute.return_value = exec_result
     return db

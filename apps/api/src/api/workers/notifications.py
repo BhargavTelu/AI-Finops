@@ -601,12 +601,12 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
                 "html": html,
             }
         )
+        # No recipient email in the log line - hard rule #4: no PII in logs.
         log.info(
             "budget_alert_sent",
             org_id=org_id,
             budget_id=budget_id,
             pct=pct,
-            to=to_email,
         )
     except Exception as exc:
         log.error("budget_alert_send_failed", org_id=org_id, budget_id=budget_id, error=str(exc))

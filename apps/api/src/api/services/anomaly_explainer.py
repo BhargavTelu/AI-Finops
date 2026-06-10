@@ -1,6 +1,6 @@
 """
 Generate a plain-language explanation for a detected cost anomaly using
-Claude claude-3-haiku-20241022. Respects the platform-wide 3-calls/org/day
+Claude Haiku. Respects the platform-wide 3-calls/org/day
 Redis rate limit defined in settings.ai_calls_per_org_per_day.
 
 Pure function - no DB access here. Side effects belong in the Celery task.
@@ -18,7 +18,10 @@ from api.config import settings
 log = structlog.get_logger()
 
 _REDIS_KEY_PREFIX = "ai:calls"
-_MODEL = "claude-3-haiku-20241022"
+# Cheapest current-generation model. The previous value
+# ("claude-3-haiku-20241022") never existed as a model ID, so every call
+# 404'd and explanations silently stayed NULL.
+_MODEL = "claude-haiku-4-5"
 
 
 def _redis() -> redis_lib.Redis:  # type: ignore[type-arg]
