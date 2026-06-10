@@ -3,8 +3,11 @@ from decimal import Decimal
 from typing import Any, Iterator
 
 import httpx
+import structlog
 
 from api.adapters.base import NormalizedUsageEvent
+
+log = structlog.get_logger()
 
 # Reference: https://platform.openai.com/docs/api-reference/organization/costs
 _BASE_URL = "https://api.openai.com/v1"
@@ -68,13 +71,15 @@ class OpenAIAdapter:
         start_ts = int(start_day.timestamp())
         end_ts = int(end_day.timestamp())
 
-        # Pass 1: build token lookup keyed by (start_time_unix, model)
-        token_lookup: dict[tuple[int, str], dict[str, int]] = {}
+        # Pass 1: build token lookup keyed by (start_time_unix, model, project_id)
+        token_lookup: dict[tuple[int, str, str], dict[str, int]] = {}
         usage_params: dict[str, Any] = {
             "start_time": start_ts,
             "end_time": end_ts,
             "bucket_width": "1d",
-            "group_by[]": "model",
+            # project_id gives per-project attribution - the project name becomes
+            # api_key_label so tag rules have something real to match on.
+            "group_by[]": ["model", "project_id"],
             "limit": _PAGE_LIMIT,
         }
         # /organization/costs group_by only supports: line_item, project_id, user_id, api_key_id
@@ -82,24 +87,36 @@ class OpenAIAdapter:
             "start_time": start_ts,
             "end_time": end_ts,
             "bucket_width": "1d",
-            "group_by[]": "line_item",
+            "group_by[]": ["line_item", "project_id"],
             "limit": _PAGE_LIMIT,
         }
 
         for bucket in self._paginate(key, "/organization/usage/completions", usage_params):
             for result in bucket.get("results", []):
                 model = result.get("model") or "unknown"
-                token_lookup[(bucket["start_time"], model)] = {
+                project_id = result.get("project_id") or ""
+                token_lookup[(bucket["start_time"], model, project_id)] = {
                     "input_tokens": result.get("input_tokens") or 0,
                     "output_tokens": result.get("output_tokens") or 0,
                     "cached_tokens": result.get("input_cached_tokens") or 0,
                     "request_count": result.get("num_model_requests") or 1,
                 }
 
+        # Project names are resolved lazily - only when a result actually carries
+        # a project_id - so orgs without projects make no extra API call.
+        project_names: dict[str, str] | None = None
+
+        def resolve_project(project_id: str) -> str:
+            nonlocal project_names
+            if project_names is None:
+                project_names = self._fetch_project_names(key)
+            return project_names.get(project_id, project_id)
+
         # Pass 2: yield NormalizedUsageEvent for each cost bucket result
         for bucket in self._paginate(key, "/organization/costs", cost_params):
             for result in bucket.get("results", []):
                 model = result.get("line_item") or "unknown"
+                project_id = result.get("project_id") or ""
                 amount = result.get("amount", {})
                 cost = Decimal(str(amount.get("value") or 0))
 
@@ -108,14 +125,14 @@ class OpenAIAdapter:
                     continue
 
                 tokens = token_lookup.get(
-                    (bucket["start_time"], model),
+                    (bucket["start_time"], model, project_id),
                     {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "request_count": 1},
                 )
 
                 yield NormalizedUsageEvent(
                     provider="openai",
                     model=model,
-                    api_key_label=None,  # not available from org cost API
+                    api_key_label=resolve_project(project_id) if project_id else None,
                     input_tokens=tokens["input_tokens"],
                     output_tokens=tokens["output_tokens"],
                     cached_tokens=tokens["cached_tokens"],
@@ -125,8 +142,44 @@ class OpenAIAdapter:
                     raw_meta={
                         "bucket_end": bucket.get("end_time"),
                         "currency": amount.get("currency", "usd"),
+                        "project_id": project_id or None,
                     },
                 )
+
+    def _fetch_project_names(self, key: bytes) -> dict[str, str]:
+        """
+        Map project_id -> project name via GET /v1/organization/projects.
+        Best-effort: on any failure, returns what was collected so far and the
+        caller falls back to raw project IDs - ingestion must not fail over a
+        cosmetic label.
+        """
+        names: dict[str, str] = {}
+        cursor: str | None = None
+        try:
+            while True:
+                params: dict[str, Any] = {"limit": 100}
+                if cursor:
+                    params["after"] = cursor
+                resp = httpx.get(
+                    f"{_BASE_URL}/organization/projects",
+                    headers=self._headers(key),
+                    params=params,
+                    timeout=30,
+                )
+                if resp.status_code != 200:
+                    log.warning("openai_project_list_failed", status=resp.status_code)
+                    break
+                body = resp.json()
+                for project in body.get("data", []):
+                    names[project["id"]] = project.get("name") or project["id"]
+                if not body.get("has_more"):
+                    break
+                cursor = body.get("last_id")
+                if not cursor:
+                    break
+        except httpx.RequestError as exc:
+            log.warning("openai_project_list_error", error=str(exc))
+        return names
 
     def _paginate(
         self, key: bytes, path: str, params: dict[str, Any]

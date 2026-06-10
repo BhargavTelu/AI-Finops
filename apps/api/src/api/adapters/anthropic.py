@@ -132,9 +132,21 @@ class AnthropicAdapter:
             "starting_at": start_iso,
             "ending_at": end_iso,
             "bucket_width": "1d",
-            "group_by[]": "model",
+            # api_key_id gives per-key attribution - the key's name becomes
+            # api_key_label so tag rules have something real to match on.
+            "group_by[]": ["model", "api_key_id"],
             "limit": _PAGE_LIMIT,
         }
+
+        # Key names are resolved lazily - only when a result actually carries
+        # an api_key_id - so accounts without key-level data make no extra call.
+        key_names: dict[str, str] | None = None
+
+        def resolve_key_name(api_key_id: str) -> str:
+            nonlocal key_names
+            if key_names is None:
+                key_names = self._fetch_api_key_names(key)
+            return key_names.get(api_key_id, api_key_id)
 
         for bucket in self._paginate(key, "/v1/organizations/usage_report/messages", params):
             bucket_start_str: str = bucket.get("starting_at", "")
@@ -146,6 +158,7 @@ class AnthropicAdapter:
 
             for result in bucket.get("results", []):
                 model: str = result.get("model") or "unknown"
+                api_key_id: str = result.get("api_key_id") or ""
                 input_tokens: int = result.get("input_tokens") or 0
                 output_tokens: int = result.get("output_tokens") or 0
                 # Anthropic calls prompt-cache reads "cache_read_input_tokens"
@@ -164,7 +177,7 @@ class AnthropicAdapter:
                 yield NormalizedUsageEvent(
                     provider="anthropic",
                     model=model,
-                    api_key_label=None,  # not available from org-level usage API
+                    api_key_label=resolve_key_name(api_key_id) if api_key_id else None,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
                     cached_tokens=cached_tokens,
@@ -174,8 +187,44 @@ class AnthropicAdapter:
                     raw_meta={
                         "bucket_end": bucket.get("ending_at"),
                         "cache_creation_input_tokens": cache_creation_tokens,
+                        "api_key_id": api_key_id or None,
                     },
                 )
+
+    def _fetch_api_key_names(self, key: bytes) -> dict[str, str]:
+        """
+        Map api_key_id -> key name via GET /v1/organizations/api_keys.
+        Best-effort: on any failure, returns what was collected so far and the
+        caller falls back to raw key IDs - ingestion must not fail over a
+        cosmetic label.
+        """
+        names: dict[str, str] = {}
+        cursor: str | None = None
+        try:
+            while True:
+                params: dict[str, Any] = {"limit": 100}
+                if cursor:
+                    params["after_id"] = cursor
+                resp = httpx.get(
+                    f"{_BASE_URL}/v1/organizations/api_keys",
+                    headers=self._headers(key),
+                    params=params,
+                    timeout=30,
+                )
+                if resp.status_code != 200:
+                    log.warning("anthropic_api_key_list_failed", status=resp.status_code)
+                    break
+                body = resp.json()
+                for item in body.get("data", []):
+                    names[item["id"]] = item.get("name") or item["id"]
+                if not body.get("has_more"):
+                    break
+                cursor = body.get("last_id")
+                if not cursor:
+                    break
+        except httpx.RequestError as exc:
+            log.warning("anthropic_api_key_list_error", error=str(exc))
+        return names
 
     def _paginate(
         self, key: bytes, path: str, params: dict[str, Any]
