@@ -1,12 +1,16 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
+import re
 from typing import Any, Iterator
 
 import httpx
+import structlog
 import yaml
 
 from api.adapters.base import NormalizedUsageEvent
+
+log = structlog.get_logger()
 
 # Reference:
 #   GET /v1/organizations/usage_report/messages  - token counts per model per day bucket
@@ -27,20 +31,49 @@ def _load_anthropic_pricing() -> dict[str, dict[str, float]]:
 
 _ANTHROPIC_PRICING: dict[str, dict[str, float]] = _load_anthropic_pricing()
 
+# Usage-report model IDs carry a date suffix (claude-sonnet-4-5-20250929);
+# pricing.yaml keys are model families. Strip the suffix before lookup.
+_DATE_SUFFIX_RE = re.compile(r"-\d{8}$")
 
-def _compute_cost(model: str, input_tokens: int, output_tokens: int, cached_tokens: int) -> Decimal:
+# Cache writes bill at 1.25x the input rate (5-minute TTL default).
+_CACHE_WRITE_MULTIPLIER = 1.25
+
+# Warn once per unknown model per process - a silent $0 cost is a data bug.
+_warned_unknown_models: set[str] = set()
+
+
+def _lookup_rates(model: str) -> dict[str, float] | None:
+    """Exact match first, then the date-suffix-stripped model family."""
+    rates = _ANTHROPIC_PRICING.get(model)
+    if rates is None:
+        rates = _ANTHROPIC_PRICING.get(_DATE_SUFFIX_RE.sub("", model))
+    return rates
+
+
+def _compute_cost(
+    model: str,
+    input_tokens: int,
+    output_tokens: int,
+    cached_tokens: int,
+    cache_creation_tokens: int = 0,
+) -> Decimal:
     """
     Calculate USD cost from token counts using pricing.yaml rates.
-    Returns Decimal("0") for unknown models - token counts are still captured.
+    Returns Decimal("0") for unknown models (with a warning) - token counts
+    are still captured so the gap is visible and repairable.
     """
-    rates = _ANTHROPIC_PRICING.get(model)
+    rates = _lookup_rates(model)
     if not rates:
+        if model not in _warned_unknown_models:
+            _warned_unknown_models.add(model)
+            log.warning("anthropic_model_missing_from_pricing", model=model)
         return Decimal("0")
 
     cost = (
         input_tokens * rates["input_per_mtok"]
         + output_tokens * rates["output_per_mtok"]
         + cached_tokens * rates["cached_per_mtok"]
+        + cache_creation_tokens * rates["input_per_mtok"] * _CACHE_WRITE_MULTIPLIER
     ) / 1_000_000
 
     return Decimal(str(round(cost, 10)))
@@ -117,9 +150,12 @@ class AnthropicAdapter:
                 output_tokens: int = result.get("output_tokens") or 0
                 # Anthropic calls prompt-cache reads "cache_read_input_tokens"
                 cached_tokens: int = result.get("cache_read_input_tokens") or 0
+                cache_creation_tokens: int = result.get("cache_creation_input_tokens") or 0
                 request_count: int = result.get("request_count") or 1
 
-                cost = _compute_cost(model, input_tokens, output_tokens, cached_tokens)
+                cost = _compute_cost(
+                    model, input_tokens, output_tokens, cached_tokens, cache_creation_tokens
+                )
 
                 # Skip rows with no tokens and no cost - identical to OpenAI zero-cost skip
                 if cost == 0 and input_tokens == 0 and output_tokens == 0:
@@ -137,7 +173,7 @@ class AnthropicAdapter:
                     bucket_hour=bucket_dt,
                     raw_meta={
                         "bucket_end": bucket.get("ending_at"),
-                        "cache_creation_input_tokens": result.get("cache_creation_input_tokens") or 0,
+                        "cache_creation_input_tokens": cache_creation_tokens,
                     },
                 )
 

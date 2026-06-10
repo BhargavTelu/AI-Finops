@@ -4,8 +4,8 @@
 # This file is used for: forecasts, estimates when Cost API is unavailable.
 # Review monthly - drift can be 20–40% after model price changes.
 # ─────────────────────────────────────────────────────────────────────────────
-version: "2025-01"
-updated_at: "2025-01-01"
+version: "2026-06"
+updated_at: "2026-06-11"
 
 providers:
   openai:
@@ -36,27 +36,70 @@ providers:
         cached_per_mtok: 1.50
 
   anthropic:
+    # Keys are model families (no date suffix). The adapter strips trailing
+    # -YYYYMMDD from usage-report model IDs before lookup, so
+    # "claude-sonnet-4-5-20250929" resolves to "claude-sonnet-4-5".
+    # cached_per_mtok = cache READ price (0.1x input). Cache WRITES are
+    # billed at 1.25x input - computed in the adapter, not listed here.
     models:
-      claude-3-5-sonnet-20241022:
+      # Historical (retired/deprecated) - kept for backfilled usage
+      claude-3-haiku:
+        input_per_mtok: 0.25
+        output_per_mtok: 1.25
+        cached_per_mtok: 0.03
+      claude-3-5-sonnet:
         input_per_mtok: 3.00
         output_per_mtok: 15.00
         cached_per_mtok: 0.30
-      claude-3-5-haiku-20241022:
+      claude-3-5-haiku:
         input_per_mtok: 0.80
         output_per_mtok: 4.00
         cached_per_mtok: 0.08
-      claude-opus-4-5:
+      claude-opus-4-0:
         input_per_mtok: 15.00
         output_per_mtok: 75.00
         cached_per_mtok: 1.50
+      claude-opus-4-1:
+        input_per_mtok: 15.00
+        output_per_mtok: 75.00
+        cached_per_mtok: 1.50
+      claude-sonnet-4-0:
+        input_per_mtok: 3.00
+        output_per_mtok: 15.00
+        cached_per_mtok: 0.30
+      # Current generation
+      claude-opus-4-5:
+        input_per_mtok: 5.00
+        output_per_mtok: 25.00
+        cached_per_mtok: 0.50
+      claude-opus-4-6:
+        input_per_mtok: 5.00
+        output_per_mtok: 25.00
+        cached_per_mtok: 0.50
+      claude-opus-4-7:
+        input_per_mtok: 5.00
+        output_per_mtok: 25.00
+        cached_per_mtok: 0.50
+      claude-opus-4-8:
+        input_per_mtok: 5.00
+        output_per_mtok: 25.00
+        cached_per_mtok: 0.50
       claude-sonnet-4-5:
         input_per_mtok: 3.00
         output_per_mtok: 15.00
         cached_per_mtok: 0.30
+      claude-sonnet-4-6:
+        input_per_mtok: 3.00
+        output_per_mtok: 15.00
+        cached_per_mtok: 0.30
       claude-haiku-4-5:
-        input_per_mtok: 0.80
-        output_per_mtok: 4.00
-        cached_per_mtok: 0.08
+        input_per_mtok: 1.00
+        output_per_mtok: 5.00
+        cached_per_mtok: 0.10
+      claude-fable-5:
+        input_per_mtok: 10.00
+        output_per_mtok: 50.00
+        cached_per_mtok: 1.00
 
   gemini:
     models:

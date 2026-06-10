@@ -12,7 +12,16 @@ Confidence is numeric (0.0–1.0): 0.85 = high, 0.60 = medium.
 
 from dataclasses import dataclass
 from decimal import Decimal
+import re
 from typing import Literal
+
+# Anthropic usage-report model IDs carry a date suffix (claude-sonnet-4-5-20250929);
+# the maps below are keyed by model family. Strip the suffix before lookup.
+_DATE_SUFFIX_RE = re.compile(r"-\d{8}$")
+
+
+def _model_family(model: str) -> str:
+    return _DATE_SUFFIX_RE.sub("", model)
 
 
 # ── Model family downgrade map ────────────────────────────────────────────────
@@ -23,8 +32,12 @@ _MODEL_DOWNGRADE: dict[str, str] = {
     "gpt-4-turbo": "gpt-4o",
     "o1": "o1-mini",
     "claude-opus-4-5": "claude-sonnet-4-5",
+    "claude-opus-4-6": "claude-sonnet-4-6",
+    "claude-opus-4-7": "claude-sonnet-4-6",
+    "claude-opus-4-8": "claude-sonnet-4-6",
     "claude-sonnet-4-5": "claude-haiku-4-5",
-    "claude-3-5-sonnet-20241022": "claude-3-5-haiku-20241022",
+    "claude-sonnet-4-6": "claude-haiku-4-5",
+    "claude-3-5-sonnet": "claude-3-5-haiku",
 }
 
 # Input price per million tokens - used to compute the savings ratio between models.
@@ -35,22 +48,31 @@ _INPUT_PRICE_PER_MTOK: dict[str, Decimal] = {
     "gpt-4-turbo": Decimal("10.00"),
     "o1": Decimal("15.00"),
     "o1-mini": Decimal("3.00"),
-    "claude-opus-4-5": Decimal("15.00"),
+    "claude-opus-4-5": Decimal("5.00"),
+    "claude-opus-4-6": Decimal("5.00"),
+    "claude-opus-4-7": Decimal("5.00"),
+    "claude-opus-4-8": Decimal("5.00"),
     "claude-sonnet-4-5": Decimal("3.00"),
-    "claude-haiku-4-5": Decimal("0.80"),
-    "claude-3-5-sonnet-20241022": Decimal("3.00"),
-    "claude-3-5-haiku-20241022": Decimal("0.80"),
+    "claude-sonnet-4-6": Decimal("3.00"),
+    "claude-haiku-4-5": Decimal("1.00"),
+    "claude-3-5-sonnet": Decimal("3.00"),
+    "claude-3-5-haiku": Decimal("0.80"),
 }
 
-# Cache-read savings per million tokens = input_price - cache_read_price.
+# Cache-read savings per million tokens = input_price - cache_read_price (0.1x input).
 # Only models with published cache pricing are listed.
 _CACHE_SAVINGS_PER_MTOK: dict[str, Decimal] = {
-    "gpt-4o": Decimal("1.25"),                      # 2.50 - 1.25
-    "gpt-4o-mini": Decimal("0.075"),                 # 0.15 - 0.075
-    "claude-3-5-sonnet-20241022": Decimal("2.70"),   # 3.00 - 0.30
-    "claude-3-5-haiku-20241022": Decimal("0.72"),    # 0.80 - 0.08
+    "gpt-4o": Decimal("1.25"),                # 2.50 - 1.25
+    "gpt-4o-mini": Decimal("0.075"),          # 0.15 - 0.075
+    "claude-3-5-sonnet": Decimal("2.70"),     # 3.00 - 0.30
+    "claude-3-5-haiku": Decimal("0.72"),      # 0.80 - 0.08
+    "claude-opus-4-5": Decimal("4.50"),       # 5.00 - 0.50
+    "claude-opus-4-6": Decimal("4.50"),
+    "claude-opus-4-7": Decimal("4.50"),
+    "claude-opus-4-8": Decimal("4.50"),
     "claude-sonnet-4-5": Decimal("2.70"),
-    "claude-haiku-4-5": Decimal("0.72"),
+    "claude-sonnet-4-6": Decimal("2.70"),
+    "claude-haiku-4-5": Decimal("0.90"),      # 1.00 - 0.10
 }
 
 # Models eligible for OpenAI Batch API (50% discount, 24h turnaround).
@@ -111,17 +133,19 @@ def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
     This overstates savings slightly (output tokens may have a different ratio) but
     is the right order of magnitude for a rule-based signal.
     """
-    # Aggregate across feature_tags - the recommendation is per model, not per tag.
+    # Aggregate across feature_tags - the recommendation is per model family,
+    # not per tag. Keying by family also folds dated ID variants together.
     by_model: dict[str, dict] = {}
     for s in stats:
-        if s.model not in by_model:
-            by_model[s.model] = {
+        family = _model_family(s.model)
+        if family not in by_model:
+            by_model[family] = {
                 "provider": s.provider,
                 "total_cost_usd": Decimal(0),
                 "total_requests": 0,
             }
-        by_model[s.model]["total_cost_usd"] += s.total_cost_usd
-        by_model[s.model]["total_requests"] += s.total_requests
+        by_model[family]["total_cost_usd"] += s.total_cost_usd
+        by_model[family]["total_requests"] += s.total_requests
 
     recs: list[Recommendation] = []
     for model, data in by_model.items():
@@ -188,7 +212,8 @@ def _check_caching_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     """
     recs: list[Recommendation] = []
     for s in stats:
-        if s.model not in _CACHE_SAVINGS_PER_MTOK:
+        family = _model_family(s.model)
+        if family not in _CACHE_SAVINGS_PER_MTOK:
             continue
         if s.total_requests < 200:
             continue
@@ -197,7 +222,7 @@ def _check_caching_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
         est_input_tokens = int(s.total_tokens * 0.70)
         # Conservative: 30% of input tokens are repeated across requests and cacheable.
         cacheable_tokens = int(est_input_tokens * 0.30)
-        savings_per_mtok = _CACHE_SAVINGS_PER_MTOK[s.model]
+        savings_per_mtok = _CACHE_SAVINGS_PER_MTOK[family]
         projected_savings = (
             Decimal(cacheable_tokens) * savings_per_mtok / Decimal(1_000_000)
         ).quantize(Decimal("0.01"))
@@ -206,7 +231,7 @@ def _check_caching_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
             continue
 
         tag_label = f" ({s.feature_tag})" if s.feature_tag else ""
-        scope = f"{s.model}:{s.feature_tag or 'all'}"
+        scope = f"{family}:{s.feature_tag or 'all'}"
 
         recs.append(
             Recommendation(
@@ -246,17 +271,18 @@ def _check_batch_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     # Aggregate across feature_tags - batch eligibility is per model, not per tag.
     by_model: dict[str, dict] = {}
     for s in stats:
-        if s.model not in _BATCH_ELIGIBLE:
+        family = _model_family(s.model)
+        if family not in _BATCH_ELIGIBLE:
             continue
-        if s.model not in by_model:
-            by_model[s.model] = {
+        if family not in by_model:
+            by_model[family] = {
                 "total_cost_usd": Decimal(0),
                 "total_requests": 0,
                 "total_tokens": 0,
             }
-        by_model[s.model]["total_cost_usd"] += s.total_cost_usd
-        by_model[s.model]["total_requests"] += s.total_requests
-        by_model[s.model]["total_tokens"] += s.total_tokens
+        by_model[family]["total_cost_usd"] += s.total_cost_usd
+        by_model[family]["total_requests"] += s.total_requests
+        by_model[family]["total_tokens"] += s.total_tokens
 
     recs: list[Recommendation] = []
     for model, data in by_model.items():
