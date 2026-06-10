@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import os
 from pathlib import Path
 import re
 from typing import Any, Iterator
@@ -19,12 +20,38 @@ _BASE_URL = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _PAGE_LIMIT = 30  # days per page; 30 covers a full month backfill in one request
 
-# Load pricing at import time - file is small, parsing is cheap
-_PRICING_PATH = Path(__file__).parents[5] / "packages" / "pricing" / "pricing.yaml"
+def _find_pricing_file() -> Path | None:
+    """
+    Locate packages/pricing/pricing.yaml.
 
+    Order: PRICING_YAML_PATH env var, then walk up from this file looking for
+    the packages/ directory. The walk-up works in both the monorepo layout
+    (<repo>/apps/api/src/...) and the Docker image (/app/src/...), where a
+    fixed parents[N] index would crash with IndexError at import time.
+    """
+    env_path = os.environ.get("PRICING_YAML_PATH")
+    if env_path:
+        p = Path(env_path)
+        if p.is_file():
+            return p
+        log.warning("pricing_yaml_env_path_missing", path=env_path)
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "packages" / "pricing" / "pricing.yaml"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+# Load pricing at import time - file is small, parsing is cheap
 def _load_anthropic_pricing() -> dict[str, dict[str, float]]:
     """Return {model_name: {input_per_mtok, output_per_mtok, cached_per_mtok}}."""
-    with open(_PRICING_PATH) as f:
+    path = _find_pricing_file()
+    if path is None:
+        # Degrade rather than crash the process: costs compute as $0 with
+        # per-model warnings, and ingestion keeps capturing token counts.
+        log.error("pricing_yaml_not_found", hint="set PRICING_YAML_PATH")
+        return {}
+    with open(path) as f:
         data = yaml.safe_load(f)
     return data.get("providers", {}).get("anthropic", {}).get("models", {})
 

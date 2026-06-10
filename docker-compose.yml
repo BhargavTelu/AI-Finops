@@ -20,8 +20,9 @@ services:
 
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      # Repo root context: the image needs packages/pricing/ from outside apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
       target: dev
     ports:
       - "8000:8000"
@@ -41,8 +42,9 @@ services:
 
   worker:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      # Repo root context: the image needs packages/pricing/ from outside apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
       target: dev
     volumes:
       - ./apps/api/src:/app/src
@@ -55,8 +57,9 @@ services:
 
   beat:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
+      # Repo root context: the image needs packages/pricing/ from outside apps/api
+      context: .
+      dockerfile: apps/api/Dockerfile
       target: dev
     volumes:
       - ./apps/api/src:/app/src
