@@ -269,7 +269,9 @@ class TestBudgetCheckConcurrentRace:
         count_lock = threading.Lock()
         barrier = threading.Barrier(2)
 
-        def run_task():
+        def make_thread_db():
+            # Each check_org call gets its own DB mock with its own response
+            # sequence, so the two concurrent threads don't share a counter.
             db = _mock_db()
             call_n = [0]
 
@@ -280,25 +282,39 @@ class TestBudgetCheckConcurrentRace:
                 return MagicMock(data=spend_rows)
 
             db.execute.side_effect = execute_side
+            return db
 
-            barrier.wait()
-            with (
-                patch("api.workers.budget_checks._get_supabase", return_value=db),
-                patch("api.workers.budget_checks.send_budget_alert") as mock_alert,
-            ):
-                def track(*args, **kwargs):
-                    with count_lock:
-                        alert_count[0] += 1
-
-                mock_alert.delay.side_effect = track
+        def run_task():
+            try:
+                barrier.wait()
                 check_org(ORG_ID)
+            except Exception as exc:
+                errors.append(exc)
 
-        t1 = threading.Thread(target=run_task)
-        t2 = threading.Thread(target=run_task)
-        t1.start()
-        t2.start()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
+        errors: list[Exception] = []
+
+        # Patch module globals ONCE in the main thread. Patching from inside
+        # concurrent threads is a race: one thread's teardown restores the
+        # other's mock as the "original", leaving the module permanently
+        # patched after the test and corrupting later tests.
+        with (
+            patch("api.workers.budget_checks._get_supabase", side_effect=make_thread_db),
+            patch("api.workers.budget_checks.send_budget_alert") as mock_alert,
+        ):
+            def track(*args, **kwargs):
+                with count_lock:
+                    alert_count[0] += 1
+
+            mock_alert.delay.side_effect = track
+
+            t1 = threading.Thread(target=run_task)
+            t2 = threading.Thread(target=run_task)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
+
+        assert errors == [], f"check_org raised exceptions: {errors}"
 
         assert alert_count[0] >= 2, (
             f"Gap-10: Expected both concurrent tasks to fire alert (no atomic lock). "

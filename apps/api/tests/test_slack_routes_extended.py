@@ -3,6 +3,7 @@ Additional Slack route tests not covered by test_slack_routes.py.
 TC-SLACK-08 and TC-SLACK-09.
 """
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -12,7 +13,21 @@ from api.main import app
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 
-app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)
+_AUTH_OVERRIDE = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)  # noqa: E731
+app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
+
+
+@pytest.fixture(autouse=True)
+def _apply_module_auth_override():
+    """Re-apply this module's auth override before each test.
+
+    Import-time assignment alone is unreliable: every test module is imported
+    at collection, so whichever module imports LAST owns the override for the
+    whole run unless each module re-applies its own before its tests.
+    """
+    app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
+    yield
+
 
 client = TestClient(app)
 

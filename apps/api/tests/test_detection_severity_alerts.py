@@ -5,7 +5,7 @@ TC-DET-11: medium severity → send_anomaly_alert IS called.
 TC-DET-12: high severity → send_anomaly_alert IS called.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
@@ -35,7 +35,9 @@ def _summary_rows(spike_cost: float, n_days: int = 15) -> list[dict]:
     Build daily_cost_summaries rows with a flat $100/day baseline and a spike
     on the last day. The worker fills any gap with $0, so we provide all n_days.
     """
-    today = date.today()
+    # Must match the worker's clock (UTC), not the machine's local date -
+    # using date.today() made these tests fail between local and UTC midnight.
+    today = datetime.now(timezone.utc).date()
     rows = []
     for i in range(n_days):
         day = today - timedelta(days=n_days - i)

@@ -88,28 +88,36 @@ class TestConcurrentRefreshRace:
             "status": "active",
         }
 
+        # One shared db mock - both threads only read the same constant
+        # integration row and write status updates we don't assert on.
+        shared_db = _mock_db()
+        shared_db.execute.return_value = MagicMock(data=[integration_data])
+
         def run_task():
             try:
-                db = _mock_db()
-                db.execute.return_value = MagicMock(data=[integration_data])
                 barrier.wait()
-                with (
-                    patch("api.workers.ingestion._get_supabase", return_value=db),
-                    patch("api.workers.ingestion._ingest_window", side_effect=mock_ingest_window),
-                    patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
-                    patch("api.workers.ingestion.settings") as ms,
-                ):
-                    ms.encryption_key = _KEY_B64
-                    refresh_integration.apply(args=[INT_ID, ORG_ID])
+                refresh_integration.apply(args=[INT_ID, ORG_ID])
             except Exception as exc:
                 errors.append(exc)
 
-        t1 = threading.Thread(target=run_task)
-        t2 = threading.Thread(target=run_task)
-        t1.start()
-        t2.start()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
+        # Patch shared module globals ONCE, in the main thread, around both runs.
+        # Patching module globals from inside concurrent threads is a race: one
+        # thread's teardown restores the other thread's mock as the "original",
+        # leaving the module permanently patched after the test and corrupting
+        # later tests (this previously made TestPartialBatchInsertFailure flake).
+        with (
+            patch("api.workers.ingestion._get_supabase", return_value=shared_db),
+            patch("api.workers.ingestion._ingest_window", side_effect=mock_ingest_window),
+            patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
+            patch("api.workers.ingestion.settings") as ms,
+        ):
+            ms.encryption_key = _KEY_B64
+            t1 = threading.Thread(target=run_task)
+            t2 = threading.Thread(target=run_task)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
 
         assert errors == [], f"Concurrent refresh_integration raised exceptions: {errors}"
         assert ingest_call_count[0] == 2, (
