@@ -30,6 +30,18 @@ def _get_supabase():
     return get_supabase()
 
 
+def _resolve_user_uuid(db, clerk_user_id: str) -> str | None:
+    """
+    Map the Clerk sub claim to the Supabase users.id UUID.
+
+    audit_events.actor_user_id is a UUID FK to users(id) - inserting the raw
+    Clerk sub fails the cast and the surrounding try/except swallowed it, so
+    no integration audit row was ever written.
+    """
+    result = db.table("users").select("id").eq("clerk_id", clerk_user_id).limit(1).execute()
+    return result.data[0]["id"] if result.data else None
+
+
 @router.post("", status_code=201)
 def create_integration(body: IntegrationCreate, org: OrgDep) -> IntegrationRead:
     """
@@ -82,7 +94,7 @@ def create_integration(body: IntegrationCreate, org: OrgDep) -> IntegrationRead:
         db.table("audit_events").insert(
             {
                 "org_id": org.org_id,
-                "actor_user_id": org.user_id,
+                "actor_user_id": _resolve_user_uuid(db, org.user_id),
                 "action": "integration.create",
                 "target_kind": "integration",
                 "target_id": row["id"],
@@ -175,7 +187,7 @@ def delete_integration(integration_id: str, org: OrgDep) -> None:
         db.table("audit_events").insert(
             {
                 "org_id": org.org_id,
-                "actor_user_id": org.user_id,
+                "actor_user_id": _resolve_user_uuid(db, org.user_id),
                 "action": "integration.delete",
                 "target_kind": "integration",
                 "target_id": integration_id,
