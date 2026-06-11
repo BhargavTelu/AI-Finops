@@ -13,7 +13,7 @@ Read this first. Then read the doc linked under §Documentation that's relevant 
 
 Next.js (Vercel) → FastAPI (Railway) → Supabase Postgres. Celery + Upstash Redis for ingestion + nightly aggregation + anomaly detection + budget alerts. Clerk auth. Stripe billing. No customer traffic flows through us - we pull from provider Admin APIs.
 
-**Current milestone: M4 (Monetize + Polish)** - M0–M3 complete. Execution order follows [docs/STRATEGIC_IMPLEMENTATION_PLAN.md](docs/STRATEGIC_IMPLEMENTATION_PLAN.md): Phases 0 (Trust Quick Wins), 1 (CFO PDF report), and 3 (forecast + activation + landing + weekly email) complete; next is Phase 2 (Stripe billing + trial + gating) - the last blocker for the MVP done-condition.
+**Current milestone: MVP code-complete (M4 done in code).** Phases 0–3 of [docs/STRATEGIC_IMPLEMENTATION_PLAN.md](docs/STRATEGIC_IMPLEMENTATION_PLAN.md) shipped 2026-06-11. Remaining before launch: founder ops (Stripe products + webhook secret, apply 2 pending Supabase migrations, R2 creds, pre-deploy smoke - see docs/project_status.md). Next code work: Phase 4 (trust & traction; done-condition is 3 paying customers).
 
 Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 

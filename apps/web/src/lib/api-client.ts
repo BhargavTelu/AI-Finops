@@ -12,6 +12,9 @@ const API_URL =
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
+  // Opt a GET out of the 2-minute Data Cache - for state that must be fresh
+  // the moment it changes (e.g. billing status right after checkout).
+  noStore?: boolean;
 };
 
 async function request<T>(
@@ -19,7 +22,7 @@ async function request<T>(
   token: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { body, method, ...init } = options;
+  const { body, method, noStore, ...init } = options;
   const isGet = !method || method === "GET";
 
   const response = await fetch(`${API_URL}/api/v1${path}`, {
@@ -35,7 +38,9 @@ async function request<T>(
     // fetch to no-store. Explicitly opt GET responses into the Data Cache so
     // re-visiting a tab skips the FastAPI + Supabase round-trip for 2 minutes.
     // Mutations stay uncached to guarantee fresh data after writes.
-    ...(isGet ? { next: { revalidate: 120 } } : { cache: "no-store" as const }),
+    ...(isGet && !noStore
+      ? { next: { revalidate: 120 } }
+      : { cache: "no-store" as const }),
   });
 
   if (!response.ok) {
@@ -50,7 +55,8 @@ async function request<T>(
 // Factory: call with a Clerk session token to get a typed client.
 export function createApiClient(token: string) {
   return {
-    get: <T>(path: string) => request<T>(path, token),
+    get: <T>(path: string, opts?: { noStore?: boolean }) =>
+      request<T>(path, token, opts ?? {}),
     post: <T>(path: string, body: unknown) =>
       request<T>(path, token, { method: "POST", body }),
     patch: <T>(path: string, body: unknown) =>

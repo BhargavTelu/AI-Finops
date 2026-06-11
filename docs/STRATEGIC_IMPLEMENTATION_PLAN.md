@@ -69,20 +69,20 @@ Goal: the differentiator exists and can be generated on demand for any org — i
 
 ---
 
-## Phase 2 — Stripe Billing + Gating (2.5–3 days) · FR-21
+## Phase 2 — Stripe Billing + Gating (2.5–3 days) · FR-21 ✅ COMPLETE (2026-06-11)
 
 **Decision D2 — 14-day trial: yes.** Self-serve product with no sales motion needs a trial; the activation flow (Phase 3) exists to make those 14 days count. `organizations.trial_ends_at` already exists.
 **Decision D3 — keep $299 entry.** No $99 tier until ≥10 paying customers give pricing signal. Revisit then.
 
-- [ ] **Stripe products:** 3 plans (Starter $299 / Growth $599 / Enterprise $1,500) as env-configured price IDs. No custom billing UI (hard architecture decision — Checkout + Customer Portal only).
-- [ ] **Routes** — implement `api/routers/billing.py` stubs: `POST /billing/checkout` (Checkout session, `client_reference_id=org_id`), `GET /billing/portal` (Customer Portal URL from `billing.stripe_customer_id`), `GET /billing` (plan, status, `current_period_end`, trial state).
-- [ ] **Webhook** — add Stripe handler to `api/routers/webhooks.py` (or new `webhooks_stripe.py`): verify signature; handle `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → upsert `billing` row + mirror plan onto `organizations.plan`. **Idempotency by Stripe event id** (dedupe table or `audit_events` check) — webhook retries must not double-process.
-- [ ] **Access gating** — `require_active_org` dependency in `deps.py`: allow if active subscription OR `trial_ends_at` in future; 402 otherwise. Apply to data routes (usage, explorer, reports, recs); never gate `/billing`, `/slack/status`, settings, or webhooks. Web: trial-countdown banner from day 7; expired state renders a paywall page with Checkout CTAs, not a dead end.
-- [ ] **Trial bootstrap:** set `trial_ends_at = now() + 14d` on org creation (Clerk webhook handler).
-- [ ] PostHog `checkout_completed`; audit event on plan changes.
-- [ ] Tests: webhook signature + idempotency + lifecycle transitions, gating dep (trial active / expired / subscribed / canceled), checkout route.
+- [x] **Stripe products:** 3 env-configured price IDs (`STRIPE_PRICE_STARTER/GROWTH/ENTERPRISE`); unconfigured → checkout 503. No custom billing UI — Checkout + Customer Portal only.
+- [x] **Routes** — `POST /billing/checkout` (subscription-mode session, `client_reference_id=org_id`, plan in session+subscription metadata, reuses existing `stripe_customer_id` on re-subscribe), `GET /billing/portal` (404 until a customer exists), `GET /billing` (plan/status/period-end/trial state plus the server's own `access_blocked` verdict so the web shell never re-implements the rule).
+- [x] **Webhook** — implemented in `webhooks.py`: `stripe.Webhook.construct_event` signature check (400 on bad sig); **idempotency via `stripe_events` claim table** (migration `20260611120000`; INSERT-as-claim, duplicate → 200 ack without re-processing); `checkout.session.completed` / `customer.subscription.updated` (org resolved from metadata or billing-table lookup, plan from price-id map with metadata fallback) / `customer.subscription.deleted` → billing upsert + `organizations.plan` mirror + best-effort `audit_events` row.
+- [x] **Access gating** — `evaluate_access()` in `services/billing_access.py` is the single source of truth (active/trialing subscription OR running built-in trial; `past_due` deliberately blocked — the paywall is the nudge that fixes the card; NULL/malformed `trial_ends_at` blocks rather than granting infinite access). `_require_active_org` (402) applied router-level in `main.py` to usage/anomalies/recommendations/reports; billing/integrations/tags/slack/budgets/onboarding stay reachable. Web: trial banner from day 7 in the dashboard shell; expired → `Paywall` with `PlanPicker` CTAs (nav intact — a door, not a dead end); both read `/billing` with `noStore` so a fresh payment is never hidden behind the 2-min cache.
+- [x] **Trial bootstrap** — verified pre-existing: `_handle_org_created` has set `trial_ends_at = now+14d` since M0.
+- [x] **PostHog** — server-side `services/analytics.py` (httpx → /capture, fail-soft, ids only): `signup` + `org_created` from the Clerk webhook, `checkout_completed` from the Stripe webhook; client-side capture on the checkout-success redirect as well. Audit events on every plan change.
+- [x] **Tests: 31 new** — `test_billing_gating.py` (access rule × 11 incl. canceled-inside-trial, Z-suffix timestamps; 402 dependency × 3), `test_billing_routes.py` (status/checkout/portal × 10), `test_stripe_webhook.py` (signature, idempotency, lifecycle × 10). Route tests bypass the gate via conftest override; TC-STUB-04/05/TC-WH-20 retired.
 
-**Done:** Stripe test-mode checkout completes → `billing` row updates → expired-trial org is paywalled, paid org is not. Pre-deploy smoke item #3 passes.
+**Done (code-side):** expired-trial org is paywalled, paid org is not, webhook lifecycle covered by tests. **Remaining (founder, ~30 min):** create the 3 Products/Prices in Stripe test mode, set the price-ID env vars + webhook endpoint secret, apply the `stripe_events` migration, run one live test-mode checkout (pre-deploy smoke #3).
 
 ---
 

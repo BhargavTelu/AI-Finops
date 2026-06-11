@@ -10,10 +10,10 @@ When a route is implemented, update the assertion from 501 → the correct code.
 TC-STUB-01  POST /integrations/:id/test
 TC-STUB-02  GET  /usage/forecast - IMPLEMENTED (Phase 3); see test_forecast*.py
 TC-STUB-03  GET  /usage/export.csv - route REMOVED (FR-23 ships client-side)
-TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
-TC-STUB-05  POST /webhooks/stripe
+TC-STUB-04  /billing routes - IMPLEMENTED (Phase 2); see test_billing_routes.py
+TC-STUB-05  POST /webhooks/stripe - IMPLEMENTED (Phase 2); see test_stripe_webhook.py
 TC-STUB-06  /reports routes - IMPLEMENTED (Phase 1); see test_report_routes.py
-TC-WH-20    POST /webhooks/stripe - duplicate stub behavior check
+TC-WH-20    POST /webhooks/stripe - IMPLEMENTED (Phase 2)
 """
 
 import pytest
@@ -81,57 +81,14 @@ class TestUsageExportCsvRemoved:
         )
 
 
-# ── TC-STUB-04: Billing routes × 3 ───────────────────────────────────────────
-
-class TestBillingStubs:
-    """
-    TC-STUB-04 - GET /billing, POST /billing/checkout, GET /billing/portal.
-    All raise NotImplementedError → 500. Critical M4 monetization gate.
-    """
-
-    def test_get_billing_returns_500(self) -> None:
-        resp = client.get("/api/v1/billing")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements (FR-21): assert 200 with plan/status."
-        )
-
-    def test_post_billing_checkout_returns_500(self) -> None:
-        resp = client.post("/api/v1/billing/checkout")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements: assert 200 with Stripe redirect URL."
-        )
-
-    def test_get_billing_portal_returns_500(self) -> None:
-        resp = client.get("/api/v1/billing/portal")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements: assert 200 with portal URL."
-        )
+# ── TC-STUB-04: Billing routes - IMPLEMENTED in Phase 2 ───────────────────────
+# Real coverage lives in tests/test_billing_routes.py (status/checkout/portal)
+# and tests/test_billing_gating.py (access rule + 402 dependency).
 
 
-# ── TC-STUB-05 + TC-WH-20: POST /webhooks/stripe ─────────────────────────────
-
-class TestStripeWebhookStub:
-    """
-    TC-STUB-05 / TC-WH-20 - POST /webhooks/stripe returns 501 Not Implemented.
-    CRITICAL: Stripe retries on non-2xx. A 500 causes indefinite retries.
-    When M4 implements: return 200 {"received": true} after valid signature.
-    An invalid stripe-signature must return 400.
-    """
-
-    def test_stripe_webhook_stub_returns_500(self) -> None:
-        resp = client.post(
-            "/api/webhooks/stripe",
-            headers={"stripe-signature": "t=123,v1=fakesig"},
-            content=b'{"type": "checkout.session.completed"}',
-        )
-        assert resp.status_code == 501, (
-            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
-            "CRITICAL: This stub must not reach production. "
-            "When M4 implements: assert 200 {\"received\": true} for valid sig."
-        )
+# ── TC-STUB-05 + TC-WH-20: POST /webhooks/stripe - IMPLEMENTED in Phase 2 ─────
+# Real coverage lives in tests/test_stripe_webhook.py (signature 400,
+# event-id idempotency, lifecycle transitions, 200 acks).
 
 
 # ── TC-STUB-06: Reports routes - IMPLEMENTED in Phase 1 ───────────────────────

@@ -205,3 +205,15 @@ export interface OnboardingStatus {
   slack_connected: boolean;
   budget_created: boolean;
 }
+
+export type PlanName = "starter" | "growth" | "enterprise";
+
+export interface BillingStatus {
+  plan: string;
+  status: string;
+  has_subscription: boolean;
+  current_period_end: string | null;
+  trial_ends_at: string | null;
+  trial_days_left: number | null;
+  access_blocked: boolean;
+}

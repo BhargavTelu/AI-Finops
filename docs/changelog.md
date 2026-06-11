@@ -6,9 +6,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] - Phases 0, 1, 3 (2026-06-11)
+## [Unreleased] - Phases 0-3 (2026-06-11) - MVP code-complete
 
-Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 3 was executed before Phase 2 (Stripe) at founder's direction.
+Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 3 was executed before Phase 2 (Stripe) at founder's direction. With Phase 2 shipped, every code-side piece of the spec's MVP done-condition exists.
+
+### Added - Phase 2: Stripe Billing + Gating (FR-21)
+
+739 tests passing (31 new), 10 skipped. 0 TypeScript errors. Production build green.
+
+- **Billing routes** (`api/routers/billing.py` - 501 stubs implemented) - `POST /billing/checkout` (subscription-mode Stripe Checkout, `client_reference_id=org_id`, plan carried in session + subscription metadata, reuses an existing `stripe_customer_id` on re-subscribe, 503 when price IDs unconfigured); `GET /billing/portal` (Customer Portal redirect, 404 until a customer exists); `GET /billing` (plan, status, period end, trial state, and the server's own `access_blocked` verdict so the web shell never re-implements the rule)
+- **Stripe webhook** (`webhooks.py` - stub implemented) - signature verification (400 on bad sig); **idempotency by event id** via the new `stripe_events` claim table (migration `20260611120000`; INSERT-as-claim, duplicate delivery acked with 200 and not re-processed); handles `checkout.session.completed`, `customer.subscription.updated` (org from metadata or billing-table lookup; plan from price-id map with metadata fallback; `current_period_end` epoch converted), `customer.subscription.deleted` (status canceled, org plan downgraded) - each upserts `billing`, mirrors `organizations.plan`, and writes a best-effort `audit_events` row
+- **Access gating** - `services/billing_access.evaluate_access()` is the single source of truth: active/trialing subscription OR running built-in 14-day trial grants access; `past_due` deliberately blocks (the paywall is the nudge that fixes the card); NULL or malformed `trial_ends_at` blocks rather than granting infinite access. `deps._require_active_org` returns 402 and is applied router-level to usage/anomalies/recommendations/reports; billing, integrations, tags, slack, budgets, and onboarding stay reachable when the trial lapses
+- **Web** - `/settings/billing` page (plan card with status badge, trial countdown, renewal date, Customer Portal button, checkout success/cancelled toasts with delayed refresh for webhook lag); shared `PlanPicker` (3 plans, POST checkout -> Stripe redirect); `Paywall` rendered by the dashboard shell when access is blocked (nav stays usable - a door, not a dead end); trial-countdown banner from day 7; Billing tab in settings nav; `api-client` gains a `noStore` GET option so billing state is never 2 minutes stale right after someone pays
+- **Server-side PostHog** (`api/services/analytics.py` - httpx to /capture, fail-soft, ids only) - `signup` + `org_created` captured from the Clerk webhook, `checkout_completed` from the Stripe webhook (plus client-side capture on the success redirect); completes the funnel deferred from Phase 3
+- **Config** - `STRIPE_PRICE_STARTER/GROWTH/ENTERPRISE`, `POSTHOG_API_KEY`, `POSTHOG_HOST` in `config.py` + `.env.example`
+- **31 new tests** - `test_billing_gating.py` (access rule incl. canceled-inside-trial-window, Z-suffix timestamps, NULL trial; 402 dependency), `test_billing_routes.py` (trial/expired/subscribed status, checkout session shape, customer reuse, 422/503, portal 404/url), `test_stripe_webhook.py` (bad signature 400, duplicate-event ack, all three lifecycle transitions, unknown-subscription resilience). Conftest neutralizes the gate for business-logic route tests; TC-STUB-04/05/TC-WH-20 retired
+
+### Changed - Phase 2
+
+- `main.py` router includes split into gated (usage, anomalies, recommendations, reports) and ungated groups; the Celery-app import-order requirement is now protected by an `isort: off` guard after a formatter pass re-introduced the M1 wrong-broker regression
+- `tests/test_tag_engine_security.py` ReDoS input reduced 2^25 -> 2^22 steps: the tag engine's thread-pool timeout cannot preempt the GIL-holding regex engine, so the test measured raw CPU speed and flapped around its 5s budget under machine load; the same exponential pattern is still exercised with ~8x headroom
+- Trial bootstrap (`trial_ends_at = now + 14d` on org creation) verified pre-existing since M0 - no change needed
 
 ### Added - Phase 3: Forecast, Activation, Landing, Weekly Email (FR-24, FR-25)
 

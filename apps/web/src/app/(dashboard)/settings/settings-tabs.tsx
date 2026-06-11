@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { KeyRound, Hash, MessageSquare } from "lucide-react";
+import { KeyRound, Hash, MessageSquare, CreditCard } from "lucide-react";
 import type { Route } from "next";
 
 import { cn } from "@/lib/utils";
@@ -30,6 +30,16 @@ const NAV_GROUPS = [
         href: "/settings/tags" as Route<string>,
         label: "Tag Rules",
         icon: Hash,
+      },
+    ],
+  },
+  {
+    label: "Account",
+    links: [
+      {
+        href: "/settings/billing" as Route<string>,
+        label: "Billing",
+        icon: CreditCard,
       },
     ],
   },

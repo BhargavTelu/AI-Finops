@@ -2,11 +2,32 @@
 
 ## Current Milestone: M4 - Monetize + Polish (via Strategic Implementation Plan)
 
-**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phases 0, 1, and 3 complete 2026-06-11** (Phase 3 executed before Phase 2 at founder's direction). Next: Phase 2 (Stripe billing + trial + gating) - the only remaining blocker for the spec's MVP done-condition.
+**Status:** M3 COMPLETE ✅. **Phases 0-3 of [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) complete 2026-06-11 - the MVP is code-complete.** Every code-side piece of the spec's done-condition exists: landing → signup → connect → checklist → chart → forecast → budget/Slack alert → CFO PDF → checkout → gating.
+
+**Remaining before a real customer can pay (founder ops, ~1-2 hours, no code):**
+1. Create the 3 Products/Prices in Stripe (test mode first) and set `STRIPE_PRICE_*` env vars
+2. Register the Stripe webhook endpoint (`/api/webhooks/stripe`) and set `STRIPE_WEBHOOK_SECRET`
+3. Apply pending migrations to Supabase: `20260611000000_add_email_digest_opt_out.sql`, `20260611120000_add_stripe_events.sql`
+4. Set R2 credentials in Railway and sanity-check one report upload/download (SigV4 is unit-tested, never live-tested)
+5. Run pre-deploy smoke: RLS probe, signup→chart on staging, one test-mode checkout end to end
+
+Next code work: Phase 4 (reconciliation, Slack ack buttons, CFO viewer seat, worker locks) - deliberately code-light; the done-condition is 3 paying customers.
 
 ---
 
 ## Strategic Implementation Plan progress
+
+### Phase 2 - Stripe Billing + Gating (FR-21) ✅ (complete 2026-06-11)
+
+**739 tests passing (31 new), 10 skipped. 0 TypeScript errors. Production build green.**
+
+- [x] Billing routes: checkout (org-tagged session, customer reuse, 503 unconfigured), portal (404 until customer), status (incl. server-side `access_blocked` verdict)
+- [x] Stripe webhook: signature check, `stripe_events` claim-table idempotency (migration `20260611120000`), all three lifecycle events -> billing upsert + org plan mirror + audit row
+- [x] Gating: `evaluate_access()` single source of truth; `_require_active_org` 402 on usage/anomalies/recommendations/reports; settings-class + billing routes never gated
+- [x] Web: `/settings/billing` page + Billing tab, shared `PlanPicker`, `Paywall` in the dashboard shell (nav intact), trial banner from day 7, `noStore` billing reads (no stale paywall after payment)
+- [x] Server-side PostHog: signup / org_created (Clerk webhook) + checkout_completed (Stripe webhook), fail-soft, ids only
+- [x] Trial bootstrap verified pre-existing since M0; D2 (14-day trial) and D3 ($299 entry) locked
+- [x] 31 tests across gating rule / routes / webhook lifecycle; TC-STUB-04/05 retired
 
 ### Phase 3 - Forecast, Activation, Landing, Weekly Email (FR-24, FR-25) ✅ (complete 2026-06-11)
 
