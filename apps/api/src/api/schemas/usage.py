@@ -56,6 +56,9 @@ class ForecastResult(BaseModel):
     confidence_low: Decimal
     confidence_high: Decimal
     as_of: datetime
+    method: str  # "linear_regression" | "trailing_30d_average"
+    last_month_cost_usd: Decimal  # full prior calendar month (delta baseline)
+    delta_vs_last_month_pct: float | None  # None when no prior-month spend
 
 
 class TagOverridePatch(BaseModel):

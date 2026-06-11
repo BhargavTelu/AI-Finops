@@ -8,7 +8,7 @@ frontend can handle the status code gracefully instead of receiving a generic 50
 When a route is implemented, update the assertion from 501 → the correct code.
 
 TC-STUB-01  POST /integrations/:id/test
-TC-STUB-02  GET  /usage/forecast
+TC-STUB-02  GET  /usage/forecast - IMPLEMENTED (Phase 3); see test_forecast*.py
 TC-STUB-03  GET  /usage/export.csv - route REMOVED (FR-23 ships client-side)
 TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
 TC-STUB-05  POST /webhooks/stripe
@@ -56,17 +56,9 @@ class TestIntegrationTestStub:
         )
 
 
-# ── TC-STUB-02: GET /usage/forecast ───────────────────────────────────────────
-
-class TestUsageForecastStub:
-    """TC-STUB-02 - GET /usage/forecast returns 501 Not Implemented."""
-
-    def test_stub_returns_500(self) -> None:
-        resp = client.get("/api/v1/usage/forecast")
-        assert resp.status_code == 501, (
-            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
-            "When M4 implements (FR-24): assert 200 with ForecastResult schema."
-        )
+# ── TC-STUB-02: GET /usage/forecast - IMPLEMENTED in Phase 3 ──────────────────
+# Real coverage lives in tests/test_forecast.py (regression math) and
+# tests/test_forecast_and_onboarding_routes.py (route contract).
 
 
 # ── TC-STUB-03: GET /usage/export.csv (removed) ───────────────────────────────

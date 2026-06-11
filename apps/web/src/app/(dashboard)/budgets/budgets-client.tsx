@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@clerk/nextjs";
 
 import { createApiClient } from "@/lib/api-client";
+import { captureBudgetCreated } from "@/lib/posthog";
 import type { BudgetRead, BudgetScopeType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -501,6 +502,7 @@ function CreateBudgetDialog({
           alert_at_pct: parseInt(form.alert_at_pct, 10),
           hard_cap: false,
         });
+        captureBudgetCreated(created.scope_type);
         onCreated(created);
         onOpenChange(false);
         reset();

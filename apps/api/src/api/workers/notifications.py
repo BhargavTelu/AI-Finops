@@ -7,13 +7,13 @@ Notification workers:
 """
 
 import calendar
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
+from celery import shared_task
 import resend
 import structlog
-from celery import shared_task
 from supabase import create_client
 
 from api.config import settings
@@ -415,7 +415,7 @@ def send_slack_digest(self, org_id: str) -> None:  # type: ignore[misc]
     Records sent_at for idempotency.
     """
     db = _get_supabase()
-    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
 
     # Skip if already sent for this date (Celery retry guard).
     existing = (
@@ -535,7 +535,7 @@ def send_anomaly_alert(self, anomaly_id: str) -> None:  # type: ignore[misc]
     # The alert was already delivered; this is audit data only.
     try:
         db.table("anomalies").update(
-            {"notified_at": datetime.now(timezone.utc).isoformat()}
+            {"notified_at": datetime.now(UTC).isoformat()}
         ).eq("id", anomaly_id).execute()
     except Exception as exc:
         log.warning("anomaly_notified_at_update_failed", anomaly_id=anomaly_id, error=str(exc))
@@ -637,3 +637,136 @@ def send_budget_alert(self, budget_id: str, pct: int, org_id: str) -> None:  # t
     except Exception as exc:
         # Non-fatal - email already sent; Slack failure is logged but not retried.
         log.warning("budget_slack_alert_failed", org_id=org_id, budget_id=budget_id, error=str(exc))
+
+
+# ── Weekly email digest (Phase 3) ──────────────────────────────────────────────
+
+
+def _weekly_email_html(data: dict[str, Any]) -> str:
+    """Branded weekly summary. Reuses the Slack digest metrics."""
+    week_total = data["avg_7d_usd"] * 7
+    mom = data.get("mom_pct")
+    if mom is not None:
+        mom_color = "#b93232" if mom > 0 else "#16825d"
+        mom_line = f'<span style="color: {mom_color};">{mom:+d}% vs last month</span>'
+    else:
+        mom_line = "no prior-month baseline yet"
+    drivers = data.get("top_drivers") or []
+    driver_rows = "".join(
+        f'<tr><td style="padding: 4px 12px 4px 0; color: #334155;">{d["label"]}</td>'
+        f'<td style="padding: 4px 0; color: #1a1a1a; text-align: right;">'
+        f"${d['usd']:,.2f}</td></tr>"
+        for d in drivers
+    )
+    drivers_block = (
+        f"<table style=\"font-size: 13px; margin: 4px 0 0 0;\">{driver_rows}</table>"
+        if driver_rows
+        else "<p style=\"color: #64748b; font-size: 13px;\">No spend recorded yesterday.</p>"
+    )
+    anomaly_count = data.get("open_anomaly_count", 0)
+    anomaly_line = (
+        f'<strong style="color: #b93232;">{anomaly_count} open</strong>'
+        if anomaly_count
+        else "none open"
+    )
+    avg_str = f"${data['avg_7d_usd']:,.2f}"
+
+    return f"""
+    <div style="font-family: Inter, Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+      <h2 style="color: #1f3a5f;">Your week in LLM spend</h2>
+      <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Last 7 days</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 600;">${week_total:,.2f}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Daily average</td>
+          <td style="padding: 8px 0; text-align: right; font-weight: 600;">{avg_str}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Month to date</td>
+          <td style="padding: 8px 0; text-align: right;">{mom_line}</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #64748b;">Cost anomalies</td>
+          <td style="padding: 8px 0; text-align: right;">{anomaly_line}</td>
+        </tr>
+      </table>
+      <h3 style="color: #1f3a5f; font-size: 14px; margin-top: 20px;">
+        Top models (most recent day)</h3>
+      {drivers_block}
+      <p style="margin: 24px 0;">
+        <a href="{settings.app_url}/dashboard"
+           style="background: #1f3a5f; color: #ffffff; padding: 10px 18px;
+                  border-radius: 8px; text-decoration: none; font-weight: 600;">
+          Open dashboard
+        </a>
+      </p>
+      <p style="color: #64748b; font-size: 12px;">
+        Sent every Monday by SpendOps AI. Connect Slack for daily digests instead.
+        Reply "unsubscribe" to stop these emails.
+      </p>
+    </div>
+    """
+
+
+@shared_task
+def send_weekly_email_digests() -> None:
+    """
+    Fan-out (Mondays 09:00 UTC): one weekly email per org that has an active
+    integration, has NOT connected Slack (Slack-first - those orgs already get
+    the daily digest), and has not opted out.
+    """
+    db = _get_supabase()
+
+    active = db.table("integrations").select("org_id").eq("status", "active").execute()
+    candidates = {row["org_id"] for row in active.data}
+
+    slack_rows = db.table("slack_integrations").select("org_id").execute()
+    candidates -= {row["org_id"] for row in slack_rows.data}
+
+    if not candidates:
+        log.info("weekly_email_digests_none")
+        return
+
+    opted_in = db.table("organizations").select("id").eq("email_digest_opt_out", False).execute()
+    recipients = sorted(candidates & {row["id"] for row in opted_in.data})
+
+    for org_id in recipients:
+        send_weekly_email_digest.delay(org_id)
+    log.info("weekly_email_digests_dispatched", count=len(recipients))
+
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=120)
+def send_weekly_email_digest(self, org_id: str) -> None:  # type: ignore[misc]
+    """Send the weekly summary email to the org admin. Retries on Resend failure."""
+    db = _get_supabase()
+
+    to_email = _get_org_admin_email(db, org_id)
+    if not to_email:
+        log.warning("weekly_digest_no_admin_email", org_id=org_id)
+        return
+
+    yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    data = _fetch_digest_data(db, org_id, yesterday)
+
+    # A "$0.00 this week" email is noise that teaches people to ignore the
+    # digest - an org with a connected key but no recent usage gets nothing.
+    if not data["avg_7d_usd"]:
+        log.info("weekly_digest_skipped_no_spend", org_id=org_id)
+        return
+
+    resend.api_key = settings.resend_api_key
+    try:
+        resend.Emails.send(
+            {
+                "from": settings.from_email,
+                "to": [to_email],
+                "subject": "Your week in LLM spend",
+                "html": _weekly_email_html(data),
+            }
+        )
+        log.info("weekly_digest_sent", org_id=org_id)
+    except Exception as exc:
+        log.error("weekly_digest_send_failed", org_id=org_id, error=str(exc))
+        raise self.retry(exc=exc) from exc

@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { createApiClient } from "@/lib/api-client";
+import { captureProviderConnected } from "@/lib/posthog";
 import type { IntegrationRead } from "@/lib/types";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptyState } from "@/components/empty-state";
@@ -123,6 +124,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
         display_name: displayName,
         api_key: apiKey,
       });
+      captureProviderConnected(created.provider);
       setList((prev) => [created, ...prev]);
       setSubmitState("success");
       setTimeout(() => {

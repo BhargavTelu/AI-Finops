@@ -77,4 +77,10 @@ celery_app.conf.beat_schedule = {
         "task": "api.workers.reports.generate_monthly_reports",
         "schedule": crontab(day_of_month="1", hour=6, minute=0),
     },
+    # Weekly email digest for orgs without Slack (Mondays 09:00 UTC,
+    # same hour as the Slack digest so numbers line up)
+    "weekly-email-digest": {
+        "task": "api.workers.notifications.send_weekly_email_digests",
+        "schedule": crontab(hour=9, minute=0, day_of_week="mon"),
+    },
 }

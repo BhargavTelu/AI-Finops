@@ -6,9 +6,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] - Phases 0-1 (2026-06-11)
+## [Unreleased] - Phases 0, 1, 3 (2026-06-11)
 
-Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers).
+Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 3 was executed before Phase 2 (Stripe) at founder's direction.
+
+### Added - Phase 3: Forecast, Activation, Landing, Weekly Email (FR-24, FR-25)
+
+707 tests passing (22 new), 10 skipped. 0 TypeScript errors. Production build green.
+
+- **Month-end forecast** (`api/services/forecast.py` + `/usage/forecast`) - pure least-squares regression over current-month daily totals (gap-filled $0 days, predictions clamped >= 0, confidence band from residual std x sqrt(remaining days), low bound never below actual MTD); trailing-30d-average fallback under 5 elapsed days; 404 distinguishes "no history" from a genuine zero-spend month. `ForecastResult` extended with `method` / `last_month_cost_usd` / `delta_vs_last_month_pct`. Dashboard gains a "Projected month-end" stat card (5-col grid when present) with delta badge and confidence range. TC-STUB-02 retired.
+- **Activation checklist** - `GET /onboarding/status` (4 org-scoped existence queries: provider, tag rule, Slack, budget) + dismissible `ActivationChecklist` dashboard card (localStorage, hydration-safe, auto-hides at 4/4); rendered on the empty-state dashboard too, where a fresh org needs it most. Replaces the spec's multi-step onboarding wizard.
+- **Landing page** - `/` redirect stub replaced with a marketing page in the existing design system: cost-statement hero vignette (ledger rows, dot leaders, flagged anomaly), numbered section rules, three feature blocks, 3-step how-it-works, spend-tiered pricing ($299/$599/$1,500 - every plan includes all features; 14-day trial, no card), navy security band linking `/security`, native-details FAQ, sign-up CTA (signed-in visitors see "Open dashboard").
+- **Weekly email digest** - `send_weekly_email_digests` beat (Mondays 09:00 UTC) reusing `_fetch_digest_data()`; targets orgs with active integrations minus Slack-connected (Slack-first: no double-notify) minus opted-out; migration `20260611000000_add_email_digest_opt_out.sql` adds `organizations.email_digest_opt_out`.
+- **PostHog funnel wired** - capture functions existed as stubs with zero call sites; now firing: `provider_connected`, `tag_created`, `budget_created` (signature widened from 3 to 7 scope types), `pdf_downloaded`; `identify(user.id)` + organization `group()` in the provider (Clerk ids only - no PII in analytics). `signup`/`org_created` deferred to server-side Clerk-webhook capture (Phase 2, alongside `checkout_completed`).
+- **22 new tests** - `test_forecast.py` (regression math: flat/trend/clamp/band/fallbacks), `test_forecast_and_onboarding_routes.py` (404 vs 200 contract, org scoping), `test_notifications_weekly.py` (fan-out exclusions, send paths, HTML content, MoM colors).
+
+### Fixed - Phase 3 verification pass (2026-06-11)
+
+A no-assumptions audit of Phase 3 against the plan (beat config and routes verified live in-process, DeltaBadge null/color semantics checked, hero-ledger arithmetic re-summed, forecast edge cases re-traced including first-of-month). Two issues found and fixed (708 tests passing):
+
+- **Zero-spend orgs received a "$0.00" weekly email** - an org with a connected key but no usage in the trailing 7 days got "Your week in LLM spend: $0.00", noise that teaches recipients to ignore the digest. `send_weekly_email_digest` now skips when the week is empty; regression test added.
+- **`#pricing` anchor scrolled under the sticky landing-page header** - added `scroll-mt-20` to the pricing section.
+
 
 ### Added - Phase 1: CFO PDF Report (FR-22)
 

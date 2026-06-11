@@ -33,7 +33,9 @@ export function captureTagCreated(tagType: "feature" | "team" | "customer" | "en
   posthog.capture("tag_created", { tag_type: tagType });
 }
 
-export function captureBudgetCreated(scopeType: "global" | "tag" | "model"): void {
+// scope_type widened from the M0 stub's 3-value union: budgets now support 7
+// scope types (global/provider/model/feature_tag/team_tag/customer_tag/env_tag).
+export function captureBudgetCreated(scopeType: string): void {
   posthog.capture("budget_created", { scope_type: scopeType });
 }
 

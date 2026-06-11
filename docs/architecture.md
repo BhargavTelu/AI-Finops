@@ -76,7 +76,9 @@ UUIDv7 ids · `created_at`/`updated_at` on all tables · UTC timestamps · RLS o
 ```sql
 -- IDENTITY (mirrors Clerk)
 users (id uuid PK, clerk_id text unique, email text unique, full_name, created_at, updated_at)
-organizations (id uuid PK, clerk_id text unique, name, plan text default 'trial', trial_ends_at, created_at, updated_at)
+organizations (id uuid PK, clerk_id text unique, name, plan text default 'trial', trial_ends_at,
+               email_digest_opt_out bool default false,  -- weekly email digest opt-out (Phase 3)
+               created_at, updated_at)
 organization_members (id, org_id FK, user_id FK, role text default 'admin', UNIQUE(org_id, user_id))
 
 -- INTEGRATIONS
@@ -172,6 +174,9 @@ GET    /anomalies?status=open
 PATCH  /anomalies/:id                   ack/dismiss
 GET    /recommendations?status=new
 PATCH  /recommendations/:id             apply/dismiss
+
+# Onboarding
+GET    /onboarding/status               activation checklist booleans (provider/tag rule/Slack/budget)
 
 # Slack
 GET    /slack/status                    connection state (connected, workspace, channel)
@@ -309,6 +314,10 @@ Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
 Monthly (1st, 06:00 UTC):
        generate_monthly_reports → CFO PDF per org: build data → fpdf2 →     [Phase 1 ✅]
                                   R2 upload → reports row → Resend email
+
+Weekly (Mon, 09:00 UTC):
+       send_weekly_email_digests → email digest for orgs WITHOUT Slack      [Phase 3 ✅]
+                                   (active integrations, not opted out)
 ```
 
 ### Slack digest (09:00 UTC) ✅ [M3 Group C complete]
