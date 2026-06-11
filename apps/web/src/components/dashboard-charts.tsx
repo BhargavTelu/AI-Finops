@@ -438,7 +438,8 @@ export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
       showLegend={models.length > 1}
       showGridLines
       curveType="monotone"
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      // `any` cast: Tremor types customTooltip more narrowly than the props
+      // it actually passes at runtime; our tooltip needs the extra fields.
       customTooltip={SpendTrendTooltip as any}
     />
   );
