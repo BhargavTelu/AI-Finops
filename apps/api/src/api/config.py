@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     resend_api_key: str
     from_email: str = "noreply@yourdomain.com"
 
+    # ── App ───────────────────────────────────────────────────────────────────
+    # Public URL of the web app - used in email CTAs (e.g. report-ready links).
+    app_url: str = "http://localhost:3000"
+
     # ── Slack ──────────────────────────────────────────────────────────────────
     # Create a Slack app at api.slack.com/apps, request scopes:
     #   incoming-webhook, chat:write

@@ -6,21 +6,41 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] - Phase 0: Trust Quick Wins (2026-06-11)
+## [Unreleased] - Phases 0-1 (2026-06-11)
 
-Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 0 removes trust blockers in the key-connect funnel.
+Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers).
 
-### Added
+### Added - Phase 1: CFO PDF Report (FR-22)
+
+680 tests passing (48 new), 10 skipped. 0 TypeScript errors. ESLint + ruff clean on new files.
+
+- **Report data service** (`api/services/report_builder.py`) - pure functions assembling `MonthlyReportData` from pre-fetched rows: month totals, MoM delta (None-safe on zero/missing prior month), spend by provider / top-10 models / feature / team / customer (untagged bucketed), anomaly count + top-3 by spike, applied-recommendation savings, flat-extrapolation month-end projection (Phase 3 forecast will replace it)
+- **PDF renderer** (`api/services/report_pdf.py`) - fpdf2 layout: navy header band, summary stat row with color-coded MoM, alternating-row tables per dimension, severity-colored anomaly lines, realized-savings section, data-source footnote ("Anthropic figures are computed from list pricing"). **Decision D1 amended: fpdf2 instead of WeasyPrint** - WeasyPrint requires Pango/GTK native libs that fail on Windows dev (`libgobject-2.0-0` load error) and weigh on Railway; fpdf2 is pure Python (~1MB)
+- **R2 storage service** (`api/services/storage.py`) - hand-rolled AWS SigV4 over httpx (boto3 is ~80MB for two operations): `upload_pdf` + `presign_download` with injectable clock for deterministic signature tests; path-style URLs, region `auto`; object key `reports/{org_id}/{period_start}.pdf` is stable per month so fuller regenerations overwrite partials
+- **Report worker** (`api/workers/reports.py`) - `generate_monthly_reports` beat task (1st of month, 06:00 UTC) fans out `generate_org_report` per org with an active integration; idempotency = one `reports` row per (org, type, period_start), regenerated only when the run covers more days or `force=True` (an on-demand partial never blocks the month-end report); R2-unconfigured fallback records the row with no file; best-effort Resend email ("Your {Month} report is ready" + `/reports` link) to the org admin
+- **Reports API** (`api/routers/reports.py` - 501 stubs implemented) - `GET /reports` (list, `has_file` flag, R2 key never exposed); `GET /reports/:id/download` (ownership-checked 10-min presigned URL); `POST /reports/generate` (202, current month-to-date with `force=True` - the sales-demo path; Redis rate limit 3/org/day, fail-open on Redis outage)
+- **`/reports` page** (`apps/web/src/app/(dashboard)/reports/`) - report cards with period label + "Month to date" badge, download button (opens presigned URL), "Generate current month" button with queued toast + delayed refresh, empty state, loading skeleton, error state; Reports nav link under Analytics
+- **Config** - `APP_URL` added to `config.py` + `.env.example` (email CTAs); `fpdf2>=2.8.0` in `pyproject.toml` with dependency-weight justification; `generate-monthly-reports` beat schedule wired in `celery_app.py`
+- **48 new tests** - `test_report_builder.py` (totals, MoM edge cases, grouping/untagged/top-10, projection partial vs complete, anomaly top-3, savings), `test_report_pdf_and_storage.py` (valid PDF bytes, empty sections, latin-1 org names; SigV4 URL/header shape, signature determinism, error wrapping), `test_reports_worker.py` (fan-out dedupe, idempotency semantics, stable key, R2-unconfigured row, email paths), `test_report_routes.py` (list/download ownership/404s, generate 202, 429, fail-open)
+
+### Changed - Phase 1
+
+- `tests/test_stub_routes.py` TC-STUB-06 retired - reports routes are implemented; coverage moved to `test_report_routes.py`
+- `/security` page contact corrected to `security@spendopsai.com` (production domain per CORS config)
+
+---
+
+### Added - Phase 0: Trust Quick Wins
 
 - **`/security` page** (`apps/web/src/app/security/page.tsx`) - public marketing-grade security overview: AES-256-GCM key encryption, read-only pull architecture (no customer traffic through our servers), Postgres RLS tenant isolation, no-PII logging, data deletion, subprocessor list. Added to Clerk middleware public routes; linked from the integrations settings page and the connect dialog.
 - **Least-privilege key guidance** (`KeyScopeGuide` in `components/integrations-page.tsx`) - collapsible per-provider panel in the connect dialog. OpenAI: step-by-step for a Restricted Admin key with read-only Usage API scope (verified against provider docs 2026-06). Anthropic: honest copy that Admin keys cannot be scoped + what we actually call. API-key placeholder now switches per provider (`sk-admin-...` / `sk-ant-admin...`).
 - **Strategy docs** - `docs/STRATEGIC_IMPLEMENTATION_PLAN.md` (source of truth for feature order, Phases 0-5) and `docs/strategic_review_2026-06-11.docx` (founder-level product review it derives from).
 
-### Changed
+### Changed - Phase 0
 
 - **Gemini hidden from the connect form** - `fetch_costs()` is a no-op (AI Studio has no billing endpoint), so connecting a Gemini key silently ingested $0 and looked broken. The provider option is now disabled with "(coming soon)"; backend adapter and existing integrations are untouched.
 
-### Removed
+### Removed - Phase 0
 
 - **`GET /usage/export.csv` 501 stub** - FR-23 (CSV export from Cost Explorer) shipped client-side via `export-button.tsx`, so the server endpoint is dead code. `test_stub_routes.py` TC-STUB-03 now guards that the route stays gone (404) instead of asserting 501.
 

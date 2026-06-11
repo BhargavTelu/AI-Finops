@@ -2,11 +2,26 @@
 
 ## Current Milestone: M4 - Monetize + Polish (via Strategic Implementation Plan)
 
-**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phase 0 (Trust Quick Wins) complete 2026-06-11.** Next: Phase 1 (CFO PDF report).
+**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phase 0 (Trust Quick Wins) complete 2026-06-11. Phase 1 (CFO PDF Report, FR-22) complete 2026-06-11.** Next: Phase 2 (Stripe billing + trial + gating).
 
 ---
 
 ## Strategic Implementation Plan progress
+
+### Phase 1 - CFO PDF Report (FR-22) ✅ (complete 2026-06-11)
+
+**680 tests passing (48 new), 10 skipped. 0 TypeScript errors. ESLint + ruff clean on new files.**
+
+- [x] `report_builder.py` - pure data assembly: totals, MoM delta (None on zero/missing prior month), by provider/model/feature/team/customer with untagged bucketing + top-10 cap, anomaly top-3 by spike, applied-rec savings, flat month-end projection
+- [x] `report_pdf.py` - fpdf2 branded layout (D1 amended: WeasyPrint's Pango deps fail on Windows dev; fpdf2 is pure Python ~1MB); smoke-verified visually CFO-presentable
+- [x] `storage.py` - SigV4 over httpx (no boto3): `upload_pdf` + `presign_download`, injectable clock, stable monthly object key, R2-unconfigured soft fallback
+- [x] `workers/reports.py` - beat on 1st 06:00 UTC, per-org fan-out, (org, type, period_start) idempotency that lets fuller runs supersede partials, best-effort report-ready email
+- [x] Routes: `GET /reports`, `GET /reports/:id/download` (presigned, ownership-checked), `POST /reports/generate` (202 month-to-date, Redis 3/day/org fail-open) - 501 stubs gone
+- [x] `/reports` web page (cards, MTD badge, download, generate button, empty/loading/error states) + Reports nav link + TS types
+- [x] Config: `APP_URL`; beat schedule `generate-monthly-reports`; `fpdf2>=2.8.0` dependency
+- [x] 48 tests across builder math / PDF + SigV4 / worker / routes; TC-STUB-06 retired
+
+**Phase 1 done-condition met:** `POST /reports/generate` produces a presentable month-to-date PDF on demand; the 1st-of-month beat covers the previous month and emails the org admin.
 
 ### Phase 0 - Trust Quick Wins ✅ (complete 2026-06-11)
 
@@ -18,9 +33,9 @@
 - [x] Dead `GET /usage/export.csv` 501 stub deleted (FR-23 ships client-side via `export-button.tsx`); TC-STUB-03 now asserts 404 (route stays gone)
 - [x] Docs updated: changelog, project status, architecture endpoint list, CLAUDE.md milestone + doc links
 
-### Phase 1 - CFO PDF Report (next)
+### Phase 2 - Stripe Billing + Gating (next)
 
-See [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) § Phase 1 for the task list (report_builder service, WeasyPrint template, R2 storage, beat worker, `/reports` routes + page).
+See [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) § Phase 2 (checkout/portal/billing routes, Stripe webhook with event-id idempotency, `require_active_org` gating, 14-day trial bootstrap).
 
 ---
 

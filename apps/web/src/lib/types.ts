@@ -167,3 +167,24 @@ export interface AnomalyRead {
   context: Record<string, unknown> | null;
   explanation: string | null;
 }
+
+export interface ReportRead {
+  id: string;
+  org_id: string;
+  type: string;
+  period_start: string; // ISO date
+  period_end: string;   // ISO date
+  has_file: boolean;
+  generated_at: string; // ISO datetime
+}
+
+export interface ReportDownloadResponse {
+  url: string;
+  expires_in_seconds: number;
+}
+
+export interface ReportGenerateAccepted {
+  status: "queued";
+  period_start: string;
+  period_end: string;
+}

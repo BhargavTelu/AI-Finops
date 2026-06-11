@@ -17,6 +17,7 @@ celery_app = Celery(
         "api.workers.notifications",
         "api.workers.recommendations",
         "api.workers.anomaly_explainer",
+        "api.workers.reports",
     ],
 )
 
@@ -69,5 +70,11 @@ celery_app.conf.beat_schedule = {
     "generate-recommendations": {
         "task": "api.workers.recommendations.generate_all_org_recommendations",
         "schedule": crontab(hour=2, minute=30),
+    },
+    # Monthly CFO PDF on the 1st at 06:00 UTC (after the night's aggregation
+    # has finalized the last day of the previous month)
+    "generate-monthly-reports": {
+        "task": "api.workers.reports.generate_monthly_reports",
+        "schedule": crontab(day_of_month="1", hour=6, minute=0),
     },
 }

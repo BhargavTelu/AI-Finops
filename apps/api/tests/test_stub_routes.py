@@ -12,7 +12,7 @@ TC-STUB-02  GET  /usage/forecast
 TC-STUB-03  GET  /usage/export.csv - route REMOVED (FR-23 ships client-side)
 TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
 TC-STUB-05  POST /webhooks/stripe
-TC-STUB-06  GET/GET/POST /reports, /reports/:id/download, /reports/generate
+TC-STUB-06  /reports routes - IMPLEMENTED (Phase 1); see test_report_routes.py
 TC-WH-20    POST /webhooks/stripe - duplicate stub behavior check
 """
 
@@ -142,31 +142,6 @@ class TestStripeWebhookStub:
         )
 
 
-# ── TC-STUB-06: Reports routes × 3 ───────────────────────────────────────────
-
-class TestReportStubs:
-    """
-    TC-STUB-06 - GET /reports, GET /reports/:id/download, POST /reports/generate.
-    All raise NotImplementedError → 500.
-    """
-
-    def test_get_reports_returns_500(self) -> None:
-        resp = client.get("/api/v1/reports")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements (FR-22): assert 200 with list."
-        )
-
-    def test_get_report_download_returns_500(self) -> None:
-        resp = client.get("/api/v1/reports/some-id/download")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements: assert 302 or 200 with signed R2 URL."
-        )
-
-    def test_post_reports_generate_returns_500(self) -> None:
-        resp = client.post("/api/v1/reports/generate")
-        assert resp.status_code == 501, (
-            f"Expected 501, got {resp.status_code}. "
-            "When M4 implements: assert 202 accepted."
-        )
+# ── TC-STUB-06: Reports routes - IMPLEMENTED in Phase 1 ───────────────────────
+# Real coverage lives in tests/test_report_routes.py (list, download ownership,
+# presign, generate 202, rate limit). No stub assertions remain.

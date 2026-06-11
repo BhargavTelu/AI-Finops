@@ -126,12 +126,11 @@ export default function SecurityPage() {
 
         <p className="mt-10 text-sm text-muted-foreground">
           Questions, security reviews, or vulnerability reports: email{" "}
-          {/* TODO: confirm the production domain before launch */}
           <a
-            href="mailto:security@spendops.ai"
+            href="mailto:security@spendopsai.com"
             className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
           >
-            security@spendops.ai
+            security@spendopsai.com
           </a>
           . Reports go straight to the founders.
         </p>
