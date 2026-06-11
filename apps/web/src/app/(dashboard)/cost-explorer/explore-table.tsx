@@ -142,7 +142,7 @@ export function ExploreTable({ rows, groupBy }: Props) {
   });
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border/60 scrollbar-thin">
+    <div className="overflow-x-auto rounded-xl bg-card shadow-card scrollbar-thin">
       <table className="w-full text-sm">
         <thead className="border-b border-border/60 bg-muted/30">
           {table.getHeaderGroups().map((hg) => (

@@ -1,15 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AreaChart,
 } from "@tremor/react";
 import {
+  Area,
+  AreaChart as RechartsAreaChart,
   Bar,
   BarChart,
   Cell,
-  Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -18,13 +18,12 @@ import {
   YAxis,
 } from "recharts";
 import {
-  CalendarDays,
-  BarChart2,
-  TrendingUp,
-  Receipt,
+  ArrowDownRight,
+  ArrowUpRight,
   Bell,
   ChevronRight,
 } from "lucide-react";
+import { animate, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 
 import type { AnomalyRead, DashboardSummary, ExploreRow, PeriodSummary } from "@/lib/types";
@@ -34,11 +33,18 @@ import { EmptyState } from "@/components/empty-state";
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function fmtCost(raw: string | number): string {
   const n = typeof raw === "string" ? parseFloat(raw) : raw;
   if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(6)}`;
-  return `$${n.toFixed(2)}`;
+  return usd.format(n);
 }
 
 function timeAgo(iso: string): string {
@@ -51,26 +57,90 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+// Concrete CSS color strings for Recharts SVG fills - resolved from the
+// chart token palette so every chart follows the same series order.
+const CHART = {
+  1: "hsl(var(--chart-1))",
+  2: "hsl(var(--chart-2))",
+  3: "hsl(var(--chart-3))",
+  4: "hsl(var(--chart-4))",
+  5: "hsl(var(--chart-5))",
+  6: "hsl(var(--chart-6))",
+} as const;
+
+const TOOLTIP_STYLE: React.CSSProperties = {
+  fontSize: "12px",
+  borderRadius: "8px",
+  border: "none",
+  backgroundColor: "hsl(var(--popover))",
+  color: "hsl(var(--popover-foreground))",
+  boxShadow: "var(--shadow-overlay)",
+  padding: "8px 12px",
+};
+
 // ---------------------------------------------------------------------------
-// SparklineChart - tiny Recharts line used inside KPI cards
+// CountUpValue - animates a financial figure from 0 on mount.
+// SSR renders the final value (no hydration mismatch); the count-up only
+// plays client-side and is skipped entirely under prefers-reduced-motion.
 // ---------------------------------------------------------------------------
 
-function SparklineChart({ data, up }: { data: number[]; up: boolean | null }) {
+function CountUpValue({ value }: { value: number }) {
+  const reduceMotion = useReducedMotion();
+  const [display, setDisplay] = useState(() => fmtCost(value));
+
+  useEffect(() => {
+    if (reduceMotion || value === 0 || value < 0.01) {
+      setDisplay(fmtCost(value));
+      return;
+    }
+    const controls = animate(0, value, {
+      duration: 0.7,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(fmtCost(v)),
+    });
+    return () => controls.stop();
+  }, [value, reduceMotion]);
+
+  return <span className="tabular">{display}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// SparklineChart - gradient area under each KPI number
+// ---------------------------------------------------------------------------
+
+function SparklineChart({
+  data,
+  up,
+  gradientId,
+}: {
+  data: number[];
+  up: boolean | null;
+  gradientId: string;
+}) {
   if (data.length < 2) return null;
-  const color = up === null ? "#94a3b8" : up ? "#ef4444" : "#10b981";
+  // Cost rising = critical tone, falling = success, flat/unknown = neutral
+  const color =
+    up === null ? CHART[6] : up ? "hsl(var(--critical))" : "hsl(var(--success))";
   const chartData = data.map((v, i) => ({ i, v }));
   return (
-    <ResponsiveContainer width="100%" height={32}>
-      <LineChart data={chartData}>
-        <Line
+    <ResponsiveContainer width="100%" height={36}>
+      <RechartsAreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area
           type="monotone"
           dataKey="v"
           stroke={color}
           strokeWidth={1.5}
+          fill={`url(#${gradientId})`}
           dot={false}
           isAnimationActive={false}
         />
-      </LineChart>
+      </RechartsAreaChart>
     </ResponsiveContainer>
   );
 }
@@ -87,15 +157,21 @@ function DeltaBadge({ pct }: { pct: number | null }) {
   const neutral = pct === 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium ${
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium tabular ${
         neutral
           ? "bg-muted text-muted-foreground"
           : up
-            ? "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"
-            : "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400"
+            ? "bg-critical-subtle text-critical"
+            : "bg-success-subtle text-success"
       }`}
     >
-      {neutral ? "=" : up ? "↑" : "↓"}&nbsp;{Math.abs(pct).toFixed(1)}% vs prior
+      {!neutral &&
+        (up ? (
+          <ArrowUpRight className="h-3 w-3" aria-hidden />
+        ) : (
+          <ArrowDownRight className="h-3 w-3" aria-hidden />
+        ))}
+      {Math.abs(pct).toFixed(1)}% vs prior
     </span>
   );
 }
@@ -115,113 +191,47 @@ interface StatCardsProps {
   budgetStatus: "healthy" | "warning" | "over";
 }
 
-interface CardDef {
-  key: keyof Pick<DashboardSummary, "day" | "week" | "month" | "mtd">;
-  icon: React.ElementType;
-  defaultIconColor: string;
-  defaultIconBg: string;
-  sparklineKey: keyof StatCardsProps["sparklines"];
-}
-
-const CARD_DEFS: CardDef[] = [
-  {
-    key: "day",
-    icon: CalendarDays,
-    defaultIconColor: "text-slate-500 dark:text-slate-400",
-    defaultIconBg: "bg-slate-100 dark:bg-slate-800",
-    sparklineKey: "day",
-  },
-  {
-    key: "week",
-    icon: BarChart2,
-    defaultIconColor: "text-blue-600 dark:text-blue-400",
-    defaultIconBg: "bg-blue-50 dark:bg-blue-950/60",
-    sparklineKey: "week",
-  },
-  {
-    key: "month",
-    icon: TrendingUp,
-    defaultIconColor: "text-violet-600 dark:text-violet-400",
-    defaultIconBg: "bg-violet-50 dark:bg-violet-950/60",
-    sparklineKey: "month",
-  },
-  {
-    key: "mtd",
-    icon: Receipt,
-    defaultIconColor: "text-emerald-600 dark:text-emerald-400",
-    defaultIconBg: "bg-emerald-50 dark:bg-emerald-950/60",
-    sparklineKey: "mtd",
-  },
-];
-
-const BUDGET_ICON: Record<
-  "healthy" | "warning" | "over",
-  { iconColor: string; iconBg: string }
-> = {
-  healthy: {
-    iconColor: "text-emerald-600 dark:text-emerald-400",
-    iconBg: "bg-emerald-50 dark:bg-emerald-950/60",
-  },
-  warning: {
-    iconColor: "text-amber-600 dark:text-amber-400",
-    iconBg: "bg-amber-50 dark:bg-amber-950/60",
-  },
-  over: {
-    iconColor: "text-red-600 dark:text-red-400",
-    iconBg: "bg-red-50 dark:bg-red-950/60",
-  },
-};
+const CARD_KEYS = ["day", "week", "month", "mtd"] as const;
 
 function SingleStatCard({
   period,
-  icon: Icon,
-  iconColor,
-  iconBg,
   sparkline,
+  gradientId,
   budgetDot,
 }: {
   period: PeriodSummary;
-  icon: React.ElementType;
-  iconColor: string;
-  iconBg: string;
   sparkline: number[];
+  gradientId: string;
   budgetDot?: "healthy" | "warning" | "over";
 }) {
   const up = period.pct_change === null ? null : period.pct_change > 0;
 
   return (
-    <div className="flex flex-col rounded-xl border border-border/60 bg-card p-6 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-              {period.period_label}
-            </p>
-            {budgetDot && budgetDot !== "healthy" && (
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${
-                  budgetDot === "over" ? "bg-red-500" : "bg-amber-400"
-                }`}
-              />
-            )}
-          </div>
-          {/* Primary KPI number - large, bold, monospace */}
-          <p className="mt-3 text-3xl font-bold tracking-tight text-mono">
-            {fmtCost(period.total_cost_usd)}
-          </p>
-          <div className="mt-2">
-            <DeltaBadge pct={period.pct_change} />
-          </div>
-        </div>
-        <div
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${iconBg}`}
-        >
-          <Icon className={`h-5 w-5 ${iconColor}`} strokeWidth={1.75} />
-        </div>
+    <div className="flex flex-col rounded-xl bg-card p-6 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
+      <div className="flex items-center gap-1.5">
+        <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+          {period.period_label}
+        </p>
+        {budgetDot && budgetDot !== "healthy" && (
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${
+              budgetDot === "over" ? "bg-critical" : "bg-warning"
+            }`}
+            role="img"
+            aria-label={budgetDot === "over" ? "Over budget" : "Approaching budget limit"}
+          />
+        )}
+      </div>
+      {/* Primary KPI number - large display figure, tabular digits */}
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+        <CountUpValue value={parseFloat(String(period.total_cost_usd))} />
+      </p>
+      <div className="mt-2">
+        <DeltaBadge pct={period.pct_change} />
       </div>
       {/* Sparkline - only renders when ≥2 data points exist */}
       <div className="mt-4">
-        <SparklineChart data={sparkline} up={up} />
+        <SparklineChart data={sparkline} up={up} gradientId={gradientId} />
       </div>
     </div>
   );
@@ -230,38 +240,28 @@ function SingleStatCard({
 export function DashboardStatCards({ periods, sparklines, budgetStatus }: StatCardsProps) {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {CARD_DEFS.map((def) => {
-        const isMtd = def.key === "mtd";
-        const { iconColor, iconBg } = isMtd
-          ? BUDGET_ICON[budgetStatus]
-          : { iconColor: def.defaultIconColor, iconBg: def.defaultIconBg };
-
-        return (
-          <SingleStatCard
-            key={def.key}
-            period={periods[def.key]}
-            icon={def.icon}
-            iconColor={iconColor}
-            iconBg={iconBg}
-            sparkline={sparklines[def.sparklineKey]}
-            budgetDot={isMtd ? budgetStatus : undefined}
-          />
-        );
-      })}
+      {CARD_KEYS.map((key) => (
+        <SingleStatCard
+          key={key}
+          period={periods[key]}
+          sparkline={sparklines[key]}
+          gradientId={`kpi-spark-${key}`}
+          budgetDot={key === "mtd" ? budgetStatus : undefined}
+        />
+      ))}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// ProviderDonut - Recharts PieChart for spend-by-provider breakdown
+// ProviderDonut - Recharts PieChart with center total for spend-by-provider
 // ---------------------------------------------------------------------------
 
 const PROVIDER_COLORS: Record<string, string> = {
-  openai: "#10b981",    // emerald-500
-  anthropic: "#8b5cf6", // violet-500
-  gemini: "#f59e0b",    // amber-500
+  openai: CHART[3],    // teal
+  anthropic: CHART[2], // violet
+  gemini: CHART[4],    // amber
 };
-const FALLBACK_COLOR = "#94a3b8"; // slate-400
 
 export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
   const chartData = rows
@@ -280,47 +280,75 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
     );
   }
 
+  const total = chartData.reduce((sum, d) => sum + d.value, 0);
+
   return (
-    <ResponsiveContainer width="100%" height={190}>
-      <PieChart>
-        <Pie
-          data={chartData}
-          cx="50%"
-          cy="45%"
-          innerRadius={52}
-          outerRadius={76}
-          paddingAngle={3}
-          dataKey="value"
-          isAnimationActive={false}
-        >
-          {chartData.map((entry, i) => (
-            <Cell
-              key={i}
-              fill={PROVIDER_COLORS[entry.name.toLowerCase()] ?? FALLBACK_COLOR}
+    <div>
+      <div className="relative">
+        <ResponsiveContainer width="100%" height={176}>
+          <PieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={58}
+              outerRadius={80}
+              paddingAngle={2}
+              dataKey="value"
+              strokeWidth={0}
+              isAnimationActive
+              animationDuration={600}
+            >
+              {chartData.map((entry, i) => (
+                <Cell
+                  key={i}
+                  fill={
+                    PROVIDER_COLORS[entry.name.toLowerCase()] ??
+                    CHART[((i % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6]
+                  }
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: number) => [fmtCost(value), "Cost"]}
+              contentStyle={TOOLTIP_STYLE}
+              itemStyle={{ color: "hsl(var(--popover-foreground))" }}
+              labelStyle={{ color: "hsl(var(--muted-foreground))" }}
             />
-          ))}
-        </Pie>
-        <Tooltip
-          formatter={(value: number) => [`$${value.toFixed(2)}`, "Cost"]}
-          contentStyle={{
-            fontSize: "12px",
-            borderRadius: "8px",
-            border: "1px solid hsl(var(--border))",
-            backgroundColor: "hsl(var(--card))",
-            color: "hsl(var(--foreground))",
-            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.12)",
-          }}
-          itemStyle={{ color: "hsl(var(--foreground))" }}
-          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
-        />
-        <Legend
-          iconSize={8}
-          iconType="circle"
-          formatter={(name: string) => name.charAt(0).toUpperCase() + name.slice(1)}
-          wrapperStyle={{ fontSize: "12px" }}
-        />
-      </PieChart>
-    </ResponsiveContainer>
+          </PieChart>
+        </ResponsiveContainer>
+        {/* Center total - the one number a CFO scans for */}
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <p className="text-lg font-semibold tracking-tight text-foreground tabular">
+            {fmtCost(total)}
+          </p>
+          <p className="text-[11px] text-muted-foreground">total</p>
+        </div>
+      </div>
+      {/* Legend with exact amounts - color is never the only signal */}
+      <ul className="mt-3 space-y-1.5">
+        {chartData.map((entry, i) => (
+          <li key={entry.name} className="flex items-center gap-2 text-xs">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor:
+                  PROVIDER_COLORS[entry.name.toLowerCase()] ??
+                  CHART[((i % 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6],
+              }}
+              aria-hidden
+            />
+            <span className="capitalize text-muted-foreground">{entry.name}</span>
+            <span className="ml-auto font-medium text-foreground text-mono">
+              {fmtCost(entry.value)}
+            </span>
+            <span className="w-10 text-right text-muted-foreground text-mono">
+              {entry.pct.toFixed(0)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -331,8 +359,11 @@ export function ProviderDonut({ rows }: { rows: ExploreRow[] }) {
 // Pivot row shape expected by Tremor: { date: string, [model]: number }
 export type ChartRow = Record<string, string | number>;
 
+// Tremor takes named palette colors; this order mirrors --chart-1..6
+const TREMOR_SERIES_COLORS = ["blue", "violet", "teal", "amber", "rose", "slate", "cyan", "indigo", "fuchsia", "lime"];
+
 const costFormatter = (value: number) =>
-  value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : `$${value.toFixed(2)}`;
+  value === 0 ? "$0" : value < 0.01 ? `$${value.toFixed(6)}` : usd.format(value);
 
 // Custom tooltip for the Tremor AreaChart - uses design tokens so it works in
 // both light and dark mode and stays visually consistent with the card surface.
@@ -352,12 +383,20 @@ function SpendTrendTooltip({ payload, active, label }: SpendTooltipProps) {
   if (!active || !payload?.length) return null;
   const nonZero = payload.filter((e) => e.value > 0);
   if (nonZero.length === 0) return null;
+  const total = nonZero.reduce((sum, e) => sum + e.value, 0);
   return (
     <div
-      className="rounded-lg border border-border bg-card px-3 py-2.5 shadow-card"
-      style={{ minWidth: "160px", maxWidth: "260px" }}
+      className="rounded-lg bg-popover px-3 py-2.5 shadow-overlay"
+      style={{ minWidth: "170px", maxWidth: "260px" }}
     >
-      <p className="mb-1.5 text-xs font-semibold text-foreground">{label}</p>
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
+        <p className="text-xs font-semibold text-popover-foreground">{label}</p>
+        {nonZero.length > 1 && (
+          <p className="text-xs font-medium text-muted-foreground text-mono">
+            {costFormatter(total)}
+          </p>
+        )}
+      </div>
       <div className="space-y-1">
         {nonZero.map((entry) => {
           const key = entry.name ?? entry.category ?? "";
@@ -368,7 +407,7 @@ function SpendTrendTooltip({ payload, active, label }: SpendTooltipProps) {
                 style={{ backgroundColor: entry.color }}
               />
               <span className="max-w-[120px] truncate text-muted-foreground">{key}</span>
-              <span className="ml-auto pl-2 text-mono font-medium text-foreground">
+              <span className="ml-auto pl-2 text-mono font-medium text-popover-foreground">
                 {costFormatter(entry.value)}
               </span>
             </div>
@@ -433,6 +472,7 @@ export function SpendTrendChart({ chartData, models }: SpendTrendProps) {
       data={renamedData}
       index="date"
       categories={shortLabels}
+      colors={TREMOR_SERIES_COLORS}
       valueFormatter={costFormatter}
       className="h-72"
       showLegend={models.length > 1}
@@ -491,19 +531,20 @@ export function TopModelsChart({ barData }: TopModelsProps) {
         />
         <Tooltip
           cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
-          formatter={(value: number) => [`$${value.toFixed(2)}`, "Cost"]}
-          contentStyle={{
-            fontSize: "12px",
-            borderRadius: "8px",
-            border: "1px solid hsl(var(--border))",
-            backgroundColor: "hsl(var(--card))",
-            color: "hsl(var(--foreground))",
-            boxShadow: "0 4px 12px 0 rgba(0,0,0,0.12)",
-          }}
-          itemStyle={{ color: "hsl(var(--foreground))" }}
-          labelStyle={{ fontWeight: 600, color: "hsl(var(--foreground))" }}
+          formatter={(value: number) => [fmtCost(value), "Cost"]}
+          contentStyle={TOOLTIP_STYLE}
+          itemStyle={{ color: "hsl(var(--popover-foreground))" }}
+          labelStyle={{ fontWeight: 600, color: "hsl(var(--popover-foreground))" }}
         />
-        <Bar dataKey="cost" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={28} />
+        <Bar
+          dataKey="cost"
+          fill={CHART[1]}
+          radius={[0, 4, 4, 0]}
+          maxBarSize={28}
+          background={{ fill: "hsl(var(--muted))", opacity: 0.35, radius: 4 }}
+          isAnimationActive
+          animationDuration={600}
+        />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -522,16 +563,16 @@ const SEVERITY_CONFIG: Record<
   { borderColor: string; dotColor: string }
 > = {
   high: {
-    borderColor: "border-l-red-500",
-    dotColor: "bg-red-500",
+    borderColor: "border-l-critical",
+    dotColor: "bg-critical",
   },
   medium: {
-    borderColor: "border-l-amber-500",
-    dotColor: "bg-amber-500",
+    borderColor: "border-l-warning",
+    dotColor: "bg-warning",
   },
   low: {
-    borderColor: "border-l-sky-500",
-    dotColor: "bg-sky-500",
+    borderColor: "border-l-info",
+    dotColor: "bg-info",
   },
 };
 
@@ -539,14 +580,14 @@ export function RecentAlertsWidget({ anomalies }: AlertsProps) {
   const openAlerts = anomalies.filter((a) => a.status === "open").slice(0, 5);
 
   return (
-    <div className="flex flex-col rounded-xl border border-border/60 bg-card p-6 shadow-card">
+    <div className="flex flex-col rounded-xl bg-card p-6 shadow-card">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">Recent alerts</h2>
           <p className="text-xs text-muted-foreground">Open anomalies and budget warnings</p>
         </div>
         {openAlerts.length > 0 && (
-          <span className="rounded-full bg-critical-subtle px-2 py-0.5 text-xs font-medium text-critical">
+          <span className="rounded-full bg-critical-subtle px-2 py-0.5 text-xs font-medium text-critical tabular">
             {openAlerts.length} open
           </span>
         )}
@@ -572,7 +613,7 @@ export function RecentAlertsWidget({ anomalies }: AlertsProps) {
               return (
                 <div
                   key={alert.id}
-                  className={`flex items-start gap-3 rounded-lg border-l-4 bg-muted/30 px-3 py-2.5 ${cfg.borderColor}`}
+                  className={`flex items-start gap-3 rounded-lg border-l-4 bg-muted/30 px-3 py-2.5 transition-colors duration-150 hover:bg-muted/50 ${cfg.borderColor}`}
                 >
                   <div className={`mt-1 h-2 w-2 shrink-0 rounded-full ${cfg.dotColor}`} />
                   <div className="min-w-0 flex-1">
@@ -584,7 +625,7 @@ export function RecentAlertsWidget({ anomalies }: AlertsProps) {
                       {alert.explanation ??
                         `↑ ${spike}% vs baseline ($${baseline} → $${actual})`}
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
+                    <p className="mt-1 text-xs text-muted-foreground/80">
                       {timeAgo(alert.detected_at)}
                     </p>
                   </div>

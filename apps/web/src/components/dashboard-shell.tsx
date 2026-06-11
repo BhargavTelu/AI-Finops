@@ -18,25 +18,28 @@ export function DashboardShell({ children }: Props) {
       {/* Mobile overlay - tap outside to close sidebar */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - tinted chrome surface so content cards stay dominant */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-60 shrink-0 flex-col border-r border-border/60 bg-card transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-60 shrink-0 flex-col border-r border-border/70 bg-sidebar transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Main navigation"
       >
-        {/* Brand */}
-        <div className="flex h-14 items-center gap-2.5 border-b border-border/60 px-4">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary">
+        {/* Brand lockup */}
+        <div className="flex h-14 items-center gap-2.5 px-4">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-chart-2 shadow-card">
             <Zap className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} aria-hidden />
           </div>
-          <span className="text-sm font-semibold tracking-tight">SpendOps AI</span>
+          <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">
+            SpendOps
+            <span className="ml-1 text-muted-foreground/80">AI</span>
+          </span>
           {/* Close button - mobile only */}
           <button
             className="ml-auto rounded-md p-1 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
@@ -48,12 +51,12 @@ export function DashboardShell({ children }: Props) {
         </div>
 
         {/* Nav links */}
-        <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
+        <div className="flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
           <NavLinks />
         </div>
 
         {/* Org switcher */}
-        <div className="border-t border-border/60 p-3">
+        <div className="border-t border-border/70 p-3">
           <OrganizationSwitcher
             hidePersonal
             appearance={{
@@ -69,8 +72,8 @@ export function DashboardShell({ children }: Props) {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        {/* Top bar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-card px-5">
+        {/* Top bar - translucent, blurs page content scrolling beneath */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/70 bg-background/85 px-5 backdrop-blur-md">
           {/* Hamburger - mobile only */}
           <button
             className="rounded-md p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
@@ -86,7 +89,7 @@ export function DashboardShell({ children }: Props) {
           <UserButton
             appearance={{
               elements: {
-                avatarBox: "h-8 w-8",
+                avatarBox: "h-8 w-8 ring-1 ring-border",
               },
             }}
           />

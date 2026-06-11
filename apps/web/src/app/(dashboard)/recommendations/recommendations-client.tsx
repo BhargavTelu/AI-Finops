@@ -251,7 +251,7 @@ function RecCard({ rec, onApply, onDismiss, pending }: CardProps) {
   return (
     <div
       className={cn(
-        "flex flex-col rounded-xl border bg-card shadow-card transition-all hover:shadow-card-hover",
+        "flex flex-col rounded-xl bg-card shadow-card transition-all hover:shadow-card-hover",
         isResolved && "opacity-70",
         pending && "opacity-60 pointer-events-none"
       )}
@@ -375,7 +375,7 @@ export function RecommendationsLoading() {
       {/* Card skeletons */}
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl border bg-card">
+          <div key={i} className="rounded-xl bg-card shadow-card">
             <div className="flex gap-5 p-5">
               <div className="w-36 shrink-0 space-y-3">
                 <div className="flex gap-1.5">

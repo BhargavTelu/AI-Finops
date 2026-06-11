@@ -25,7 +25,7 @@ export default function AnomaliesLoading() {
       {/* Alert card skeletons (4 cards) */}
       <div className="space-y-3">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="overflow-hidden rounded-xl border bg-card">
+          <div key={i} className="overflow-hidden rounded-xl bg-card shadow-card">
             <div className="flex">
               {/* Left strip */}
               <div className="w-1 shrink-0 bg-muted" />

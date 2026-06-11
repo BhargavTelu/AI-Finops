@@ -304,7 +304,7 @@ function BudgetCard({
     <>
       <div
         className={cn(
-          "flex flex-col rounded-xl border bg-card shadow-card transition-shadow duration-200 hover:shadow-card-hover",
+          "flex flex-col rounded-xl border border-transparent bg-card shadow-card transition-shadow duration-200 hover:shadow-card-hover",
           isOver && "border-critical/30"
         )}
       >

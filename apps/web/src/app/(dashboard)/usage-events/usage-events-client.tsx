@@ -202,7 +202,7 @@ export function UsageEventsClient({ events: initialEvents, tags }: Props) {
 
   return (
     <PageMotion>
-      <div className="overflow-x-auto rounded-xl border border-border/60 scrollbar-thin">
+      <div className="overflow-x-auto rounded-xl bg-card shadow-card scrollbar-thin">
         <table className="w-full text-sm">
           <thead className="border-b border-border/60 bg-muted/30">
             <tr>

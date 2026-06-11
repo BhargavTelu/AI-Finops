@@ -91,7 +91,7 @@ export default async function CostExplorerPage({
         {rows.length === 0 ? (
           Object.keys(activeFilters).length > 0 ? (
             /* Filtered but no results */
-            <div className="rounded-xl border border-border/60 bg-card p-12">
+            <div className="rounded-xl bg-card p-12 shadow-card">
               <EmptyState
                 icon={BarChart3}
                 title="No results match your filters"
@@ -100,7 +100,7 @@ export default async function CostExplorerPage({
             </div>
           ) : (
             /* No data at all */
-            <div className="rounded-xl border border-border/60 bg-card p-12">
+            <div className="rounded-xl bg-card p-12 shadow-card">
               <EmptyState
                 icon={BarChart3}
                 title="No cost data yet"

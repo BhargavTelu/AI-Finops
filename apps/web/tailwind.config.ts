@@ -70,6 +70,21 @@ const config: Config = {
           foreground: "hsl(var(--info-foreground))",
           subtle: "hsl(var(--info-subtle))",
         },
+        // sidebar: app shell chrome, one value step below the page surface
+        sidebar: {
+          DEFAULT: "hsl(var(--sidebar))",
+          foreground: "hsl(var(--sidebar-foreground))",
+        },
+        // chart-1..6: categorical data-viz palette - use in order on every
+        // multi-series chart so series colors stay consistent across pages
+        chart: {
+          "1": "hsl(var(--chart-1))",
+          "2": "hsl(var(--chart-2))",
+          "3": "hsl(var(--chart-3))",
+          "4": "hsl(var(--chart-4))",
+          "5": "hsl(var(--chart-5))",
+          "6": "hsl(var(--chart-6))",
+        },
       },
 
       // ── Typography ──────────────────────────────────────────────────
@@ -108,6 +123,7 @@ const config: Config = {
       boxShadow: {
         card: "var(--shadow-card)",
         "card-hover": "var(--shadow-card-hover)",
+        overlay: "var(--shadow-overlay)",
       },
 
       // ── Keyframes ───────────────────────────────────────────────────

@@ -172,7 +172,7 @@ function AlertCard({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border bg-card shadow-card transition-shadow hover:shadow-card-hover",
+        "overflow-hidden rounded-xl bg-card shadow-card transition-shadow hover:shadow-card-hover",
         isAcknowledged && "opacity-60"
       )}
     >

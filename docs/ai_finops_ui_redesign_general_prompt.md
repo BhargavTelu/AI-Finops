@@ -646,38 +646,6 @@ CREDIBILITY:
 - ❌ Weak contrast or hard-to-read text
 - ❌ Decorative elements that don't communicate
 
----
-
-## QUESTIONS TO CLARIFY BEFORE STARTING
-
-**Ask your designer/developer these questions:**
-
-1. **Visual Direction**
-   - [ ] Which of the inspiration examples matches closest to your vision?
-   - [ ] Any brand color preferences or existing brand guidelines?
-   - [ ] Dark mode needed, or light mode only?
-
-2. **Scope & Priority**
-   - [ ] Which pages are most broken right now? Focus there first.
-   - [ ] Timeline: 1–2 days (critical pages)? 3–5 days (full redesign)?
-   - [ ] All pages or dashboard + Cost Explorer first?
-
-3. **Responsive Design**
-   - [ ] Desktop focus (1200px+)?
-   - [ ] Desktop + Tablet (down to 768px)?
-   - [ ] Full mobile optimization needed (<768px)?
-
-4. **Technology/Tools**
-   - [ ] Existing component library (Shadcn, Tailwind, etc.)?
-   - [ ] Icon library preference?
-   - [ ] Chart library (Recharts, Tremor, etc.)?
-
-5. **Specific Pain Points**
-   - [ ] Which pages have the worst alignment issues?
-   - [ ] What specific UX problems are users experiencing?
-   - [ ] Any metrics on user feedback or complaints?
-
----
 
 ## FINAL THOUGHTS
 

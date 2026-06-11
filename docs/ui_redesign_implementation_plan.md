@@ -1,12 +1,12 @@
 # UI/UX Redesign Implementation Plan
 ## SpendOps AI - Analyst-Grade SaaS Platform
 
-**Document version:** 1.3
+**Document version:** 1.4
 **Based on brief:** `docs/ai_finops_ui_redesign_general_prompt.md`
 **Target audience:** CTOs, CFOs, Finance & Engineering teams
 **Design direction:** Stripe / Vercel / Vantage - minimal, data-first, enterprise credibility
 **Tech stack:** Next.js 14 App Router · shadcn/ui · Tailwind CSS · Tremor · Recharts · lucide-react · Framer Motion
-**Last updated:** 2026-05-28 (M-QA complete)
+**Last updated:** 2026-06-11 (M-PREMIUM complete)
 
 ---
 
@@ -24,6 +24,50 @@
 | **M-P6** Recommendations Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-P7** Budgets Redesign | ✅ COMPLETE | 2026-05-27 |
 | **M-QA** Polish & QA Pass | ✅ COMPLETE | 2026-05-28 |
+| **M-PREMIUM** Premium Elevation Pass | ✅ COMPLETE | 2026-06-11 |
+
+---
+
+## M-PREMIUM Completion Notes
+
+**Completed 2026-06-11. Second-generation polish pass elevating the M-DS/M-QA system from "clean shadcn" to premium enterprise grade.**
+
+**Design tokens (`globals.css` + `tailwind.config.ts`):**
+- Neutral ramp recalibrated to a cooler, lower-saturation family (`220` hue base); status colors deepened for white-background contrast (success → deep emerald `158 64% 34%`, warning → amber-700-leaning `35 92% 40%` with white foreground, critical/info deepened to match)
+- **New `--chart-1..6` categorical data-viz palette** (blue/violet/teal/amber/rose/slate, dark-mode lifted variants) - exposed as `chart.1`–`chart.6` in Tailwind; all multi-series charts must consume series colors in this order
+- **New `--sidebar` / `--sidebar-foreground` tokens** - app shell chrome sits one value step below the page surface
+- **Layered ring elevation**: `--shadow-card` / `--shadow-card-hover` now embed a `0 0 0 1px` hairline ring + two soft blur layers; **new `--shadow-overlay`** (`shadow-overlay`) for popovers/tooltips. Cards no longer need a `border` class - the ring carries the edge (state-tinted cards keep `border border-transparent` so `border-critical/30` overrides still work)
+- Inter OpenType features enabled globally (`cv02/cv03/cv04/cv11` + `rlig/calt`); `::selection` tinted with primary; `text-rendering: optimizeLegibility`
+- **New `.tabular` utility** (tabular-nums + `-0.02em` tracking, sans face) for large display numbers; `.text-mono` remains the rule for table/inline data values
+- **`prefers-reduced-motion` globally honored** - all animations/transitions collapse to 0.01ms
+
+**App shell (`dashboard-shell.tsx`, `nav-links.tsx`):**
+- Sidebar moved to `bg-sidebar` tinted chrome; brand mark upgraded to `from-primary to-chart-2` gradient tile; "SpendOps AI" two-tone wordmark
+- Active nav item is now an **elevated card pill** (`bg-card shadow-card`, Framer Motion `layoutId` spring) instead of a primary-tint highlight; left accent bar removed
+- Top bar translucent (`bg-background/85 backdrop-blur-md`); UserButton avatar ring; mobile overlay gains `backdrop-blur-sm`
+
+**Dashboard (`dashboard-charts.tsx`, `dashboard/page.tsx`, `loading.tsx`):**
+- **`CountUpValue`**: KPI figures animate from $0 on mount (Framer Motion `animate`, 0.7s expo-out); SSR renders the final value (no hydration mismatch); skipped under reduced motion and for sub-cent values
+- KPI cards simplified: rainbow icon chips removed; uppercase tracking label + `text-3xl font-semibold tracking-tight` display number + delta pill + gradient-fill sparkline (rising = critical tone, falling = success)
+- `DeltaBadge` tokenized (`bg-critical-subtle text-critical` / `bg-success-subtle text-success`) with lucide `ArrowUpRight/ArrowDownRight` icons (was hardcoded red/emerald Tailwind classes + text arrows)
+- `ProviderDonut`: **center total label**, custom HTML legend with exact amounts + % per provider, provider colors mapped to chart tokens (openai=teal, anthropic=violet, gemini=amber)
+- `TopModelsChart`: bar fill = `chart-1`, muted background track per bar, 600ms entrance animation
+- `SpendTrendChart`: explicit Tremor `colors` array mirroring the chart token order; tooltip shows per-day total when multi-series
+- All chart tooltips share one `TOOLTIP_STYLE` (popover surface + `shadow-overlay`, borderless)
+- Currency formatting upgraded to `Intl.NumberFormat` (comma grouping) everywhere on the page
+- Alert severity strips/dots tokenized (`border-l-critical` / `border-l-warning` / `border-l-info`)
+
+**Shared components:**
+- `button.tsx`: default/destructive/outline gain `shadow-sm`; base gains `active:translate-y-px` press feedback (`transition` instead of `transition-colors` so transform animates); outline uses `bg-card`
+- `page-header.tsx`: H1 promoted to `text-2xl font-semibold tracking-tight`
+
+**Card unification sweep (all pages + loading skeletons):**
+- Every card/table surface is now `rounded-xl bg-card shadow-card` with **no border class** (integrations, anomalies, budgets, recommendations, slack, tags, cost explorer, usage events, data-table-skeleton, all loading.tsx files); cards with state-tint borders keep `border border-transparent`
+
+**Auth screens:**
+- **New `(auth)/layout.tsx`**: branded frame (gradient brand tile + wordmark, radial primary glow backdrop, positioning microcopy) wrapping Clerk `SignIn`/`SignUp`; `create-org/page.tsx` gets the same treatment inline
+
+**Verification:** `pnpm typecheck` ✅ · `pnpm lint` ✅ · `pnpm build` ✅ (16/16 routes) - no frontend unit tests per MVP testing policy.
 
 ---
 

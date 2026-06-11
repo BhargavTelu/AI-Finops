@@ -49,13 +49,13 @@ export function NavLinks() {
   }, [router]);
 
   return (
-    <nav className="flex flex-col gap-4">
+    <nav className="flex flex-col gap-5">
       {NAV_SECTIONS.map((section) => (
         <div key={section.label}>
-          <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
             {section.label}
           </p>
-          <div className="flex flex-col gap-0.5">
+          <div className="flex flex-col gap-px">
             {section.links.map(({ href, label, icon: Icon }) => {
               const isActive = pathname === href || pathname.startsWith(href + "/");
               return (
@@ -64,17 +64,17 @@ export function NavLinks() {
                   href={href}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "group relative flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors duration-150",
+                    "group relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors duration-150",
                     isActive
                       ? "font-medium text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                      : "text-muted-foreground hover:bg-accent hover:text-foreground"
                   )}
                 >
-                  {/* Animated active background pill */}
+                  {/* Active pill - elevated card surface lifts off the tinted sidebar */}
                   {isActive && (
                     <motion.span
                       layoutId="nav-active"
-                      className="absolute inset-0 rounded-lg bg-primary/10"
+                      className="absolute inset-0 rounded-lg bg-card shadow-card"
                       transition={{ type: "spring", stiffness: 380, damping: 30 }}
                     />
                   )}
@@ -83,17 +83,9 @@ export function NavLinks() {
                       "relative h-4 w-4 shrink-0 transition-colors",
                       isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
                     )}
-                    strokeWidth={isActive ? 2.5 : 2}
+                    strokeWidth={isActive ? 2.25 : 2}
                   />
                   <span className="relative">{label}</span>
-                  {/* Active left bar accent */}
-                  {isActive && (
-                    <motion.span
-                      layoutId="nav-bar"
-                      className="absolute left-0 top-1 h-[calc(100%-8px)] w-0.5 rounded-full bg-primary"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
                 </Link>
               );
             })}
