@@ -17,6 +17,7 @@ from celery import shared_task
 from supabase import create_client
 
 from api.config import settings
+from api.services.db import fetch_all_pages
 from api.services.encryption import EncryptionService
 from api.services.slack_client import post_message
 
@@ -262,14 +263,15 @@ def _fetch_digest_data(db, org_id: str, yesterday: date) -> dict[str, Any]:
     week_ago_str = (yesterday - timedelta(days=6)).isoformat()
 
     # 7 days of data (includes yesterday) - drives three metrics at once.
-    week_rows: list[dict[str, Any]] = (
-        db.table("daily_cost_summaries")
+    # All digest reads are paged: an unpaged select is silently truncated at
+    # the PostgREST max-rows cap and skews every number in the digest.
+    week_rows: list[dict[str, Any]] = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("day, model, total_cost_usd")
         .eq("org_id", org_id)
         .gte("day", week_ago_str)
         .lte("day", yesterday_str)
-        .execute()
-    ).data
+    )
 
     yesterday_rows = [r for r in week_rows if r["day"][:10] == yesterday_str]
     yesterday_usd = sum(Decimal(str(r["total_cost_usd"])) for r in yesterday_rows)
@@ -288,14 +290,13 @@ def _fetch_digest_data(db, org_id: str, yesterday: date) -> dict[str, Any]:
 
     # This-month MTD (month start → yesterday).
     first_of_month = yesterday.replace(day=1)
-    mtd_rows: list[dict[str, Any]] = (
-        db.table("daily_cost_summaries")
+    mtd_rows: list[dict[str, Any]] = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("total_cost_usd")
         .eq("org_id", org_id)
         .gte("day", first_of_month.isoformat())
         .lte("day", yesterday_str)
-        .execute()
-    ).data
+    )
     this_mtd = sum(Decimal(str(r["total_cost_usd"])) for r in mtd_rows)
 
     # Previous month, same day range (handles month-length differences).
@@ -305,14 +306,13 @@ def _fetch_digest_data(db, org_id: str, yesterday: date) -> dict[str, Any]:
     lm_end = date(lm_year, lm_month, min(yesterday.day, lm_max_day))
     lm_start = date(lm_year, lm_month, 1)
 
-    lm_rows: list[dict[str, Any]] = (
-        db.table("daily_cost_summaries")
+    lm_rows: list[dict[str, Any]] = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("total_cost_usd")
         .eq("org_id", org_id)
         .gte("day", lm_start.isoformat())
         .lte("day", lm_end.isoformat())
-        .execute()
-    ).data
+    )
     last_mtd = sum(Decimal(str(r["total_cost_usd"])) for r in lm_rows)
 
     mom_pct: int | None = None

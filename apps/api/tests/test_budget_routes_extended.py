@@ -68,6 +68,7 @@ class TestBudgetSpentPctEdgeCases:
         db.gte.return_value = db
         db.lte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.limit.return_value = db
         # First execute = budget list, subsequent = MTD spend (returns empty)
         db.execute.side_effect = [
@@ -94,6 +95,7 @@ class TestBudgetSpentPctEdgeCases:
         db.gte.return_value = db
         db.lte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.limit.return_value = db
         db.execute.side_effect = [
             result_budget,

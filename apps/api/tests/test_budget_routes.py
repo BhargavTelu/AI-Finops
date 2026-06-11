@@ -55,6 +55,7 @@ def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     db.lte.return_value = db
     db.is_.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.limit.return_value = db
     db.execute.return_value = result
     return db

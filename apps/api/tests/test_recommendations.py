@@ -316,6 +316,7 @@ class TestWorkerDedup:
         db.eq.return_value = db
         db.gte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.execute.side_effect = [
             MagicMock(data=summaries),   # first call: summaries query
             MagicMock(data=existing_recs),  # second call: existing open recs
@@ -347,6 +348,7 @@ class TestWorkerDedup:
             db.eq.return_value = db
             db.gte.return_value = db
             db.order.return_value = db
+            db.range.return_value = db
 
             # Use list side_effect (unittest.mock handles StopIteration correctly)
             db.execute.side_effect = [
@@ -387,6 +389,7 @@ class TestWorkerDedup:
             db.eq.return_value = db
             db.gte.return_value = db
             db.order.return_value = db
+            db.range.return_value = db
 
             execute_results = iter([
                 MagicMock(data=summaries),
@@ -486,6 +489,7 @@ def _mock_db_router(rows: list[dict] | None = None) -> MagicMock:
     db.delete.return_value = db
     db.eq.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.limit.return_value = db
     db.execute.return_value = result
     return db
@@ -632,6 +636,7 @@ class TestWorkerInsertionAndAggregation:
         db.eq.return_value = db
         db.gte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
 
         side = [
             MagicMock(data=summaries),
@@ -966,6 +971,8 @@ class TestWorkerMixedProviders:
             db.select.return_value = db
             db.eq.return_value = db
             db.gte.return_value = db
+            db.order.return_value = db
+            db.range.return_value = db
             db.execute.side_effect = [
                 MagicMock(data=summaries),
                 MagicMock(data=[]),

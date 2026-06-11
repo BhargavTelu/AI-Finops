@@ -48,6 +48,7 @@ def _mock_db(rows: list[dict]) -> MagicMock:
     db.gte.return_value = db
     db.lte.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.execute.return_value = result
     return db
 
