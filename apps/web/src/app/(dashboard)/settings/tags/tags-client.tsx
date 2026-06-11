@@ -6,6 +6,7 @@ import { Plus, Tag as TagIcon, Trash2, Layers } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
 import { createApiClient } from "@/lib/api-client";
+import { captureTagCreated } from "@/lib/posthog";
 import type { MatchType, PreviewMatch, Tag, TagRule, TagType } from "@/lib/types";
 import { EmptyState } from "@/components/empty-state";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -117,6 +118,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
         name: newTagName.trim(),
         color: newTagColor,
       });
+      captureTagCreated(created.type);
       setTags((prev) => [...prev, created]);
       setTagDialogOpen(false);
       router.refresh();

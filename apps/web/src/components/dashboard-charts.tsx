@@ -26,7 +26,13 @@ import {
 import { animate, useReducedMotion } from "framer-motion";
 import Link from "next/link";
 
-import type { AnomalyRead, DashboardSummary, ExploreRow, PeriodSummary } from "@/lib/types";
+import type {
+  AnomalyRead,
+  DashboardSummary,
+  ExploreRow,
+  ForecastResult,
+  PeriodSummary,
+} from "@/lib/types";
 import { EmptyState } from "@/components/empty-state";
 
 // ---------------------------------------------------------------------------
@@ -189,6 +195,7 @@ interface StatCardsProps {
     mtd: number[];
   };
   budgetStatus: "healthy" | "warning" | "over";
+  forecast?: ForecastResult | null;
 }
 
 const CARD_KEYS = ["day", "week", "month", "mtd"] as const;
@@ -237,9 +244,42 @@ function SingleStatCard({
   );
 }
 
-export function DashboardStatCards({ periods, sparklines, budgetStatus }: StatCardsProps) {
+function ForecastStatCard({ forecast }: { forecast: ForecastResult }) {
+  const fmt = (raw: string) =>
+    parseFloat(raw).toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="flex flex-col rounded-xl bg-card p-6 shadow-card transition-shadow duration-200 hover:shadow-card-hover">
+      <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+        Projected month-end
+      </p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+        <CountUpValue value={parseFloat(forecast.projected_month_end_usd)} />
+      </p>
+      <div className="mt-2">
+        <DeltaBadge pct={forecast.delta_vs_last_month_pct} />
+      </div>
+      <p className="mt-4 text-xs text-muted-foreground">
+        Range {fmt(forecast.confidence_low)} &ndash; {fmt(forecast.confidence_high)}
+        {forecast.method === "trailing_30d_average" && " · based on trailing 30d"}
+      </p>
+    </div>
+  );
+}
+
+export function DashboardStatCards({ periods, sparklines, budgetStatus, forecast }: StatCardsProps) {
+  return (
+    <div
+      className={
+        forecast
+          ? "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          : "grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      }
+    >
       {CARD_KEYS.map((key) => (
         <SingleStatCard
           key={key}
@@ -249,6 +289,7 @@ export function DashboardStatCards({ periods, sparklines, budgetStatus }: StatCa
           budgetDot={key === "mtd" ? budgetStatus : undefined}
         />
       ))}
+      {forecast && <ForecastStatCard forecast={forecast} />}
     </div>
   );
 }

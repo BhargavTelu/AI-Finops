@@ -188,3 +188,20 @@ export interface ReportGenerateAccepted {
   period_start: string;
   period_end: string;
 }
+
+export interface ForecastResult {
+  projected_month_end_usd: string; // Decimal -> string
+  confidence_low: string;
+  confidence_high: string;
+  as_of: string; // ISO datetime
+  method: "linear_regression" | "trailing_30d_average";
+  last_month_cost_usd: string;
+  delta_vs_last_month_pct: number | null;
+}
+
+export interface OnboardingStatus {
+  provider_connected: boolean;
+  tag_rule_created: boolean;
+  slack_connected: boolean;
+  budget_created: boolean;
+}

@@ -3,8 +3,9 @@ Usage data endpoints - read from daily_cost_summaries (never raw usage_events).
 All queries scoped to the requesting org. Target p95 ≤ 800ms.
 """
 
+import calendar
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
@@ -21,6 +22,7 @@ from api.schemas.usage import (
     UsageSummary,
 )
 from api.services.db import fetch_all_pages, get_supabase
+from api.services.forecast import forecast_month_end
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -37,7 +39,7 @@ def _parse_range(range_param: str) -> tuple[date, date]:
     exactly `days` calendar days inclusive.
     """
     days = int(range_param[:-1])
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     period_end = today - timedelta(days=1)
     period_start = period_end - timedelta(days=days - 1)
     return period_start, period_end
@@ -216,7 +218,7 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     Also returns MoM % change and full prior-month cost for the callout widget.
     Reads from daily_cost_summaries only. Target p95 ≤ 800ms.
     """
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     yesterday = today - timedelta(days=1)
 
     # Fetch far enough back to cover 30d + prior 30d + current MTD + prior-month MTD.
@@ -329,10 +331,84 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     )
 
 
+def _fetch_daily_totals(db, org_id: str, start: date, end: date) -> dict[date, Decimal]:
+    """Sum daily_cost_summaries per day over [start, end]. Paged."""
+    if start > end:
+        return {}
+    rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
+        .select("day, total_cost_usd")
+        .eq("org_id", org_id)
+        .gte("day", start.isoformat())
+        .lte("day", end.isoformat())
+    )
+    totals: dict[date, Decimal] = {}
+    for row in rows:
+        day = date.fromisoformat(row["day"])
+        totals[day] = totals.get(day, Decimal("0")) + Decimal(str(row["total_cost_usd"]))
+    return totals
+
+
+def _fill_gaps(totals: dict[date, Decimal], start: date, end: date) -> list[Decimal]:
+    """Dense daily series over [start, end]; days without rows count as $0."""
+    if start > end:
+        return []
+    return [
+        totals.get(start + timedelta(days=offset), Decimal("0"))
+        for offset in range((end - start).days + 1)
+    ]
+
+
 @router.get("/forecast")
 def get_forecast(org: OrgDep) -> ForecastResult:
-    """Month-end spend forecast via linear regression on daily_cost_summaries."""
-    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
+    """Month-end spend forecast (FR-24). Linear regression over this month's
+    complete days; trailing-30d average when fewer than 5 days have elapsed."""
+    db = _get_supabase()
+    today = datetime.now(UTC).date()
+    yesterday = today - timedelta(days=1)
+    month_start = today.replace(day=1)
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+
+    mtd_totals = _fetch_daily_totals(db, org.org_id, month_start, yesterday)
+    mtd_daily = _fill_gaps(mtd_totals, month_start, yesterday)
+
+    trailing_totals = _fetch_daily_totals(
+        db, org.org_id, yesterday - timedelta(days=29), yesterday
+    )
+    trailing_daily = _fill_gaps(trailing_totals, yesterday - timedelta(days=29), yesterday)
+    # Gap-filling turns "no rows at all" into an all-zeros series, which the
+    # regression would dutifully forecast as $0.00 - distinguish real zero
+    # history from no history before forecasting.
+    if not any(trailing_daily):
+        trailing_daily = []
+    if not any(mtd_daily) and not trailing_daily:
+        raise HTTPException(status_code=404, detail="Not enough spend data to forecast.")
+
+    result = forecast_month_end(mtd_daily, trailing_daily, days_in_month)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Not enough spend data to forecast.")
+
+    prev_month_end = month_start - timedelta(days=1)
+    prev_month_start = prev_month_end.replace(day=1)
+    last_month_total = sum(
+        _fetch_daily_totals(db, org.org_id, prev_month_start, prev_month_end).values(),
+        Decimal("0"),
+    )
+    delta_pct = (
+        float((result.projected_month_end_usd - last_month_total) / last_month_total * 100)
+        if last_month_total > 0
+        else None
+    )
+
+    return ForecastResult(
+        projected_month_end_usd=result.projected_month_end_usd,
+        confidence_low=result.confidence_low,
+        confidence_high=result.confidence_high,
+        as_of=datetime.now(UTC),
+        method=result.method,
+        last_month_cost_usd=last_month_total,
+        delta_vs_last_month_pct=delta_pct,
+    )
 
 
 # ── Usage event admin endpoints ────────────────────────────────────────────────
@@ -378,7 +454,6 @@ def override_event_tags(
     manual_override=true rows before delete-before-insert and restores them
     afterward. Re-runs aggregate_org so daily_cost_summaries reflect the change.
     """
-    from datetime import timezone
 
     db = _get_supabase()
 
@@ -394,7 +469,7 @@ def override_event_tags(
     if not existing.data:
         raise HTTPException(status_code=404, detail="Usage event not found")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     patch: dict = {
         "manual_override": True,
         "manual_override_at": now,

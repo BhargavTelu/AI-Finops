@@ -15,6 +15,7 @@ from api.routers import (
     billing,
     budgets,
     integrations,
+    onboarding,
     recommendations,
     reports,
     slack,
@@ -62,6 +63,7 @@ def create_app() -> FastAPI:
         slack.router,
         reports.router,
         billing.router,
+        onboarding.router,
     ]:
         app.include_router(router, prefix="/api/v1")
 

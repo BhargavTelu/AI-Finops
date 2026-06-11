@@ -86,15 +86,17 @@ Goal: the differentiator exists and can be generated on demand for any org — i
 
 ---
 
-## Phase 3 — Forecast, Activation, Landing, Weekly Email (3 days) · FR-24, FR-25
+## Phase 3 — Forecast, Activation, Landing, Weekly Email (3 days) · FR-24, FR-25 ✅ COMPLETE (2026-06-11)
 
-- [ ] **Forecast** — `api/services/forecast.py`: pure least-squares linear regression over current-month daily totals from `daily_cost_summaries` (fallback: trailing 30d trend when <5 days elapsed); returns projected month-end ± simple confidence band. Implement the `/usage/forecast` stub. Unit-test the regression math hard (CFO-facing). Dashboard: "Projected month-end" stat card with delta vs. last month, wired into the existing stat-card row.
-- [ ] **Activation checklist** (replaces the spec's onboarding wizard — 90% of the value, 20% of the effort): dismissible dashboard card with 4 server-computed checks — provider connected → tag rule created → Slack connected → budget set — each linking to its page. State: existence queries, no new tables; dismissal in `localStorage`.
-- [ ] **Landing page** — replace the `/` redirect stub: hero ("Know which feature, team, and customer burns your LLM budget"), product shots, pricing table (3 plans + trial), security section linking `/security`, FAQ, sign-up CTA. Use the existing design system; keep Clerk sign-up as the only CTA. (Use the `frontend-design` skill when building.)
-- [ ] **Weekly email digest** — `send_weekly_email_digests` beat (Mondays 09:00 UTC) in `notifications.py`: reuse `_fetch_digest_data()`, render HTML via Resend to org admins **without Slack connected** (Slack-first principle: don't double-notify Slack orgs). Unsubscribe flag on `organizations` (simple boolean, honored in the fan-out).
-- [ ] PostHog funnel events verified end-to-end: signup → provider_connected → budget_created → checkout_completed.
+**Executed before Phase 2 at founder's direction.** The done-condition's "…and pay" clause stays open until Phase 2 (Stripe) ships; everything else delivered.
 
-**Done:** A stranger can land on `/`, understand the product, sign up, follow the checklist to first chart in <10 min, see a forecast, and pay — untouched. (= the spec's MVP done-condition.)
+- [x] **Forecast** — `api/services/forecast.py`: pure least-squares regression over current-month daily totals (gap-filled $0 days); per-day predictions clamped ≥ 0; confidence band from residual std × √(remaining days); low bound never below actual MTD spend; trailing-30d-average fallback under 5 elapsed days. `/usage/forecast` implemented (404 distinguishes "no history" from a genuine $0 month); `ForecastResult` extended with `method`, `last_month_cost_usd`, `delta_vs_last_month_pct`. Dashboard "Projected month-end" card in the stat row (5-col grid when present) with delta badge + range line. 10 math tests + route tests; TC-STUB-02 retired.
+- [x] **Activation checklist** — `GET /onboarding/status` (4 existence queries, org-scoped, no new tables) + dismissible `ActivationChecklist` card (localStorage, hydration-safe, auto-hides at 4/4) rendered on the dashboard **including the empty state**, where a fresh org needs it most.
+- [x] **Landing page** — `/` redirect stub replaced: "audited ledger" concept within the shadcn system — cost-statement hero vignette with dot leaders and a flagged anomaly row, numbered section rules, 3 features, 3 steps, spend-tiered pricing ($299/$599/$1,500, all-features-on-every-plan, 14-day trial no card), navy security band → `/security`, native-`details` FAQ, footer. Clerk sign-up is the only CTA; signed-in visitors get "Open dashboard".
+- [x] **Weekly email digest** — `send_weekly_email_digests` beat (Mon 09:00 UTC): reuses `_fetch_digest_data()`; targets orgs with active integrations, minus Slack-connected (no double-notify), minus opted-out; migration `20260611000000_add_email_digest_opt_out.sql` adds `organizations.email_digest_opt_out` (manual opt-out via email reply at current scale). 9 tests (fan-out exclusions, send paths, HTML content).
+- [x] **PostHog funnel** — events were typed stubs with zero call sites; now wired: `provider_connected` (connect success), `tag_created`, `budget_created` (signature widened to 7 scope types), `pdf_downloaded`, plus `identify(user.id)` + org `group()` in the provider (ids only, no PII). `signup`/`org_created` deferred to server-side capture via the Clerk webhook (more reliable than client heuristics — wire in Phase 2 alongside `checkout_completed`).
+
+**Done:** A stranger can land on `/`, understand the product, sign up, follow the checklist to first chart in <10 min, and see a forecast. ~~and pay~~ ← unblocked by Phase 2.
 
 ---
 

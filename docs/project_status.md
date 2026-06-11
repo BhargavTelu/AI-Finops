@@ -2,11 +2,23 @@
 
 ## Current Milestone: M4 - Monetize + Polish (via Strategic Implementation Plan)
 
-**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phase 0 (Trust Quick Wins) complete 2026-06-11. Phase 1 (CFO PDF Report, FR-22) complete 2026-06-11.** Next: Phase 2 (Stripe billing + trial + gating).
+**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phases 0, 1, and 3 complete 2026-06-11** (Phase 3 executed before Phase 2 at founder's direction). Next: Phase 2 (Stripe billing + trial + gating) - the only remaining blocker for the spec's MVP done-condition.
 
 ---
 
 ## Strategic Implementation Plan progress
+
+### Phase 3 - Forecast, Activation, Landing, Weekly Email (FR-24, FR-25) ✅ (complete 2026-06-11)
+
+**707 tests passing (22 new), 10 skipped. 0 TypeScript errors. Production build green.**
+
+- [x] `forecast.py` service + `/usage/forecast` route - least-squares regression, >= 0 clamping, residual-std confidence band, low bound floored at actual MTD, trailing-30d fallback (<5 days), no-history 404; dashboard "Projected month-end" stat card with delta vs last month
+- [x] `GET /onboarding/status` + `ActivationChecklist` dashboard card (dismissible, auto-hides at 4/4, shown on the empty state too) - replaces the onboarding wizard
+- [x] Landing page at `/` - ledger-statement hero, features, steps, spend-tiered pricing with 14-day no-card trial, security band, FAQ; Clerk sign-up CTA
+- [x] Weekly email digest beat (Mon 09:00 UTC) for non-Slack orgs; `email_digest_opt_out` migration; Slack-first exclusion
+- [x] PostHog funnel wired (provider_connected, tag_created, budget_created, pdf_downloaded + identify/group); signup/org_created deferred to server-side via Clerk webhook in Phase 2
+
+**Phase 3 done-condition:** met except the final "…and pay" clause, which is blocked on Phase 2 (Stripe).
 
 ### Phase 1 - CFO PDF Report (FR-22) ✅ (complete 2026-06-11)
 

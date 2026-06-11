@@ -10,6 +10,7 @@ import {
   RecentAlertsWidget,
   type ChartRow,
 } from "@/components/dashboard-charts";
+import { ActivationChecklist } from "@/components/activation-checklist";
 import { PageMotion } from "@/components/motion-wrapper";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
@@ -20,6 +21,8 @@ import type {
   DailyPoint,
   DashboardSummary,
   ExploreRow,
+  ForecastResult,
+  OnboardingStatus,
 } from "@/lib/types";
 
 const VALID_RANGE = new Set(["7d", "30d", "90d"]);
@@ -61,19 +64,24 @@ export default async function DashboardPage({
   const token = await getToken();
   const api = createApiClient(token!);
 
-  const [dashboard, timeseries, providers, budgets, anomalies] = await Promise.all([
-    api.get<DashboardSummary>("/usage/dashboard").catch(() => null),
-    api
-      .get<DailyPoint[]>(`/usage/timeseries?range=${range}&group_by=model`)
-      .catch(() => [] as DailyPoint[]),
-    api
-      .get<ExploreRow[]>(`/usage/explore?group_by=provider&range=${range}`)
-      .catch(() => [] as ExploreRow[]),
-    api.get<BudgetRead[]>("/budgets").catch(() => [] as BudgetRead[]),
-    api.get<AnomalyRead[]>("/anomalies").catch(() => [] as AnomalyRead[]),
-  ]);
+  const [dashboard, timeseries, providers, budgets, anomalies, forecast, onboarding] =
+    await Promise.all([
+      api.get<DashboardSummary>("/usage/dashboard").catch(() => null),
+      api
+        .get<DailyPoint[]>(`/usage/timeseries?range=${range}&group_by=model`)
+        .catch(() => [] as DailyPoint[]),
+      api
+        .get<ExploreRow[]>(`/usage/explore?group_by=provider&range=${range}`)
+        .catch(() => [] as ExploreRow[]),
+      api.get<BudgetRead[]>("/budgets").catch(() => [] as BudgetRead[]),
+      api.get<AnomalyRead[]>("/anomalies").catch(() => [] as AnomalyRead[]),
+      // 404 until there is enough data to forecast - render no card then.
+      api.get<ForecastResult>("/usage/forecast").catch(() => null),
+      api.get<OnboardingStatus>("/onboarding/status").catch(() => null),
+    ]);
 
-  // Empty state - no integrations connected or no data yet
+  // Empty state - no integrations connected or no data yet. The activation
+  // checklist matters most here: it is the new org's map to first value.
   if (!dashboard || dashboard.month.total_requests === 0) {
     return (
       <PageMotion>
@@ -83,6 +91,7 @@ export default async function DashboardPage({
             description="LLM spend overview for your organisation"
             actions={<PeriodSelector range={range} />}
           />
+          {onboarding && <ActivationChecklist status={onboarding} />}
           <EmptyState
             icon={TrendingUp}
             title="No spend data yet"
@@ -169,11 +178,15 @@ export default async function DashboardPage({
           actions={<PeriodSelector range={range} />}
         />
 
-        {/* ── Four KPI stat cards ───────────────────────────────────────── */}
+        {/* ── Activation checklist (hidden once complete or dismissed) ──── */}
+        {onboarding && <ActivationChecklist status={onboarding} />}
+
+        {/* ── KPI stat cards (+ month-end forecast when available) ─────── */}
         <DashboardStatCards
           periods={dashboard}
           sparklines={sparklines}
           budgetStatus={budgetStatus}
+          forecast={forecast}
         />
 
         {/* ── Spend trend (2/3 width) + Provider split (1/3 width) ─────── */}

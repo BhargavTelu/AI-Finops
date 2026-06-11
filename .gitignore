@@ -52,3 +52,7 @@ celerybeat-schedule*
 
 # Claude Code local (per-machine) settings - never commit
 .claude/settings.local.json
+
+# MS Office lock files (created while a doc is open)
+~$*
+docs/~$*

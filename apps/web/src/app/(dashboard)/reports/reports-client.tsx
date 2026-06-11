@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { Download, FileText, Loader2, Sparkles } from "lucide-react";
 
 import { createApiClient } from "@/lib/api-client";
+import { capturePdfDownloaded } from "@/lib/posthog";
 import type { ReportDownloadResponse, ReportGenerateAccepted, ReportRead } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export function ReportsClient({ initialReports }: Props) {
       const { url } = await api.get<ReportDownloadResponse>(
         `/reports/${report.id}/download`
       );
+      capturePdfDownloaded(report.id);
       window.open(url, "_blank", "noopener");
     } catch (err: unknown) {
       toast({
