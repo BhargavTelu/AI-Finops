@@ -31,6 +31,10 @@ dependencies = [
     # Billing + comms
     "stripe>=10.0.0",
     "resend>=2.0.0",
+    # CFO PDF rendering (D1 amended: pure Python, no native deps - WeasyPrint
+    # needs Pango, unavailable on Windows dev and heavy on Railway).
+    # ~1MB installed; transitive deps: pillow, fonttools, defusedxml.
+    "fpdf2>=2.8.0",
     # Observability
     "sentry-sdk[fastapi]>=2.8.0",
     "structlog>=24.2.0",

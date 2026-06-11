@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, BarChart3, Settings, AlertTriangle, Lightbulb, Wallet, List } from "lucide-react";
+import { LayoutDashboard, BarChart3, Settings, AlertTriangle, Lightbulb, Wallet, List, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 import type { Route } from "next";
 
@@ -15,6 +15,7 @@ const NAV_SECTIONS = [
     links: [
       { href: "/dashboard" as Route<string>, label: "Dashboard", icon: LayoutDashboard },
       { href: "/cost-explorer" as Route<string>, label: "Cost Explorer", icon: BarChart3 },
+      { href: "/reports" as Route<string>, label: "Reports", icon: FileText },
     ],
   },
   {

@@ -50,20 +50,20 @@ Goal: nothing in the product lies, and the scariest onboarding moment (handing o
 
 ---
 
-## Phase 1 — CFO PDF Report (3–4 days) · FR-22
+## Phase 1 — CFO PDF Report (3–4 days) · FR-22 ✅ COMPLETE (2026-06-11)
 
 Goal: the differentiator exists and can be generated on demand for any org — including a design partner mid-sales-call.
 
-**Decision D1 — PDF engine: WeasyPrint** (HTML/CSS → PDF, pure Python, no headless browser). Justification under the dependency rule: the alternative (Puppeteer/Chromium on the worker) is ~300MB and a separate runtime; @react-pdf/renderer would put report generation in the Next.js layer, but the trigger is a Celery beat task — keeping it in Python avoids a cross-service call. If WeasyPrint's native deps (Pango) fight Railway, fall back to `fpdf2` (zero native deps, more layout work).
+**Decision D1 (amended 2026-06-11) — PDF engine: fpdf2.** WeasyPrint was tried first per the original decision and failed exactly as the fallback clause anticipated: it requires Pango/GTK native libraries that are unavailable on Windows dev (`OSError: cannot load library 'libgobject-2.0-0'`) and add weight on Railway. fpdf2 is pure Python (~1MB, transitive deps: pillow, fonttools, defusedxml), renders the branded layout directly in Python (no Jinja2 HTML step), and was smoke-verified to produce a CFO-presentable PDF.
 
-- [ ] **Report data service** — `api/services/report_builder.py`, pure functions, no DB: takes pre-fetched rows, returns a `MonthlyReportData` dataclass: month totals + MoM delta, spend by provider, top-10 models, spend by feature/team/customer tag, anomaly count + top 3 by spike, applied-recommendation savings, next-month figure (reuse Phase 3 forecast once it exists; flat extrapolation until then). Unit-test the math (this is CFO-facing arithmetic — 80% target per CLAUDE.md).
-- [ ] **HTML template** — Jinja2 (already a FastAPI transitive dep), branded, one page summary + breakdown pages. Render with WeasyPrint.
-- [ ] **R2 storage service** — `api/services/storage.py`: S3-compatible upload + presigned GET (boto3 or httpx+sigv4; prefer httpx if boto3 weight is objectionable). Object key: `reports/{org_id}/{period}.pdf`. Insert `reports` row (table already in schema).
-- [ ] **Worker** — `api/workers/reports.py`: `generate_monthly_reports()` beat task (1st of month, 06:00 UTC) fanning out `generate_org_report(org_id, period)`; on success email the org admin via Resend with a download link (reuse admin-email lookup from `notifications.py`). Idempotency: skip if `reports` row exists for (org, period) unless `force=True`.
-- [ ] **Routes** — implement the three 501 stubs in `api/routers/reports.py`: `GET /reports` (list), `GET /reports/:id/download` (presigned URL, ownership-checked), `POST /reports/generate` (202; current-month-to-date on demand — this is the sales-demo path, rate-limit 3/day/org in Redis).
-- [ ] **Web** — `/reports` page: list with period + generated date + download button; "Generate current month" button; empty state ("Your first report arrives on the 1st — or generate one now"); loading skeleton; error state.
-- [ ] **Env/config:** `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` in `config.py` + `.env.example`.
-- [ ] Tests: report_builder math, R2 service (mocked), worker idempotency, route ownership/404s.
+- [x] **Report data service** — `api/services/report_builder.py`, pure functions, no DB: `MonthlyReportData` dataclass with month totals + MoM delta, spend by provider, top-10 models, spend by feature/team/customer tag, anomaly count + top 3 by spike, applied-recommendation savings, flat-extrapolation projection (Phase 3 forecast replaces it). Unit-tested.
+- [x] **PDF rendering** — `api/services/report_pdf.py` (replaces the Jinja2+WeasyPrint task per amended D1): branded navy header band, summary stat row with color-coded MoM, per-dimension tables with alternating rows, severity-colored anomaly lines, realized-savings section, honest data-source footnote.
+- [x] **R2 storage service** — `api/services/storage.py`: hand-rolled SigV4 over httpx (boto3 is ~80MB for two operations); `upload_pdf` + `presign_download`; injectable clock for deterministic signature tests. Object key: `reports/{org_id}/{period_start}.pdf` (stable per month — fuller regenerations overwrite partials). Fails soft when R2 is unconfigured (row recorded with `has_file=false`).
+- [x] **Worker** — `api/workers/reports.py`: `generate_monthly_reports()` beat (1st, 06:00 UTC) fans out `generate_org_report`; Resend email with link to `/reports` (best-effort). Idempotency: one row per (org, type, period_start); regenerates only when the new run covers more days or `force=True`, so an on-demand partial never blocks the month-end report.
+- [x] **Routes** — `GET /reports`, `GET /reports/:id/download` (presigned URL, ownership-checked, object key never exposed), `POST /reports/generate` (202, month-to-date, force=True; Redis rate limit 3/day/org, fail-open).
+- [x] **Web** — `/reports` page: report cards with period + month-to-date badge + download button; "Generate current month" button; empty state; loading skeleton; error state; Reports nav link.
+- [x] **Env/config:** R2 vars were already present; added `APP_URL` (email CTAs) to `config.py` + `.env.example`; `fpdf2>=2.8.0` added to `pyproject.toml` with weight justification.
+- [x] Tests: 48 new (report_builder math, PDF render, SigV4 shape/determinism, worker fan-out + idempotency + email, route ownership/404/429). TC-STUB-06 retired.
 
 **Done:** `POST /reports/generate` on a real org produces a PDF a CFO could be handed unedited; the 1st-of-month email fires for a test org.
 
@@ -134,7 +134,7 @@ Deliberately code-light. The done-condition for this phase is **3 paying custome
 
 ## Decision log
 
-- **D1:** PDF engine = WeasyPrint (fallback fpdf2). Python-side because the trigger is Celery.
+- **D1 (amended 2026-06-11):** PDF engine = fpdf2. WeasyPrint's Pango native deps fail on Windows dev and weigh on Railway; the documented fallback was exercised. Python-side because the trigger is Celery.
 - **D2:** 14-day trial = yes (resolves spec open question #3).
 - **D3:** Entry price stays $299 (resolves spec open question #4 for now).
 - **D4:** Reconciliation v1 = manual invoice entry, no invoice-API integration.

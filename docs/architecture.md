@@ -15,7 +15,8 @@ Companion to `project_spec.md`. How we build it.
 | Auth | Clerk | Multi-tenant orgs built-in |
 | Billing | Stripe Checkout + Customer Portal | No custom billing UI |
 | Email | Resend | |
-| Storage | Cloudflare R2 | PDFs |
+| Storage | Cloudflare R2 | PDFs - SigV4 via httpx, no boto3 (`services/storage.py`) |
+| PDF | fpdf2 | CFO report rendering - pure Python (WeasyPrint rejected: Pango native deps) |
 | AI | Claude Haiku 4.5 | Recs, narratives - capped $0.05/org/day |
 | Hosting | Vercel (web) + Railway (api + worker) | |
 | Errors | Sentry | |
@@ -302,8 +303,12 @@ Target: chart visible < 5 min for 30-day backfill on $20K/mo org.
            send_anomaly_alert   → post Block Kit to Slack (severity ≥ med)  [M3 Group C ✅]
 02:00  check_budgets            → compare MTD spend to limits, enqueue      [M3 Group B ✅]
            send_budget_alert    → Resend email + best-effort Slack post      [M3 Group B+C ✅]
+02:30  generate_recommendations → rule-based recs engine                    [M3 Group D ✅]
 09:00  send_daily_digests       → per-org Slack digest (idempotency guard)  [M3 Group C ✅]
-??:??  generate_recommendations → rule-based (V1: Claude Haiku)             [M3 Group D]
+
+Monthly (1st, 06:00 UTC):
+       generate_monthly_reports → CFO PDF per org: build data → fpdf2 →     [Phase 1 ✅]
+                                  R2 upload → reports row → Resend email
 ```
 
 ### Slack digest (09:00 UTC) ✅ [M3 Group C complete]

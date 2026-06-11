@@ -13,7 +13,7 @@ Read this first. Then read the doc linked under §Documentation that's relevant 
 
 Next.js (Vercel) → FastAPI (Railway) → Supabase Postgres. Celery + Upstash Redis for ingestion + nightly aggregation + anomaly detection + budget alerts. Clerk auth. Stripe billing. No customer traffic flows through us - we pull from provider Admin APIs.
 
-**Current milestone: M4 (Monetize + Polish)** - M0–M3 complete. Execution order follows [docs/STRATEGIC_IMPLEMENTATION_PLAN.md](docs/STRATEGIC_IMPLEMENTATION_PLAN.md): Phase 0 (Trust Quick Wins) complete; next is Phase 1 (CFO PDF report).
+**Current milestone: M4 (Monetize + Polish)** - M0–M3 complete. Execution order follows [docs/STRATEGIC_IMPLEMENTATION_PLAN.md](docs/STRATEGIC_IMPLEMENTATION_PLAN.md): Phases 0 (Trust Quick Wins) and 1 (CFO PDF report) complete; next is Phase 2 (Stripe billing + trial + gating).
 
 Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 
