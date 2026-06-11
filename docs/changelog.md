@@ -22,6 +22,16 @@ Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATIO
 - **Config** - `STRIPE_PRICE_STARTER/GROWTH/ENTERPRISE`, `POSTHOG_API_KEY`, `POSTHOG_HOST` in `config.py` + `.env.example`
 - **31 new tests** - `test_billing_gating.py` (access rule incl. canceled-inside-trial-window, Z-suffix timestamps, NULL trial; 402 dependency), `test_billing_routes.py` (trial/expired/subscribed status, checkout session shape, customer reuse, 422/503, portal 404/url), `test_stripe_webhook.py` (bad signature 400, duplicate-event ack, all three lifecycle transitions, unknown-subscription resilience). Conftest neutralizes the gate for business-logic route tests; TC-STUB-04/05/TC-WH-20 retired
 
+### Fixed - Phase 2 verification pass (2026-06-11)
+
+A no-assumptions audit of Phase 2 (the money path) found three issues, all fixed with regression tests (745 tests passing):
+
+- **Transient DB errors during the webhook idempotency claim were acked as duplicates** - `_claim_stripe_event` caught every exception as "already processed", so a connection blip while claiming would 200-ack the event and silently drop a billing transition (a paid customer who never gets unlocked). Now only genuine unique-violations (code 23505 / duplicate-key message) count as duplicates; anything else re-raises so Stripe retries.
+- **A handler crash after the claim lost the event permanently** - the claim row blocked Stripe's retry from re-processing. The webhook now releases the claim and returns 500 on processing failure so Stripe redelivers; if even the release fails, the event id is logged loudly for manual replay.
+- **Post-checkout webhook-lag race** - the Stripe success redirect can beat the webhook, briefly paywalling someone who just paid. New `PaywallRefresher` polls `/billing` (noStore) every 5s for up to a minute and refreshes the moment access unblocks, landing the user on the success page with its toast intact.
+- **Gating hot path** - `_require_active_org` constructed a fresh Supabase client (and httpx pool) on every gated request; now uses the process-wide `get_supabase()` singleton.
+- New wiring tests assert, over HTTP, that an expired org gets 402 from a gated router and that `/billing` is never gated (the way out stays open).
+
 ### Changed - Phase 2
 
 - `main.py` router includes split into gated (usage, anomalies, recommendations, reports) and ungated groups; the Celery-app import-order requirement is now protected by an `isort: off` guard after a formatter pass re-introduced the M1 wrong-broker regression

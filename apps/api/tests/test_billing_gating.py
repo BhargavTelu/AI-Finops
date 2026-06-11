@@ -122,12 +122,12 @@ ORG = OrgContext(user_id="user_x", org_id="00000000-0000-0000-0000-000000000001"
 class TestRequireActiveOrgDependency:
     def test_allows_trialing_org(self) -> None:
         db = _dep_db([{"trial_ends_at": FUTURE, "plan": "trial"}], [])
-        with patch("api.deps.create_client", return_value=db):
+        with patch("api.services.db.get_supabase", return_value=db):
             assert _require_active_org(ORG) is ORG
 
     def test_blocks_expired_org_with_402(self) -> None:
         db = _dep_db([{"trial_ends_at": PAST, "plan": "trial"}], [])
-        with patch("api.deps.create_client", return_value=db):
+        with patch("api.services.db.get_supabase", return_value=db):
             with pytest.raises(HTTPException) as exc_info:
                 _require_active_org(ORG)
         assert exc_info.value.status_code == 402
@@ -137,5 +137,47 @@ class TestRequireActiveOrgDependency:
             [{"trial_ends_at": PAST, "plan": "growth"}],
             [{"status": "active", "stripe_subscription_id": "sub_1", "plan": "growth"}],
         )
-        with patch("api.deps.create_client", return_value=db):
+        with patch("api.services.db.get_supabase", return_value=db):
             assert _require_active_org(ORG) is ORG
+
+
+class TestGateWiredIntoDataRouters:
+    """End-to-end through HTTP: verifies main.py actually attached the gate
+    to the data routers - the wiring most likely to silently regress."""
+
+    def test_expired_org_gets_402_from_usage_route(self) -> None:
+        from fastapi.testclient import TestClient
+
+        from api.deps import _require_org
+        from api.main import app
+
+        # Drop the conftest bypass for this test only (conftest snapshots and
+        # restores overrides around each test).
+        app.dependency_overrides.pop(_require_active_org, None)
+        app.dependency_overrides[_require_org] = lambda: ORG
+
+        db = _dep_db([{"trial_ends_at": PAST, "plan": "trial"}], [])
+        client = TestClient(app)
+        with patch("api.services.db.get_supabase", return_value=db):
+            resp = client.get("/api/v1/usage/summary")
+        assert resp.status_code == 402
+
+    def test_billing_route_is_never_gated(self) -> None:
+        from fastapi.testclient import TestClient
+
+        from api.deps import _require_org
+        from api.main import app
+
+        app.dependency_overrides.pop(_require_active_org, None)
+        app.dependency_overrides[_require_org] = lambda: ORG
+
+        db = _dep_db([{"trial_ends_at": PAST, "plan": "trial"}], [])
+        client = TestClient(app)
+        with (
+            patch("api.services.db.get_supabase", return_value=db),
+            patch("api.routers.billing._get_supabase", return_value=db),
+        ):
+            resp = client.get("/api/v1/billing")
+        # Expired org can still see its billing state (the way out).
+        assert resp.status_code == 200
+        assert resp.json()["access_blocked"] is True

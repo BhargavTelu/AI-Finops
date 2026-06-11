@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 
+import { PaywallRefresher } from "@/components/paywall-refresher";
 import { PlanPicker } from "@/components/plan-picker";
 
 /**
@@ -11,6 +12,8 @@ import { PlanPicker } from "@/components/plan-picker";
 export function Paywall() {
   return (
     <div className="mx-auto max-w-2xl py-12">
+      {/* Auto-unblocks the post-checkout webhook-lag window */}
+      <PaywallRefresher />
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
         <Lock className="h-5 w-5 text-muted-foreground" />
       </div>

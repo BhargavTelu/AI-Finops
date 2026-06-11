@@ -80,6 +80,54 @@ class TestSignature:
         assert resp.status_code == 422
 
 
+class TestClaimSemantics:
+    """Regression: only a true unique-violation is a duplicate. Anything else
+    must NOT be silently acked - that drops a billing transition."""
+
+    def _raising_db(self, exc: Exception) -> MagicMock:
+        db = MagicMock()
+        chain = MagicMock()
+        db.table.return_value = chain
+        chain.insert.return_value = chain
+        chain.execute.side_effect = exc
+        return db
+
+    def test_unique_violation_message_is_duplicate(self) -> None:
+        db = self._raising_db(Exception("duplicate key value violates unique constraint"))
+        assert webhooks._claim_stripe_event(db, "evt_1", "t") is False
+
+    def test_postgres_23505_code_is_duplicate(self) -> None:
+        exc = Exception("conflict")
+        exc.code = "23505"  # type: ignore[attr-defined]
+        db = self._raising_db(exc)
+        assert webhooks._claim_stripe_event(db, "evt_1", "t") is False
+
+    def test_transient_error_reraises_instead_of_acking(self) -> None:
+        import pytest
+
+        db = self._raising_db(RuntimeError("connection reset by peer"))
+        with pytest.raises(RuntimeError):
+            webhooks._claim_stripe_event(db, "evt_1", "t")
+
+    def test_processing_failure_releases_claim_and_500s(self) -> None:
+        # Regression: a handler crash after the claim must not leave the
+        # event permanently claimed - Stripe's retry would be acked as a
+        # duplicate and the transition lost.
+        db = _RecordingDb()
+        event = _event("checkout.session.completed", {"client_reference_id": ORG_ID})
+        with (
+            patch.object(webhooks, "_service_db", return_value=db),
+            patch("stripe.Webhook.construct_event", return_value=event),
+            patch.object(
+                webhooks, "_handle_checkout_completed", side_effect=RuntimeError("db down")
+            ),
+            patch.object(webhooks, "_release_stripe_event") as mock_release,
+        ):
+            resp = client.post("/api/webhooks/stripe", headers=HEADERS, content=b"{}")
+        assert resp.status_code == 500  # Stripe will retry
+        mock_release.assert_called_once_with(db, "evt_test_1")
+
+
 class TestIdempotency:
     def test_duplicate_event_acked_without_processing(self) -> None:
         db = _RecordingDb()

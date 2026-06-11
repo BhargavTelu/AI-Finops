@@ -248,10 +248,15 @@ def _require_active_org(org: OrgDep) -> OrgContext:
     in its threadpool (same rationale as _require_admin_org). FastAPI caches
     the _require_org sub-dependency per request, so this adds queries, not
     re-authentication.
+
+    Uses the process-wide get_supabase() client: this dependency runs on
+    EVERY gated data request, and constructing a fresh client (and its httpx
+    pool) per request is pure overhead on the hottest path in the API.
     """
     from api.services.billing_access import evaluate_access
+    from api.services.db import get_supabase
 
-    db = create_client(settings.supabase_url, settings.supabase_service_role_key)
+    db = get_supabase()
 
     org_result = (
         db.table("organizations")

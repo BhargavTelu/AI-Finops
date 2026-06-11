@@ -271,15 +271,36 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
 def _claim_stripe_event(db: Any, event_id: str, event_type: str) -> bool:
     """
     Idempotency by Stripe event id: INSERT into stripe_events acts as the
-    claim. A unique-violation means a retry of an already-processed delivery -
-    return False so the handler acks with 200 without re-processing.
+    claim. ONLY a unique-violation means "retry of an already-processed
+    delivery" (return False -> ack without re-processing). Any other failure
+    re-raises: treating a transient DB error as a duplicate would ack the
+    event and silently drop a billing transition - a paid customer who never
+    gets unlocked.
     """
     try:
         db.table("stripe_events").insert({"id": event_id, "type": event_type}).execute()
         return True
-    except Exception:
-        log.info("stripe_event_duplicate", event_id=event_id, type=event_type)
-        return False
+    except Exception as exc:
+        marker = str(exc).lower()
+        code = getattr(exc, "code", None)
+        if code == "23505" or "duplicate key" in marker or "already exists" in marker:
+            log.info("stripe_event_duplicate", event_id=event_id, type=event_type)
+            return False
+        raise
+
+
+def _release_stripe_event(db: Any, event_id: str) -> None:
+    """
+    Undo a claim after processing failed, so Stripe's retry is not acked as a
+    duplicate. Best-effort: if even the delete fails, the event is logged
+    loudly for manual replay from the Stripe dashboard.
+    """
+    try:
+        db.table("stripe_events").delete().eq("id", event_id).execute()
+    except Exception as exc:
+        log.error(
+            "stripe_event_claim_stuck_replay_manually", event_id=event_id, error=str(exc)
+        )
 
 
 def _plan_from_price(price_id: str | None) -> str | None:
@@ -447,14 +468,24 @@ async def stripe_webhook(
         return {"received": True}  # already processed - ack the retry
 
     obj: dict[str, Any] = event["data"]["object"]
-    if event_type == "checkout.session.completed":
-        _handle_checkout_completed(db, obj)
-    elif event_type == "customer.subscription.updated":
-        _handle_subscription_updated(db, obj)
-    elif event_type == "customer.subscription.deleted":
-        _handle_subscription_deleted(db, obj)
-    else:
-        log.info("stripe_event_ignored", type=event_type)
+    try:
+        if event_type == "checkout.session.completed":
+            _handle_checkout_completed(db, obj)
+        elif event_type == "customer.subscription.updated":
+            _handle_subscription_updated(db, obj)
+        elif event_type == "customer.subscription.deleted":
+            _handle_subscription_deleted(db, obj)
+        else:
+            log.info("stripe_event_ignored", type=event_type)
+    except Exception as exc:
+        # Release the claim and 500 so Stripe redelivers - otherwise the
+        # retry would be acked as a duplicate and the transition lost.
+        log.error("stripe_event_processing_failed", event_id=event["id"], error=str(exc))
+        _release_stripe_event(db, event["id"])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Event processing failed; Stripe will retry.",
+        ) from exc
 
     return {"received": True}
 
