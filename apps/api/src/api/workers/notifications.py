@@ -750,6 +750,12 @@ def send_weekly_email_digest(self, org_id: str) -> None:  # type: ignore[misc]
     yesterday = datetime.now(UTC).date() - timedelta(days=1)
     data = _fetch_digest_data(db, org_id, yesterday)
 
+    # A "$0.00 this week" email is noise that teaches people to ignore the
+    # digest - an org with a connected key but no recent usage gets nothing.
+    if not data["avg_7d_usd"]:
+        log.info("weekly_digest_skipped_no_spend", org_id=org_id)
+        return
+
     resend.api_key = settings.resend_api_key
     try:
         resend.Emails.send(

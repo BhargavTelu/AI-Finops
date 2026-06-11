@@ -277,7 +277,8 @@ export default function LandingPage() {
         </section>
 
         {/* ── Pricing ───────────────────────────────────────────────────── */}
-        <section id="pricing" className="py-14">
+        {/* scroll-mt offsets the sticky header when arriving via the #pricing anchor */}
+        <section id="pricing" className="scroll-mt-20 py-14">
           <SectionRule index="03" title="Pricing" />
           <p className="mt-6 max-w-lg text-sm text-muted-foreground">
             Every plan includes everything - attribution, anomaly alerts,

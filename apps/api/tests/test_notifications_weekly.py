@@ -109,6 +109,19 @@ class TestWeeklyEmailSend:
             notifications.send_weekly_email_digest(ORG_A)
         mock_send.assert_not_called()
 
+    def test_zero_spend_week_skips_send(self) -> None:
+        # Regression: an org with a connected key but no usage must not get
+        # a "$0.00 this week" email.
+        zero_data = {**_DIGEST_DATA, "avg_7d_usd": Decimal("0")}
+        with (
+            patch.object(notifications, "_get_supabase", return_value=MagicMock()),
+            patch.object(notifications, "_get_org_admin_email", return_value="cto@acme.com"),
+            patch.object(notifications, "_fetch_digest_data", return_value=zero_data),
+            patch.object(notifications.resend.Emails, "send") as mock_send,
+        ):
+            notifications.send_weekly_email_digest(ORG_A)
+        mock_send.assert_not_called()
+
 
 class TestWeeklyEmailHtml:
     def test_contains_metrics_and_unsubscribe(self) -> None:

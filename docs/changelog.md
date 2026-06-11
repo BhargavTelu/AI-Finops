@@ -21,6 +21,13 @@ Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATIO
 - **PostHog funnel wired** - capture functions existed as stubs with zero call sites; now firing: `provider_connected`, `tag_created`, `budget_created` (signature widened from 3 to 7 scope types), `pdf_downloaded`; `identify(user.id)` + organization `group()` in the provider (Clerk ids only - no PII in analytics). `signup`/`org_created` deferred to server-side Clerk-webhook capture (Phase 2, alongside `checkout_completed`).
 - **22 new tests** - `test_forecast.py` (regression math: flat/trend/clamp/band/fallbacks), `test_forecast_and_onboarding_routes.py` (404 vs 200 contract, org scoping), `test_notifications_weekly.py` (fan-out exclusions, send paths, HTML content, MoM colors).
 
+### Fixed - Phase 3 verification pass (2026-06-11)
+
+A no-assumptions audit of Phase 3 against the plan (beat config and routes verified live in-process, DeltaBadge null/color semantics checked, hero-ledger arithmetic re-summed, forecast edge cases re-traced including first-of-month). Two issues found and fixed (708 tests passing):
+
+- **Zero-spend orgs received a "$0.00" weekly email** - an org with a connected key but no usage in the trailing 7 days got "Your week in LLM spend: $0.00", noise that teaches recipients to ignore the digest. `send_weekly_email_digest` now skips when the week is empty; regression test added.
+- **`#pricing` anchor scrolled under the sticky landing-page header** - added `scroll-mt-20` to the pricing section.
+
 
 ### Added - Phase 1: CFO PDF Report (FR-22)
 
