@@ -23,6 +23,8 @@
 
 **Phase 1 done-condition met:** `POST /reports/generate` produces a presentable month-to-date PDF on demand; the 1st-of-month beat covers the previous month and emails the org admin.
 
+**Verification pass (2026-06-11):** Phases 0-1 audited line-by-line against the plan - router registration, `reports` RLS policy, live Celery beat config, and a full `next build` all confirmed. Four bugs found and fixed with regression tests (685 passing): same-period MoM for MTD reports, non-latin-1 PDF crash, UTC rate-limit window, stale report list after generation. Known caveat: the SigV4 R2 client is unit-tested but has not yet hit a live R2 endpoint - sanity-check the first production upload/download.
+
 ### Phase 0 - Trust Quick Wins ✅ (complete 2026-06-11)
 
 **632 tests passing, 10 skipped. 0 TypeScript errors. ESLint clean.**

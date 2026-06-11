@@ -8,7 +8,7 @@ CFO PDF report endpoints (Phase 1 / FR-22).
                                 if Redis is unreachable.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException
 import redis as redis_lib
@@ -89,7 +89,8 @@ def _generate_rate_limited(org_id: str) -> bool:
     Allow 3 on-demand generations per org per UTC day. Fail-open: a Redis
     outage should never block a sales demo over a nice-to-have limit.
     """
-    key = f"reports:generate:{org_id}:{date.today().isoformat()}"
+    # UTC, not server-local: the limit window must match the worker's clock.
+    key = f"reports:generate:{org_id}:{datetime.now(UTC).date().isoformat()}"
     try:
         r = redis_lib.Redis.from_url(settings.redis_url, decode_responses=True)
         pipe = r.pipeline()

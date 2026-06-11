@@ -50,6 +50,36 @@ class TestPreviousMonthRange:
         assert (start, end) == (date(2025, 12, 1), date(2025, 12, 31))
 
 
+class TestMomComparisonRange:
+    """Regression: a month-to-date report must compare against the SAME number
+    of days last month, not the full prior month (-97% headline bug)."""
+
+    def test_partial_month_compares_same_days(self) -> None:
+        start, end = reports_worker._mom_comparison_range(
+            date(2026, 6, 1), date(2026, 6, 11)
+        )
+        assert (start, end) == (date(2026, 5, 1), date(2026, 5, 11))
+
+    def test_complete_month_compares_full_prev_month(self) -> None:
+        # May (31d) vs April (30d): capped at April's length -> full April.
+        start, end = reports_worker._mom_comparison_range(
+            date(2026, 5, 1), date(2026, 5, 31)
+        )
+        assert (start, end) == (date(2026, 4, 1), date(2026, 4, 30))
+
+    def test_march_vs_february_caps_at_28(self) -> None:
+        start, end = reports_worker._mom_comparison_range(
+            date(2026, 3, 1), date(2026, 3, 31)
+        )
+        assert (start, end) == (date(2026, 2, 1), date(2026, 2, 28))
+
+    def test_single_day_mtd(self) -> None:
+        start, end = reports_worker._mom_comparison_range(
+            date(2026, 6, 1), date(2026, 6, 1)
+        )
+        assert (start, end) == (date(2026, 5, 1), date(2026, 5, 1))
+
+
 class TestGenerateMonthlyReports:
     def test_dispatches_once_per_unique_org(self) -> None:
         db = _make_db({"integrations": [

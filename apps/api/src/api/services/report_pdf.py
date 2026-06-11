@@ -34,6 +34,15 @@ def _count(value: int) -> str:
     return f"{value:,}"
 
 
+def _latin1(text: str) -> str:
+    """
+    Core Helvetica only supports latin-1; org names (Clerk) and tag labels
+    (user-defined) can be any unicode. fpdf2 raises on unsupported chars,
+    which would fail report generation outright - replace instead.
+    """
+    return text.encode("latin-1", errors="replace").decode("latin-1")
+
+
 class _ReportPDF(FPDF):
     """A4 portrait with a branded footer on every page."""
 
@@ -60,7 +69,7 @@ def _header_band(pdf: _ReportPDF, data: MonthlyReportData) -> None:
     period = f"{data.period_start:%B %Y}"
     if data.is_partial:
         period += f" (month to date through {data.period_end:%b %d})"
-    pdf.cell(0, 6, f"{data.org_name}  |  {period}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 6, _latin1(f"{data.org_name}  |  {period}"), new_x="LMARGIN", new_y="NEXT")
     pdf.set_y(42)
 
 
@@ -72,7 +81,10 @@ def _summary_cards(pdf: _ReportPDF, data: MonthlyReportData) -> None:
     ]
     if data.mom_delta_pct is not None:
         color = _RED if data.mom_delta_pct > 0 else _GREEN
-        cards.append(("vs last month", f"{data.mom_delta_pct:+.1f}%", color))
+        # Partial periods compare against the SAME number of days last month
+        # (see workers/reports._mom_comparison_range) - label accordingly.
+        mom_label = "vs last month (MTD)" if data.is_partial else "vs last month"
+        cards.append((mom_label, f"{data.mom_delta_pct:+.1f}%", color))
     if data.is_partial:
         cards.append(("Projected month end", _money(data.projected_month_cost_usd), None))
 
@@ -127,7 +139,7 @@ def _spend_table(pdf: _ReportPDF, lines: list[SpendLine], label_header: str) -> 
         if i % 2 == 1:
             pdf.set_fill_color(*_LIGHT_ROW)
         fill = i % 2 == 1
-        pdf.cell(cols[0], 6, f"  {line.label[:48]}", fill=fill)
+        pdf.cell(cols[0], 6, _latin1(f"  {line.label[:48]}"), fill=fill)
         pdf.cell(cols[1], 6, f"{_money(line.cost_usd)}  ", fill=fill, align="R")
         pdf.cell(cols[2], 6, f"{_count(line.requests)}  ", fill=fill, align="R")
         pdf.cell(
@@ -155,9 +167,11 @@ def _anomaly_section(pdf: _ReportPDF, count: int, anomalies: list[AnomalyLine]) 
         pdf.set_text_color(*_BODY_TEXT)
         pdf.cell(
             0, 6,
-            f"{anomaly.detected_on}  {anomaly.scope_value[:40]}: "
-            f"{_money(anomaly.baseline_usd)}/day baseline to {_money(anomaly.actual_usd)} "
-            f"(+{anomaly.spike_pct}%)",
+            _latin1(
+                f"{anomaly.detected_on}  {anomaly.scope_value[:40]}: "
+                f"{_money(anomaly.baseline_usd)}/day baseline to {_money(anomaly.actual_usd)} "
+                f"(+{anomaly.spike_pct}%)"
+            ),
             new_x="LMARGIN", new_y="NEXT",
         )
 

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
 import { Download, FileText, Loader2, Sparkles } from "lucide-react";
 
 import { createApiClient } from "@/lib/api-client";
@@ -32,13 +31,64 @@ interface Props {
   initialReports: ReportRead[];
 }
 
+const POLL_INTERVAL_MS = 5_000;
+const POLL_MAX_ATTEMPTS = 12; // give the worker up to ~1 minute
+
 export function ReportsClient({ initialReports }: Props) {
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const router = useRouter();
 
+  const [reports, setReports] = useState<ReportRead[]>(initialReports);
   const [generating, setGenerating] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Clear any in-flight poll when the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (pollTimer.current) clearInterval(pollTimer.current);
+    };
+  }, []);
+
+  function stopPolling() {
+    if (pollTimer.current) {
+      clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+    setGenerating(false);
+  }
+
+  // Client-side fetch deliberately bypasses the Next.js server Data Cache
+  // (revalidate: 120) - router.refresh() alone can serve a stale list for up
+  // to 2 minutes after the worker finishes.
+  function startPolling(before: Map<string, string>) {
+    let attempts = 0;
+    pollTimer.current = setInterval(async () => {
+      attempts += 1;
+      try {
+        const token = await getToken();
+        const fresh = await createApiClient(token!).get<ReportRead[]>("/reports");
+        const changed = fresh.some(
+          (r) => !before.has(r.id) || before.get(r.id) !== r.generated_at
+        );
+        if (changed) {
+          setReports(fresh);
+          stopPolling();
+          toast({ title: "Report ready", description: "Your month-to-date report is ready to download." });
+          return;
+        }
+      } catch {
+        // transient fetch error - keep polling until the attempt budget runs out
+      }
+      if (attempts >= POLL_MAX_ATTEMPTS) {
+        stopPolling();
+        toast({
+          title: "Still generating",
+          description: "The report is taking longer than expected - reload the page in a minute.",
+        });
+      }
+    }, POLL_INTERVAL_MS);
+  }
 
   async function handleGenerate() {
     setGenerating(true);
@@ -48,11 +98,9 @@ export function ReportsClient({ initialReports }: Props) {
       await api.post<ReportGenerateAccepted>("/reports/generate", null);
       toast({
         title: "Report queued",
-        description:
-          "Generating your month-to-date report. It appears in the list within a minute - refresh to see it.",
+        description: "Generating your month-to-date report - it appears below when ready.",
       });
-      // Refresh after a grace period so a fast worker shows up without a manual reload.
-      setTimeout(() => router.refresh(), 20_000);
+      startPolling(new Map(reports.map((r) => [r.id, r.generated_at])));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Could not queue the report.";
       toast({
@@ -60,7 +108,6 @@ export function ReportsClient({ initialReports }: Props) {
         description: msg,
         variant: "destructive",
       });
-    } finally {
       setGenerating(false);
     }
   }
@@ -99,7 +146,7 @@ export function ReportsClient({ initialReports }: Props) {
         </Button>
       </div>
 
-      {initialReports.length === 0 ? (
+      {reports.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No reports yet"
@@ -108,7 +155,7 @@ export function ReportsClient({ initialReports }: Props) {
         />
       ) : (
         <div className="space-y-3">
-          {initialReports.map((report) => (
+          {reports.map((report) => (
             <div
               key={report.id}
               className="flex items-center justify-between gap-4 rounded-xl border border-transparent bg-card p-5 shadow-card transition-shadow hover:shadow-card-hover"

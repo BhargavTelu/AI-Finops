@@ -11,6 +11,7 @@ regenerates when it covers MORE days (period_end advanced) or force=True, so
 a month-to-date partial never blocks the full month-end report.
 """
 
+import calendar
 from datetime import UTC, date, datetime, timedelta
 
 from celery import shared_task
@@ -38,6 +39,22 @@ def _get_supabase():
 def _previous_month_range(today: date) -> tuple[date, date]:
     period_end = today.replace(day=1) - timedelta(days=1)
     return period_end.replace(day=1), period_end
+
+
+def _mom_comparison_range(start: date, end: date) -> tuple[date, date]:
+    """
+    Previous-month window covering the SAME number of elapsed days.
+
+    A month-to-date report (11 days in) must compare against the first 11
+    days of last month - comparing against the full prior month makes the
+    MoM headline wildly misleading (e.g. -97% mid-month). Capped at the
+    previous month's length, so a complete month compares to the complete
+    previous month.
+    """
+    prev_start, _ = _previous_month_range(start)
+    days_elapsed = (end - start).days + 1
+    prev_month_days = calendar.monthrange(prev_start.year, prev_start.month)[1]
+    return prev_start, prev_start + timedelta(days=min(days_elapsed, prev_month_days) - 1)
 
 
 @shared_task
@@ -105,7 +122,7 @@ def generate_org_report(  # type: ignore[misc]
         log.info("report_no_data", org_id=org_id, period_start=period_start)
         return
 
-    prev_start, prev_end = _previous_month_range(start)
+    prev_start, prev_end = _mom_comparison_range(start, end)
     prev_rows = _fetch_summaries(db, org_id, prev_start, prev_end)
 
     anomaly_rows = (

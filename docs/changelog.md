@@ -28,6 +28,15 @@ Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATIO
 - `tests/test_stub_routes.py` TC-STUB-06 retired - reports routes are implemented; coverage moved to `test_report_routes.py`
 - `/security` page contact corrected to `security@spendopsai.com` (production domain per CORS config)
 
+### Fixed - Phase 1 verification pass (2026-06-11)
+
+A no-assumptions audit of Phases 0-1 against the plan found and fixed four issues (685 tests passing, 5 new regression tests):
+
+- **Misleading MoM on month-to-date reports** - `generate_org_report` compared the partial current month against the FULL previous month (an 11-day MTD showed "-96.8% vs last month"). New `_mom_comparison_range()` compares the same number of elapsed days (capped at the prior month's length, so complete months still compare to complete months); PDF label reads "vs last month (MTD)" on partial periods. Regression tests cover partial, complete, March-vs-February cap, and single-day cases.
+- **Report generation crashed for non-latin-1 names** - core Helvetica raised `FPDFUnicodeEncodingException` for any org name (Clerk), tag, or label outside latin-1 (e.g. "Acme 株式会社"), failing generation outright. Dynamic text is now sanitized via `_latin1()` (replace, not raise). Regression test renders CJK/Cyrillic/emoji strings.
+- **Rate-limit window used the server's local date** - `/reports/generate` keyed its 3/day Redis counter on `date.today()` (server timezone) while the rest of the pipeline runs UTC; now `datetime.now(UTC).date()`.
+- **Stale report list after on-demand generation** - the client relied on `router.refresh()` after 20s, which can re-serve the Next.js Data Cache (`revalidate: 120`) for up to 2 minutes after the worker finishes. The reports list is now client-side state polled every 5s (up to ~1 min) after queuing, bypassing the server cache; shows a "Report ready" toast on arrival and a graceful timeout message.
+
 ---
 
 ### Added - Phase 0: Trust Quick Wins

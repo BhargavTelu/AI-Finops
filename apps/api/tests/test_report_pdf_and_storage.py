@@ -64,6 +64,27 @@ class TestRenderPdf:
         )
         assert render_pdf(data).startswith(b"%PDF")
 
+    def test_non_latin1_strings_do_not_crash(self) -> None:
+        # Regression: core Helvetica raised FPDFUnicodeEncodingException for
+        # any org/tag/label outside latin-1, failing generation outright.
+        data = build_report_data(
+            org_name="Acme 株式会社 🚀",
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            generated_on=date(2026, 6, 1),
+            current_rows=[
+                {"total_cost_usd": "1.00", "provider": "openai", "model": "gpt-4o",
+                 "feature_tag": "чат-бот", "team_tag": "团队", "customer_tag": None}
+            ],
+            prev_month_rows=[],
+            anomaly_rows=[
+                {"detected_at": "2026-05-14", "scope_value": "模型-x", "baseline_usd": "1",
+                 "actual_usd": "5", "spike_pct": 400, "severity": "high"}
+            ],
+            applied_rec_rows=[],
+        )
+        assert render_pdf(data).startswith(b"%PDF")
+
 
 @pytest.fixture(autouse=True)
 def _r2_settings():
