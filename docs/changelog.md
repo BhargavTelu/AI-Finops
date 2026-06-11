@@ -6,7 +6,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ---
 
-## [Unreleased] - M3 Group D in progress
+## [Unreleased] - Phase 0: Trust Quick Wins (2026-06-11)
+
+Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 0 removes trust blockers in the key-connect funnel.
+
+### Added
+
+- **`/security` page** (`apps/web/src/app/security/page.tsx`) - public marketing-grade security overview: AES-256-GCM key encryption, read-only pull architecture (no customer traffic through our servers), Postgres RLS tenant isolation, no-PII logging, data deletion, subprocessor list. Added to Clerk middleware public routes; linked from the integrations settings page and the connect dialog.
+- **Least-privilege key guidance** (`KeyScopeGuide` in `components/integrations-page.tsx`) - collapsible per-provider panel in the connect dialog. OpenAI: step-by-step for a Restricted Admin key with read-only Usage API scope (verified against provider docs 2026-06). Anthropic: honest copy that Admin keys cannot be scoped + what we actually call. API-key placeholder now switches per provider (`sk-admin-...` / `sk-ant-admin...`).
+- **Strategy docs** - `docs/STRATEGIC_IMPLEMENTATION_PLAN.md` (source of truth for feature order, Phases 0-5) and `docs/strategic_review_2026-06-11.docx` (founder-level product review it derives from).
+
+### Changed
+
+- **Gemini hidden from the connect form** - `fetch_costs()` is a no-op (AI Studio has no billing endpoint), so connecting a Gemini key silently ingested $0 and looked broken. The provider option is now disabled with "(coming soon)"; backend adapter and existing integrations are untouched.
+
+### Removed
+
+- **`GET /usage/export.csv` 501 stub** - FR-23 (CSV export from Cost Explorer) shipped client-side via `export-button.tsx`, so the server endpoint is dead code. `test_stub_routes.py` TC-STUB-03 now guards that the route stays gone (404) instead of asserting 501.
 
 ---
 

@@ -1,8 +1,26 @@
 # Project Status
 
-## Current Milestone: M3 - Intelligence Layer
+## Current Milestone: M4 - Monetize + Polish (via Strategic Implementation Plan)
 
-**Status:** M3 COMPLETE ✅. Group A (Anomaly Detection) complete 2026-05-21. Group B (Budgets + Email Alerts) complete 2026-05-21. Group C (Slack Integration) complete 2026-05-21. Group D (Recommendations Engine) complete 2026-06-10. Ready for M4.
+**Status:** M3 COMPLETE ✅ (all four groups; Group D Recommendations complete 2026-06-10). Execution order for M4 and beyond now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md). **Phase 0 (Trust Quick Wins) complete 2026-06-11.** Next: Phase 1 (CFO PDF report).
+
+---
+
+## Strategic Implementation Plan progress
+
+### Phase 0 - Trust Quick Wins ✅ (complete 2026-06-11)
+
+**632 tests passing, 10 skipped. 0 TypeScript errors. ESLint clean.**
+
+- [x] Gemini hidden from connect form - disabled "(coming soon)" option in `integrations-page.tsx`; backend adapter kept; existing Gemini integrations untouched (cost ingestion deferred until Cloud Billing OAuth ships)
+- [x] `KeyScopeGuide` collapsible panel in the connect dialog - per-provider least-privilege key steps; OpenAI Restricted Admin key with read-only Usage API scope (scope names verified against provider docs 2026-06); Anthropic honest no-scoping copy; per-provider key placeholder
+- [x] `/security` public page - key encryption, read-only architecture, RLS isolation, no-PII logging, data deletion, subprocessors; public route in Clerk middleware; linked from integrations settings + connect dialog
+- [x] Dead `GET /usage/export.csv` 501 stub deleted (FR-23 ships client-side via `export-button.tsx`); TC-STUB-03 now asserts 404 (route stays gone)
+- [x] Docs updated: changelog, project status, architecture endpoint list, CLAUDE.md milestone + doc links
+
+### Phase 1 - CFO PDF Report (next)
+
+See [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) § Phase 1 for the task list (report_builder service, WeasyPrint template, R2 storage, beat worker, `/reports` routes + page).
 
 ---
 

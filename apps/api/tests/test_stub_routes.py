@@ -9,14 +9,12 @@ When a route is implemented, update the assertion from 501 → the correct code.
 
 TC-STUB-01  POST /integrations/:id/test
 TC-STUB-02  GET  /usage/forecast
-TC-STUB-03  GET  /usage/export.csv
+TC-STUB-03  GET  /usage/export.csv - route REMOVED (FR-23 ships client-side)
 TC-STUB-04  GET/POST/GET /billing, /billing/checkout, /billing/portal
 TC-STUB-05  POST /webhooks/stripe
 TC-STUB-06  GET/GET/POST /reports, /reports/:id/download, /reports/generate
 TC-WH-20    POST /webhooks/stripe - duplicate stub behavior check
 """
-
-from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -71,16 +69,23 @@ class TestUsageForecastStub:
         )
 
 
-# ── TC-STUB-03: GET /usage/export.csv ─────────────────────────────────────────
+# ── TC-STUB-03: GET /usage/export.csv (removed) ───────────────────────────────
 
-class TestUsageExportCsvStub:
-    """TC-STUB-03 - GET /usage/export.csv returns 501 Not Implemented."""
+class TestUsageExportCsvRemoved:
+    """TC-STUB-03 - /usage/export.csv was removed, not implemented.
 
-    def test_stub_returns_500(self) -> None:
+    FR-23 (CSV export from Cost Explorer) ships client-side via
+    apps/web/src/app/(dashboard)/cost-explorer/export-button.tsx, so the
+    server endpoint is intentionally gone. Guard against it silently
+    reappearing without a deliberate decision.
+    """
+
+    def test_route_is_gone(self) -> None:
         resp = client.get("/api/v1/usage/export.csv")
-        assert resp.status_code == 501, (
-            f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
-            "When M4 implements (FR-23): assert 200 with Content-Type: text/csv."
+        assert resp.status_code == 404, (
+            f"Expected 404 (route removed - FR-23 is client-side), got "
+            f"{resp.status_code}. If this endpoint is being reintroduced, "
+            "it needs a real implementation and a deliberate plan change."
         )
 
 

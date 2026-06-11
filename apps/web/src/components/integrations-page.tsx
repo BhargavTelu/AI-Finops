@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { useToast } from "@/hooks/use-toast";
 import {
   Copy,
   Check,
+  ChevronDown,
   MoreHorizontal,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   Plus,
   KeyRound,
@@ -187,7 +191,13 @@ export function IntegrationsPage({ integrations: initial }: Props) {
               API Integrations
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Connect your LLM provider Admin API keys to start tracking spend.
+              Connect your LLM provider Admin API keys to start tracking spend.{" "}
+              <Link
+                href={"/security" as Route}
+                className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              >
+                How we protect your keys
+              </Link>
             </p>
           </div>
           <Button onClick={openAddDialog} size="sm" className="gap-1.5 shrink-0">
@@ -250,7 +260,12 @@ export function IntegrationsPage({ integrations: initial }: Props) {
                   <SelectContent>
                     <SelectItem value="openai">OpenAI</SelectItem>
                     <SelectItem value="anthropic">Anthropic</SelectItem>
-                    <SelectItem value="gemini">Gemini</SelectItem>
+                    {/* Gemini hidden until cost ingestion ships (AI Studio has
+                        no billing endpoint; Cloud Billing OAuth deferred).
+                        Connecting it today would silently ingest $0. */}
+                    <SelectItem value="gemini" disabled>
+                      Gemini (coming soon)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -274,7 +289,7 @@ export function IntegrationsPage({ integrations: initial }: Props) {
                 <Input
                   id="apiKey"
                   type="password"
-                  placeholder="sk-admin-..."
+                  placeholder={provider === "anthropic" ? "sk-ant-admin..." : "sk-admin-..."}
                   required
                   minLength={10}
                   value={apiKey}
@@ -289,6 +304,8 @@ export function IntegrationsPage({ integrations: initial }: Props) {
                   - not a project key.
                 </p>
               </div>
+
+              <KeyScopeGuide provider={provider} />
 
               {submitState === "error" && (
                 <div role="alert" className="flex items-start gap-2 rounded-md bg-critical-subtle border border-critical/20 px-3 py-2 text-sm text-critical">
@@ -342,6 +359,89 @@ export function IntegrationsPage({ integrations: initial }: Props) {
         />
       </div>
     </PageMotion>
+  );
+}
+
+/**
+ * Per-provider least-privilege key guidance, collapsed by default.
+ * Scope facts verified against provider docs 2026-06: OpenAI Admin keys
+ * support a read-only "Usage API" scope; Anthropic Admin keys cannot be
+ * scoped, so we state what we actually call instead of implying a scope.
+ */
+function KeyScopeGuide({ provider }: { provider: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="rounded-md border bg-muted/40">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        aria-expanded={open}
+      >
+        <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
+        How to create a least-privilege key
+        <ChevronDown
+          className={cn(
+            "ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
+
+      {open && (
+        <div className="space-y-2 border-t px-3 py-2.5 text-xs text-muted-foreground">
+          {provider === "openai" && (
+            <ol className="list-decimal space-y-1 pl-4">
+              <li>
+                On platform.openai.com, open{" "}
+                <span className="font-medium text-foreground">
+                  Settings &rarr; Organization &rarr; Admin keys
+                </span>{" "}
+                (requires the Organization Owner role).
+              </li>
+              <li>
+                Create a new Admin key and choose{" "}
+                <span className="font-medium text-foreground">Restricted</span>.
+              </li>
+              <li>
+                Grant <span className="font-medium text-foreground">Read</span>{" "}
+                on the <span className="font-medium text-foreground">Usage API</span>{" "}
+                scope only - that covers the costs and usage endpoints we read.
+                Leave every other scope at None.
+              </li>
+            </ol>
+          )}
+          {provider === "anthropic" && (
+            <>
+              <p>
+                Create an Admin key in the{" "}
+                <span className="font-medium text-foreground">
+                  Claude Console &rarr; Settings &rarr; Admin keys
+                </span>{" "}
+                (requires the org admin role).
+              </p>
+              <p>
+                Anthropic Admin keys can&apos;t be scoped down. We only ever call
+                the read-only usage-report endpoint - never any endpoint that
+                changes your org.
+              </p>
+            </>
+          )}
+          <p>
+            Your key is AES-256 encrypted at rest, never returned to the
+            browser, and never written to logs.{" "}
+            <Link
+              href={"/security" as Route}
+              className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+            >
+              Security details
+            </Link>
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
