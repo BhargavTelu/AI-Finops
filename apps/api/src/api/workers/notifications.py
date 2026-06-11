@@ -715,8 +715,11 @@ def send_weekly_email_digests() -> None:
     """
     Fan-out (Mondays 09:00 UTC): one weekly email per org that has an active
     integration, has NOT connected Slack (Slack-first - those orgs already get
-    the daily digest), and has not opted out.
+    the daily digest), has not opted out, and still has access (active
+    subscription or running trial - lapsed orgs must not keep getting email).
     """
+    from api.services.billing_access import filter_accessible_org_ids
+
     db = _get_supabase()
 
     active = db.table("integrations").select("org_id").eq("status", "active").execute()
@@ -730,7 +733,8 @@ def send_weekly_email_digests() -> None:
         return
 
     opted_in = db.table("organizations").select("id").eq("email_digest_opt_out", False).execute()
-    recipients = sorted(candidates & {row["id"] for row in opted_in.data})
+    candidates &= {row["id"] for row in opted_in.data}
+    recipients = sorted(filter_accessible_org_ids(db, sorted(candidates)))
 
     for org_id in recipients:
         send_weekly_email_digest.delay(org_id)

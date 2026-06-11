@@ -49,6 +49,10 @@ _DIGEST_DATA = {
 }
 
 
+def _all_accessible(db, org_ids):
+    return set(org_ids)
+
+
 class TestWeeklyFanOut:
     def test_excludes_slack_connected_orgs(self) -> None:
         db = _db_for_fanout(
@@ -58,6 +62,10 @@ class TestWeeklyFanOut:
         )
         with (
             patch.object(notifications, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                side_effect=_all_accessible,
+            ),
             patch.object(notifications.send_weekly_email_digest, "delay") as mock_delay,
         ):
             notifications.send_weekly_email_digests()
@@ -71,10 +79,33 @@ class TestWeeklyFanOut:
         )
         with (
             patch.object(notifications, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                side_effect=_all_accessible,
+            ),
             patch.object(notifications.send_weekly_email_digest, "delay") as mock_delay,
         ):
             notifications.send_weekly_email_digests()
         mock_delay.assert_called_once_with(ORG_C)
+
+    def test_excludes_lapsed_orgs(self) -> None:
+        # Regression: an org whose trial lapsed must not keep getting weekly
+        # email - that's spam to someone who churned.
+        db = _db_for_fanout(
+            active_orgs=[ORG_A, ORG_B],
+            slack_orgs=[],
+            opted_in_orgs=[ORG_A, ORG_B],
+        )
+        with (
+            patch.object(notifications, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                return_value={ORG_B},  # ORG_A lapsed
+            ),
+            patch.object(notifications.send_weekly_email_digest, "delay") as mock_delay,
+        ):
+            notifications.send_weekly_email_digests()
+        mock_delay.assert_called_once_with(ORG_B)
 
     def test_no_candidates_no_dispatch(self) -> None:
         db = _db_for_fanout(active_orgs=[ORG_A], slack_orgs=[ORG_A], opted_in_orgs=[ORG_A])

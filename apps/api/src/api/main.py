@@ -1,15 +1,18 @@
-import sentry_sdk
-import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import sentry_sdk
+import structlog
 
 from api.config import settings
 
+# isort: off
 # Must be imported before any router that calls .delay() so that @shared_task
 # binds to the configured Celery app (Redis broker) rather than the default app
-# (AMQP / no broker).
+# (AMQP / no broker). The isort guard keeps formatters from sorting this back
+# below the router imports - that exact regression shipped once in M1.
 import api.workers.celery_app  # noqa: F401
 
+# isort: on
 from api.routers import (
     anomalies,
     billing,
@@ -51,17 +54,26 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     )
 
-    # All business routes under /api/v1
+    # Data routers gated behind an active subscription or running trial
+    # (Phase 2). Config-class routers stay reachable when the trial lapses:
+    # billing (the way out of the paywall), integrations/tags/slack/budgets
+    # (settings), onboarding (checklist on the paywalled dashboard shell).
+    from api.deps import require_active_org
+
+    for router in [
+        usage.router,
+        anomalies.router,
+        recommendations.router,
+        reports.router,
+    ]:
+        app.include_router(router, prefix="/api/v1", dependencies=[require_active_org])
+
     for router in [
         integrations.router,
-        usage.router,
         tags.router,
         tags.tag_rules_router,
         budgets.router,
-        anomalies.router,
-        recommendations.router,
         slack.router,
-        reports.router,
         billing.router,
         onboarding.router,
     ]:

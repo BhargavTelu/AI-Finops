@@ -149,8 +149,7 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 1. ~~Anthropic Enterprise Analytics API - Enterprise-tier-gated?~~ → Standard Admin API, not Enterprise-gated. Shipped in M2.
 2. ~~Gemini billing granularity - verify in week 1~~ → AI Studio API has no usage-reporting endpoint; Cloud Billing API requires OAuth2/service account. Key validation ships M2, cost collection deferred to V1.
 
-**Active (resolve before M4):**
-3. Stripe trial: 14 days vs none? Decide after first 5 design partner pricing conversations. (M4)
-4. Pricing test: $299 entry or $99 thinner Starter for top-of-funnel? (M4)
+3. ~~Stripe trial: 14 days vs none?~~ → **resolved (D2)**: 14-day trial, no card required; gating via `billing_access.evaluate_access()` (Phase 2)
+4. ~~Pricing test: $299 entry or $99 thinner Starter?~~ → **resolved (D3)**: $299 entry stays; revisit at ≥10 paying customers
 5. ~~Budget reset cycle: calendar month vs rolling 30 days?~~ → **resolved**: calendar month; implemented as `date_trunc('month')` comparison (M3-B)
 6. ~~Slack app registration: create in dev workspace before starting M3 Group C~~ → **resolved**: Slack OAuth flow complete; set `SLACK_CLIENT_ID` + `SLACK_CLIENT_SECRET` + `SLACK_REDIRECT_URI` in env (M3-C)

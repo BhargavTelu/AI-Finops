@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # ── Stripe ────────────────────────────────────────────────────────────────
     stripe_secret_key: str
     stripe_webhook_secret: str
+    # Price IDs for the three plans (Stripe Dashboard → Products). Empty in
+    # environments where billing is not configured - checkout returns 503.
+    stripe_price_starter: str = ""
+    stripe_price_growth: str = ""
+    stripe_price_enterprise: str = ""
 
     # ── Resend ────────────────────────────────────────────────────────────────
     resend_api_key: str
@@ -53,6 +58,13 @@ class Settings(BaseSettings):
 
     # ── Sentry ────────────────────────────────────────────────────────────────
     sentry_dsn: str = ""
+
+    # ── PostHog (server-side capture) ─────────────────────────────────────────
+    # Project API key for server-side funnel events (signup, org_created,
+    # checkout_completed). Empty = capture disabled. Same key as
+    # NEXT_PUBLIC_POSTHOG_KEY - PostHog project keys are write-only.
+    posthog_api_key: str = ""
+    posthog_host: str = "https://app.posthog.com"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     cors_origins: list[str] = ["http://localhost:3000"]

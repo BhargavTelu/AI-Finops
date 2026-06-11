@@ -3,10 +3,19 @@ Shared pytest fixtures.
 Provider API calls are mocked at the httpx transport level - no real network.
 """
 
-import pytest
 from httpx import AsyncClient
+import pytest
 
+from api.deps import _require_active_org
 from api.main import app
+
+# Neutralize the Phase 2 subscription gate for all route tests. The gated
+# routers (usage, anomalies, recommendations, reports) carry a router-level
+# _require_active_org dependency that queries Supabase; route tests assert
+# business behavior, not billing. The gate's own logic is unit-tested in
+# tests/test_billing_gating.py against mocked rows. Installed at import time
+# so _isolate_dependency_overrides snapshots (and therefore preserves) it.
+app.dependency_overrides[_require_active_org] = lambda: None
 
 
 @pytest.fixture(autouse=True)

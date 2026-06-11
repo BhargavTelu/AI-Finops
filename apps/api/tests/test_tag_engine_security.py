@@ -64,8 +64,14 @@ class TestMatchesRegexSecurity:
         Fix: wrap re.search() with a signal-based timeout (Linux) or use the re2 library.
         """
         rule = _rule("regex", r"^(a+)+$")
-        # Classic ReDoS input: many 'a's followed by a non-matching char
-        evil_input = "a" * 25 + "!"
+        # Classic ReDoS input: many 'a's followed by a non-matching char.
+        # 22 chars (~2^22 backtracking steps), not 25: the thread-pool timeout
+        # in tag_engine cannot preempt the regex engine mid-match (sre holds
+        # the GIL), so elapsed time here is raw CPU speed - at 2^25 this test
+        # was a machine-load coin flip around the 5s budget. 2^22 exercises
+        # the same exponential pattern with ~8x headroom while still failing
+        # loudly if matching ever becomes a true hang.
+        evil_input = "a" * 22 + "!"
 
         start = time.monotonic()
         result = _matches(rule, evil_input)

@@ -80,6 +80,10 @@ class TestMomComparisonRange:
         assert (start, end) == (date(2026, 5, 1), date(2026, 5, 1))
 
 
+def _all_accessible(db, org_ids):
+    return set(org_ids)
+
+
 class TestGenerateMonthlyReports:
     def test_dispatches_once_per_unique_org(self) -> None:
         db = _make_db({"integrations": [
@@ -87,6 +91,10 @@ class TestGenerateMonthlyReports:
         ]})
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                side_effect=_all_accessible,
+            ),
             patch.object(reports_worker.generate_org_report, "delay") as mock_delay,
         ):
             reports_worker.generate_monthly_reports()
@@ -96,10 +104,32 @@ class TestGenerateMonthlyReports:
         db = _make_db({"integrations": []})
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                side_effect=_all_accessible,
+            ),
             patch.object(reports_worker.generate_org_report, "delay") as mock_delay,
         ):
             reports_worker.generate_monthly_reports()
         mock_delay.assert_not_called()
+
+    def test_lapsed_orgs_excluded_from_fanout(self) -> None:
+        # Regression: an org whose trial lapsed must not get a report (or the
+        # report-ready email) generated month after month.
+        db = _make_db({"integrations": [
+            {"org_id": ORG_ID}, {"org_id": "lapsed-org"},
+        ]})
+        with (
+            patch.object(reports_worker, "_get_supabase", return_value=db),
+            patch(
+                "api.services.billing_access.filter_accessible_org_ids",
+                return_value={ORG_ID},
+            ),
+            patch.object(reports_worker.generate_org_report, "delay") as mock_delay,
+        ):
+            reports_worker.generate_monthly_reports()
+        assert mock_delay.call_count == 1
+        assert mock_delay.call_args.args[0] == ORG_ID
 
 
 class TestGenerateOrgReportIdempotency:

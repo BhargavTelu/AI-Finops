@@ -2,11 +2,11 @@ import json
 import time
 from typing import Annotated, Any
 
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.concurrency import run_in_threadpool
 import httpx
 import jwt
 import structlog
-from fastapi import Depends, Header, HTTPException, status
-from fastapi.concurrency import run_in_threadpool
 from supabase import create_client
 
 from api.config import settings
@@ -233,3 +233,57 @@ def _require_admin_org(org: OrgDep) -> OrgContext:
 
 # Shorthand for admin-only routes: `org: AdminOrgDep`
 AdminOrgDep = Annotated[OrgContext, Depends(_require_admin_org)]
+
+
+def _require_active_org(org: OrgDep) -> OrgContext:
+    """
+    Gate data routes behind an active subscription or a running trial (Phase 2).
+
+    402 when neither holds. Applied at router-include time in main.py to the
+    data routers (usage, anomalies, recommendations, reports) - never to
+    billing (must stay reachable to fix the situation), settings-class routes
+    (integrations/tags/slack/onboarding), or webhooks.
+
+    Sync on purpose: Supabase calls block, and FastAPI runs sync dependencies
+    in its threadpool (same rationale as _require_admin_org). FastAPI caches
+    the _require_org sub-dependency per request, so this adds queries, not
+    re-authentication.
+
+    Uses the process-wide get_supabase() client: this dependency runs on
+    EVERY gated data request, and constructing a fresh client (and its httpx
+    pool) per request is pure overhead on the hottest path in the API.
+    """
+    from api.services.billing_access import evaluate_access
+    from api.services.db import get_supabase
+
+    db = get_supabase()
+
+    org_result = (
+        db.table("organizations")
+        .select("trial_ends_at, plan")
+        .eq("id", org.org_id)
+        .limit(1)
+        .execute()
+    )
+    billing_result = (
+        db.table("billing")
+        .select("plan, status, stripe_subscription_id, current_period_end")
+        .eq("org_id", org.org_id)
+        .limit(1)
+        .execute()
+    )
+
+    state = evaluate_access(
+        org_result.data[0] if org_result.data else None,
+        billing_result.data[0] if billing_result.data else None,
+    )
+    if state.access_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Trial ended and no active subscription. Choose a plan to continue.",
+        )
+    return org
+
+
+# Router-level dependency for gated data routers (see main.py include list).
+require_active_org = Depends(_require_active_org)

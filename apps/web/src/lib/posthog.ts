@@ -57,6 +57,8 @@ export function capturePdfDownloaded(reportId: string): void {
   posthog.capture("pdf_downloaded", { report_id: reportId });
 }
 
-export function captureCheckoutCompleted(plan: "starter" | "growth" | "enterprise"): void {
+// plan widened to string: at capture time (checkout redirect) the webhook may
+// not have written the purchased plan yet, so "trial"/"unknown" are possible.
+export function captureCheckoutCompleted(plan: string): void {
   posthog.capture("checkout_completed", { plan });
 }

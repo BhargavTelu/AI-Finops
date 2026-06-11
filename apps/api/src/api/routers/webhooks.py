@@ -266,6 +266,175 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
     log.info("membership_synced", org_id=org_db_id, actor_user_id=user_db_id, role=role)
 
 
+# ── Stripe billing webhook (Phase 2 / FR-21) ───────────────────────────────────
+
+def _claim_stripe_event(db: Any, event_id: str, event_type: str) -> bool:
+    """
+    Idempotency by Stripe event id: INSERT into stripe_events acts as the
+    claim. ONLY a unique-violation means "retry of an already-processed
+    delivery" (return False -> ack without re-processing). Any other failure
+    re-raises: treating a transient DB error as a duplicate would ack the
+    event and silently drop a billing transition - a paid customer who never
+    gets unlocked.
+    """
+    try:
+        db.table("stripe_events").insert({"id": event_id, "type": event_type}).execute()
+        return True
+    except Exception as exc:
+        marker = str(exc).lower()
+        code = getattr(exc, "code", None)
+        if code == "23505" or "duplicate key" in marker or "already exists" in marker:
+            log.info("stripe_event_duplicate", event_id=event_id, type=event_type)
+            return False
+        raise
+
+
+def _release_stripe_event(db: Any, event_id: str) -> None:
+    """
+    Undo a claim after processing failed, so Stripe's retry is not acked as a
+    duplicate. Best-effort: if even the delete fails, the event is logged
+    loudly for manual replay from the Stripe dashboard.
+    """
+    try:
+        db.table("stripe_events").delete().eq("id", event_id).execute()
+    except Exception as exc:
+        log.error(
+            "stripe_event_claim_stuck_replay_manually", event_id=event_id, error=str(exc)
+        )
+
+
+def _plan_from_price(price_id: str | None) -> str | None:
+    return {
+        settings.stripe_price_starter: "starter",
+        settings.stripe_price_growth: "growth",
+        settings.stripe_price_enterprise: "enterprise",
+    }.get(price_id or "")
+
+
+def _audit_plan_change(db: Any, org_id: str, action: str, metadata: dict[str, Any]) -> None:
+    """Best-effort audit trail - a failed audit write never fails the webhook."""
+    try:
+        db.table("audit_events").insert(
+            {
+                "org_id": org_id,
+                "actor_user_id": None,  # system actor: Stripe webhook
+                "action": action,
+                "target_kind": "billing",
+                "metadata": metadata,
+            }
+        ).execute()
+    except Exception as exc:
+        log.warning("billing_audit_write_failed", org_id=org_id, error=str(exc))
+
+
+def _upsert_billing(db: Any, org_id: str, fields: dict[str, Any]) -> None:
+    db.table("billing").upsert({"org_id": org_id, **fields}, on_conflict="org_id").execute()
+
+
+def _mirror_org_plan(db: Any, org_id: str, plan: str) -> None:
+    db.table("organizations").update({"plan": plan}).eq("id", org_id).execute()
+
+
+def _handle_checkout_completed(db: Any, obj: dict[str, Any]) -> None:
+    org_id: str | None = obj.get("client_reference_id") or (obj.get("metadata") or {}).get(
+        "org_id"
+    )
+    if not org_id:
+        log.error("stripe_checkout_missing_org", session_id=obj.get("id"))
+        return
+
+    plan = (obj.get("metadata") or {}).get("plan") or "starter"
+    _upsert_billing(
+        db,
+        org_id,
+        {
+            "stripe_customer_id": obj.get("customer"),
+            "stripe_subscription_id": obj.get("subscription"),
+            "plan": plan,
+            "status": "active",
+        },
+    )
+    _mirror_org_plan(db, org_id, plan)
+    _audit_plan_change(
+        db, org_id, "billing.checkout_completed", {"plan": plan, "session": obj.get("id")}
+    )
+    log.info("billing_checkout_completed", org_id=org_id, plan=plan)
+
+    from api.services.analytics import capture
+
+    capture(org_id, "checkout_completed", {"plan": plan})
+
+
+def _org_id_for_subscription(db: Any, obj: dict[str, Any]) -> str | None:
+    """Subscription metadata carries org_id (set at checkout); fall back to
+    looking the subscription id up in our own billing table."""
+    org_id = (obj.get("metadata") or {}).get("org_id")
+    if org_id:
+        return org_id  # type: ignore[no-any-return]
+    result = (
+        db.table("billing")
+        .select("org_id")
+        .eq("stripe_subscription_id", obj.get("id"))
+        .limit(1)
+        .execute()
+    )
+    return result.data[0]["org_id"] if result.data else None
+
+
+def _period_end_iso(obj: dict[str, Any]) -> str | None:
+    epoch = obj.get("current_period_end")
+    if not epoch:
+        return None
+    return datetime.fromtimestamp(int(epoch), tz=UTC).isoformat()
+
+
+def _handle_subscription_updated(db: Any, obj: dict[str, Any]) -> None:
+    org_id = _org_id_for_subscription(db, obj)
+    if not org_id:
+        log.warning("stripe_subscription_unknown_org", subscription_id=obj.get("id"))
+        return
+
+    items = (obj.get("items") or {}).get("data") or [{}]
+    price_id = ((items[0].get("price")) or {}).get("id")
+    plan = (
+        _plan_from_price(price_id)
+        or (obj.get("metadata") or {}).get("plan")
+        or "starter"
+    )
+    sub_status: str = obj.get("status") or "active"
+
+    _upsert_billing(
+        db,
+        org_id,
+        {
+            "stripe_subscription_id": obj.get("id"),
+            "stripe_customer_id": obj.get("customer"),
+            "plan": plan,
+            "status": sub_status,
+            "current_period_end": _period_end_iso(obj),
+        },
+    )
+    _mirror_org_plan(db, org_id, plan)
+    _audit_plan_change(
+        db, org_id, "billing.subscription_updated", {"plan": plan, "status": sub_status}
+    )
+    log.info("billing_subscription_updated", org_id=org_id, plan=plan, status=sub_status)
+
+
+def _handle_subscription_deleted(db: Any, obj: dict[str, Any]) -> None:
+    org_id = _org_id_for_subscription(db, obj)
+    if not org_id:
+        log.warning("stripe_subscription_unknown_org", subscription_id=obj.get("id"))
+        return
+
+    _upsert_billing(db, org_id, {"status": "canceled"})
+    # Back to 'trial' plan label; access is decided by billing_access (the
+    # built-in trial window has almost certainly lapsed -> paywall).
+    _mirror_org_plan(db, org_id, "trial")
+    _audit_plan_change(db, org_id, "billing.subscription_canceled", {})
+    log.info("billing_subscription_canceled", org_id=org_id)
+
+
 # ── Route handlers ─────────────────────────────────────────────────────────────
 
 @router.post("/stripe")
@@ -277,8 +446,48 @@ async def stripe_webhook(
     Verify Stripe signature and process billing lifecycle events.
     Updates the billing table on checkout.session.completed,
     customer.subscription.updated, and customer.subscription.deleted.
+    Idempotent by Stripe event id (stripe_events claim table).
     """
-    raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
+    import stripe as stripe_lib
+
+    payload = await request.body()
+    try:
+        event = stripe_lib.Webhook.construct_event(
+            payload, stripe_signature, settings.stripe_webhook_secret
+        )
+    except (ValueError, stripe_lib.SignatureVerificationError) as exc:
+        log.warning("stripe_webhook_bad_signature", error=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature"
+        ) from exc
+
+    event_type: str = event["type"]
+    db = _service_db()
+
+    if not _claim_stripe_event(db, event["id"], event_type):
+        return {"received": True}  # already processed - ack the retry
+
+    obj: dict[str, Any] = event["data"]["object"]
+    try:
+        if event_type == "checkout.session.completed":
+            _handle_checkout_completed(db, obj)
+        elif event_type == "customer.subscription.updated":
+            _handle_subscription_updated(db, obj)
+        elif event_type == "customer.subscription.deleted":
+            _handle_subscription_deleted(db, obj)
+        else:
+            log.info("stripe_event_ignored", type=event_type)
+    except Exception as exc:
+        # Release the claim and 500 so Stripe redelivers - otherwise the
+        # retry would be acked as a duplicate and the transition lost.
+        log.error("stripe_event_processing_failed", event_id=event["id"], error=str(exc))
+        _release_stripe_event(db, event["id"])
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Event processing failed; Stripe will retry.",
+        ) from exc
+
+    return {"received": True}
 
 
 @router.post("/clerk")
@@ -315,13 +524,21 @@ async def clerk_webhook(
 
     db = _service_db()
 
+    # Server-side funnel capture (Phase 2): the Clerk webhook is the reliable
+    # signup/org-creation moment - client-side has no hook into Clerk's
+    # hosted components. Distinct ids match the client's posthog.identify
+    # (Clerk user id). Fail-soft inside capture().
+    from api.services.analytics import capture
+
     if event_type == "user.created":
         db_id = _handle_user_created(data, db)
         await _write_clerk_metadata("users", data["id"], db_id)
+        capture(data["id"], "signup")
 
     elif event_type == "organization.created":
         db_id = _handle_org_created(data, db)
         await _write_clerk_metadata("organizations", data["id"], db_id)
+        capture(data.get("created_by") or data["id"], "org_created", {"org_id": str(db_id)})
 
     elif event_type == "organizationMembership.created":
         _handle_membership_created(data, db)

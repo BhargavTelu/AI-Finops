@@ -135,6 +135,7 @@ INDEX (org_id, status, projected_savings_usd DESC)
 -- INTEGRATIONS (3rd party)
 slack_integrations (id, org_id unique, workspace_id, channel_id, channel_name, bot_token_enc, installed_by)
 billing (org_id PK FK, stripe_customer_id, stripe_subscription_id, plan, status, current_period_end)
+stripe_events (id text PK, type, received_at)  -- webhook idempotency claims; RLS on, no policies (service-role only)
 reports (id, org_id, type, period_start, period_end, r2_object_key, generated_at)
 INDEX (org_id, period_start DESC)
 audit_events (id, org_id, actor_user_id, action, target_kind, target_id, metadata jsonb, at)
@@ -199,6 +200,8 @@ POST   /api/webhooks/clerk
 ```
 
 **Conventions:** cursor pagination · Problem+JSON errors · `Idempotency-Key` on creates · FastAPI `require_org()` dep reads Clerk JWT.
+
+**Access gating (Phase 2):** data routers (usage, anomalies, recommendations, reports) carry a router-level `_require_active_org` dependency → 402 unless the org has an active/trialing Stripe subscription or a running built-in 14-day trial (`services/billing_access.evaluate_access()` is the single source of truth). Billing, integrations, tags, slack, budgets, and onboarding are never gated - the way out of the paywall stays open.
 
 ## Provider Adapter Pattern
 
