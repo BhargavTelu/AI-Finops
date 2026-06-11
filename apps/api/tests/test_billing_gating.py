@@ -12,7 +12,7 @@ from fastapi import HTTPException
 import pytest
 
 from api.deps import OrgContext, _require_active_org
-from api.services.billing_access import evaluate_access
+from api.services.billing_access import evaluate_access, filter_accessible_org_ids
 
 NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 FUTURE = (NOW + timedelta(days=10)).isoformat()
@@ -98,6 +98,54 @@ class TestEvaluateAccess:
         z_future = (NOW + timedelta(days=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
         state = evaluate_access({"trial_ends_at": z_future}, None, now=NOW)
         assert state.access_blocked is False
+
+
+class TestFilterAccessibleOrgIds:
+    """Bulk access filter used by outbound-email worker fan-outs."""
+
+    def _bulk_db(self, org_rows: list[dict], billing_rows: list[dict]) -> MagicMock:
+        db = MagicMock()
+
+        def table(name: str) -> MagicMock:
+            chain = MagicMock()
+            for method in ("select", "in_", "eq"):
+                getattr(chain, method).return_value = chain
+            result = MagicMock()
+            result.data = org_rows if name == "organizations" else billing_rows
+            chain.execute.return_value = result
+            return chain
+
+        db.table.side_effect = table
+        return db
+
+    def test_mixed_access(self) -> None:
+        db = self._bulk_db(
+            org_rows=[
+                {"id": "org-trialing", "trial_ends_at": FUTURE},
+                {"id": "org-lapsed", "trial_ends_at": PAST},
+                {"id": "org-paid", "trial_ends_at": PAST},
+            ],
+            billing_rows=[
+                {"org_id": "org-paid", "status": "active",
+                 "stripe_subscription_id": "sub_1", "plan": "growth",
+                 "current_period_end": None},
+            ],
+        )
+        accessible = filter_accessible_org_ids(
+            db, ["org-trialing", "org-lapsed", "org-paid"]
+        )
+        assert accessible == {"org-trialing", "org-paid"}
+
+    def test_empty_input_returns_empty_without_queries(self) -> None:
+        db = MagicMock()
+        assert filter_accessible_org_ids(db, []) == set()
+        db.table.assert_not_called()
+
+    def test_org_missing_from_db_is_blocked(self) -> None:
+        # Candidate id with no organizations row (deleted org, stale
+        # integration) must not be granted access.
+        db = self._bulk_db(org_rows=[], billing_rows=[])
+        assert filter_accessible_org_ids(db, ["ghost-org"]) == set()
 
 
 def _dep_db(org_rows: list[dict], billing_rows: list[dict]) -> MagicMock:

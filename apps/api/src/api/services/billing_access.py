@@ -40,6 +40,38 @@ def _parse_ts(value: str | None) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
+def filter_accessible_org_ids(db, org_ids: list[str]) -> set[str]:
+    """
+    Bulk version of the access rule for worker fan-outs: outbound email
+    (weekly digests, monthly report mails) must not keep landing in the
+    inboxes of orgs whose trial lapsed months ago. Two queries total,
+    regardless of org count.
+    """
+    if not org_ids:
+        return set()
+
+    org_rows = (
+        db.table("organizations")
+        .select("id, trial_ends_at")
+        .in_("id", org_ids)
+        .execute()
+    ).data
+    billing_rows = (
+        db.table("billing")
+        .select("org_id, status, stripe_subscription_id, plan, current_period_end")
+        .in_("org_id", org_ids)
+        .execute()
+    ).data
+    billing_by_org = {row["org_id"]: row for row in billing_rows}
+
+    now = datetime.now(UTC)
+    return {
+        row["id"]
+        for row in org_rows
+        if not evaluate_access(row, billing_by_org.get(row["id"]), now=now).access_blocked
+    }
+
+
 def evaluate_access(
     org_row: dict | None,
     billing_row: dict | None,

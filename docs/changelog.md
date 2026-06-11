@@ -22,6 +22,13 @@ Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATIO
 - **Config** - `STRIPE_PRICE_STARTER/GROWTH/ENTERPRISE`, `POSTHOG_API_KEY`, `POSTHOG_HOST` in `config.py` + `.env.example`
 - **31 new tests** - `test_billing_gating.py` (access rule incl. canceled-inside-trial-window, Z-suffix timestamps, NULL trial; 402 dependency), `test_billing_routes.py` (trial/expired/subscribed status, checkout session shape, customer reuse, 422/503, portal 404/url), `test_stripe_webhook.py` (bad signature 400, duplicate-event ack, all three lifecycle transitions, unknown-subscription resilience). Conftest neutralizes the gate for business-logic route tests; TC-STUB-04/05/TC-WH-20 retired
 
+### Fixed - Cross-phase verification pass (2026-06-11)
+
+A final audit across Phases 0-3 focused on the seams between phases (750 tests passing):
+
+- **Lapsed orgs kept receiving outbound email forever** - the Phase 1 monthly-report fan-out and Phase 3 weekly-digest fan-out never consulted Phase 2's billing state, so an org whose trial expired months ago would keep getting CFO PDFs (with generation + R2 + Resend cost) and weekly digests indefinitely. New `billing_access.filter_accessible_org_ids()` (two bulk queries regardless of org count) now filters both fan-outs; orgs missing from the DB are blocked, not granted access. 7 new tests. Note: the M3-era Slack daily digest and budget/anomaly alerts were deliberately left unfiltered - Slack-connected orgs chose those channels and they serve as win-back surface; revisit in Phase 4.
+- **Finding (recorded, not fixed): mypy strict and black are aspirational, not enforced** - `black --check` would reformat 78 files and `mypy` strict reports 199 errors across 34 files, distributed across M0-M3-era code (the untyped-`db` pattern) and newer files alike. The de-facto enforced gates are pytest + tsc + ESLint + targeted ruff. Mass-fixing inside an audit commit would churn every milestone's code; schedule as deliberate hardening or amend CLAUDE.md's claim.
+
 ### Fixed - Phase 2 verification pass (2026-06-11)
 
 A no-assumptions audit of Phase 2 (the money path) found three issues, all fixed with regression tests (745 tests passing):

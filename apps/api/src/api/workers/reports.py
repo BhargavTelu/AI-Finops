@@ -59,13 +59,23 @@ def _mom_comparison_range(start: date, end: date) -> tuple[date, date]:
 
 @shared_task
 def generate_monthly_reports() -> None:
-    """Fan-out: one report task per org with an active integration."""
+    """
+    Fan-out: one report task per org with an active integration AND access
+    (active subscription or running trial). Lapsed orgs are skipped entirely -
+    no generation cost, and no report-ready email landing in the inbox of
+    someone who churned months ago.
+    """
+    from api.services.billing_access import filter_accessible_org_ids
+
     db = _get_supabase()
     today = datetime.now(UTC).date()
     period_start, period_end = _previous_month_range(today)
 
     result = db.table("integrations").select("org_id").eq("status", "active").execute()
-    org_ids = sorted({row["org_id"] for row in result.data})
+    candidates = sorted({row["org_id"] for row in result.data})
+    org_ids = sorted(filter_accessible_org_ids(db, candidates))
+    if len(org_ids) < len(candidates):
+        log.info("monthly_reports_skipped_lapsed", count=len(candidates) - len(org_ids))
     for org_id in org_ids:
         generate_org_report.delay(
             org_id,
