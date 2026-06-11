@@ -1,14 +1,13 @@
-from datetime import date, timezone, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
-import structlog
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
-from supabase import create_client
+import structlog
 
-from api.config import settings
 from api.deps import OrgDep
 from api.schemas.budgets import BudgetCreate, BudgetRead, BudgetUpdate
+from api.services.db import fetch_all_pages, get_supabase
 
 log = structlog.get_logger()
 
@@ -16,7 +15,7 @@ router = APIRouter(prefix="/budgets", tags=["budgets"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 def _mtd_date_range() -> tuple[str, str]:
@@ -33,31 +32,34 @@ def _compute_mtd_spend(db, org_id: str, scope_type: str, scope_value: str | None
     """
     first_day, today = _mtd_date_range()
 
-    q = (
-        db.table("daily_cost_summaries")
-        .select("total_cost_usd")
-        .eq("org_id", org_id)
-        .gte("day", first_day)
-        .lte("day", today)
-    )
+    def build_query():
+        q = (
+            db.table("daily_cost_summaries")
+            .select("total_cost_usd")
+            .eq("org_id", org_id)
+            .gte("day", first_day)
+            .lte("day", today)
+        )
+        if scope_type == "global":
+            pass  # no additional filter - sum everything
+        elif scope_type == "provider":
+            q = q.eq("provider", scope_value)
+        elif scope_type == "model":
+            q = q.eq("model", scope_value)
+        elif scope_type == "feature_tag":
+            q = q.eq("feature_tag", scope_value)
+        elif scope_type == "team_tag":
+            q = q.eq("team_tag", scope_value)
+        elif scope_type == "customer_tag":
+            q = q.eq("customer_tag", scope_value)
+        elif scope_type == "env_tag":
+            q = q.eq("env_tag", scope_value)
+        return q
 
-    if scope_type == "global":
-        pass  # no additional filter - sum everything
-    elif scope_type == "provider":
-        q = q.eq("provider", scope_value)
-    elif scope_type == "model":
-        q = q.eq("model", scope_value)
-    elif scope_type == "feature_tag":
-        q = q.eq("feature_tag", scope_value)
-    elif scope_type == "team_tag":
-        q = q.eq("team_tag", scope_value)
-    elif scope_type == "customer_tag":
-        q = q.eq("customer_tag", scope_value)
-    elif scope_type == "env_tag":
-        q = q.eq("env_tag", scope_value)
-
-    result = q.execute()
-    return sum(Decimal(str(row["total_cost_usd"])) for row in result.data)
+    # Paged: an unpaged sum under-reports MTD spend (and spent_pct) once the
+    # month's summary rows exceed the PostgREST max-rows cap.
+    rows = fetch_all_pages(build_query)
+    return sum(Decimal(str(row["total_cost_usd"])) for row in rows)
 
 
 def _to_budget_read(row: dict, mtd_spend: Decimal) -> BudgetRead:
@@ -79,7 +81,7 @@ def _to_budget_read(row: dict, mtd_spend: Decimal) -> BudgetRead:
 
 
 @router.get("", response_model=list[BudgetRead])
-async def list_budgets(org: OrgDep) -> list[BudgetRead]:
+def list_budgets(org: OrgDep) -> list[BudgetRead]:
     db = _get_supabase()
     result = (
         db.table("budgets")
@@ -95,7 +97,7 @@ async def list_budgets(org: OrgDep) -> list[BudgetRead]:
 
 
 @router.post("", status_code=201, response_model=BudgetRead)
-async def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
+def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
     # scope_value must be set for every scope_type except 'global'
     if body.scope_type != "global" and not body.scope_value:
         raise HTTPException(
@@ -154,7 +156,7 @@ async def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
 
 
 @router.patch("/{budget_id}", response_model=BudgetRead)
-async def update_budget(budget_id: str, body: BudgetUpdate, org: OrgDep) -> BudgetRead:
+def update_budget(budget_id: str, body: BudgetUpdate, org: OrgDep) -> BudgetRead:
     db = _get_supabase()
 
     existing = (
@@ -198,7 +200,7 @@ async def update_budget(budget_id: str, body: BudgetUpdate, org: OrgDep) -> Budg
 
 
 @router.delete("/{budget_id}", status_code=204)
-async def delete_budget(budget_id: str, org: OrgDep) -> None:
+def delete_budget(budget_id: str, org: OrgDep) -> None:
     db = _get_supabase()
 
     existing = (

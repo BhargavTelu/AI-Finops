@@ -85,6 +85,10 @@ def aggregate_org(org_id: str) -> None:
             .in_("integration_id", active_ids)
             .gte("bucket_hour", from_date.isoformat())
             .lt("bucket_hour", today.isoformat())
+            # Deterministic ordering is required for offset pagination -
+            # without it Postgres may repeat/skip rows across pages and the
+            # summaries silently drift once an org exceeds one page.
+            .order("id", desc=False)
             .range(offset, offset + _PAGE_SIZE - 1)
             .execute()
         )

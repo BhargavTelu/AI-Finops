@@ -5,7 +5,7 @@ TC-DET-11: medium severity → send_anomaly_alert IS called.
 TC-DET-12: high severity → send_anomaly_alert IS called.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
@@ -25,6 +25,7 @@ def _mock_db() -> MagicMock:
     db.gte.return_value = db
     db.lt.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.limit.return_value = db
     db.execute.return_value = empty
     return db
@@ -35,7 +36,9 @@ def _summary_rows(spike_cost: float, n_days: int = 15) -> list[dict]:
     Build daily_cost_summaries rows with a flat $100/day baseline and a spike
     on the last day. The worker fills any gap with $0, so we provide all n_days.
     """
-    today = date.today()
+    # Must match the worker's clock (UTC), not the machine's local date -
+    # using date.today() made these tests fail between local and UTC midnight.
+    today = datetime.now(timezone.utc).date()
     rows = []
     for i in range(n_days):
         day = today - timedelta(days=n_days - i)
@@ -125,7 +128,7 @@ class TestExplainAnomalyDispatch:
     """
 
     def test_explain_dispatched_for_medium_severity(self) -> None:  # TC-M3-D01
-        _, mock_explain = _run_detect_org_with_explain(100.035)
+        _, mock_explain = _run_detect_org_with_explain(117.5)
         mock_explain.delay.assert_called_once()
 
     def test_explain_dispatched_for_high_severity(self) -> None:  # TC-M3-D02
@@ -133,7 +136,7 @@ class TestExplainAnomalyDispatch:
         mock_explain.delay.assert_called_once()
 
     def test_explain_not_dispatched_for_low_severity(self) -> None:  # TC-M3-D03
-        _, mock_explain = _run_detect_org_with_explain(100.025)
+        _, mock_explain = _run_detect_org_with_explain(112.5)
         mock_explain.delay.assert_not_called()
 
 
@@ -141,18 +144,18 @@ class TestSeverityAlerts:
     def test_low_severity_no_slack_alert(self) -> None:  # TC-DET-10
         """
         z ≈ 2.5 (low severity) → send_anomaly_alert.delay must NOT be called.
-        Flat $100 baseline, stdev ≈ 0 → stdev clipped to 0.01.
-        actual = 100 + 0.01*2.5 = 100.025 → z = 2.5 → low.
+        Flat $100 baseline → pstdev=0, floored to mean*5% = $5.
+        actual = 100 + 5*2.5 = 112.5 → z = 2.5 → low.
         """
-        mock_alert = _run_detect_org(100.025)
+        mock_alert = _run_detect_org(112.5)
         mock_alert.delay.assert_not_called()
 
     def test_medium_severity_triggers_slack_alert(self) -> None:  # TC-DET-11
         """
         z ≈ 3.5 (medium severity) → send_anomaly_alert.delay IS called.
-        actual = 100 + 0.01*3.5 = 100.035 → z = 3.5 → medium.
+        actual = 100 + 5*3.5 = 117.5 → z = 3.5 → medium.
         """
-        mock_alert = _run_detect_org(100.035)
+        mock_alert = _run_detect_org(117.5)
         mock_alert.delay.assert_called_once()
 
     def test_high_severity_triggers_slack_alert(self) -> None:  # TC-DET-12

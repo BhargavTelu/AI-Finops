@@ -280,3 +280,120 @@ class TestFetchCosts:
             events = list(adapter.fetch_costs(KEY, START, END))
 
         assert events == []
+
+
+# ── BUG-C3: pricing lookups and corrected rates ─────────────────────────────────
+
+class TestPricingNormalizationAndRates:
+    def test_dated_model_id_resolves_to_family_rates(self) -> None:
+        """Usage-report IDs carry a -YYYYMMDD suffix; lookup must not miss."""
+        cost = _compute_cost("claude-sonnet-4-5-20250929", 1_000_000, 0, 0)
+        assert cost == Decimal("3.00")
+
+    def test_unknown_model_still_returns_zero(self) -> None:
+        cost = _compute_cost("claude-totally-unknown-20990101", 1_000_000, 0, 0)
+        assert cost == Decimal("0")
+
+    def test_haiku_4_5_rates_corrected(self) -> None:
+        # claude-haiku-4-5 is $1.00 in / $5.00 out per MTok
+        cost = _compute_cost("claude-haiku-4-5", 1_000_000, 1_000_000, 0)
+        assert cost == Decimal("6.00")
+
+    def test_opus_4_5_rates_corrected(self) -> None:
+        # claude-opus-4-5 is $5.00 in / $25.00 out per MTok (not 15/75)
+        cost = _compute_cost("claude-opus-4-5", 1_000_000, 1_000_000, 0)
+        assert cost == Decimal("30.00")
+
+    def test_cache_creation_tokens_billed_at_1_25x_input(self) -> None:
+        # 1M cache-write tokens on sonnet: 3.00 * 1.25 = 3.75
+        cost = _compute_cost("claude-sonnet-4-5", 0, 0, 0, 1_000_000)
+        assert cost == Decimal("3.75")
+
+    def test_fetch_costs_includes_cache_creation_in_cost(self) -> None:
+        page = _usage_page([
+            _bucket(START_ISO, END_ISO, [
+                _result(
+                    "claude-sonnet-4-5",
+                    input_tokens=1000,
+                    output_tokens=200,
+                    cache_creation_input_tokens=2000,
+                ),
+            ])
+        ])
+        adapter = AnthropicAdapter()
+        with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 1
+        expected = _compute_cost("claude-sonnet-4-5", 1000, 200, 0, 2000)
+        assert events[0].cost_usd == expected
+        assert events[0].raw_meta["cache_creation_input_tokens"] == 2000
+
+
+# ── BUG-C2: per-key attribution (api_key_label) ─────────────────────────────────
+
+class TestApiKeyAttribution:
+    def _api_keys_page(self, keys: list[dict]) -> dict:
+        return {"data": keys, "has_more": False}
+
+    def test_api_key_id_resolves_to_key_name_label(self) -> None:
+        page = _usage_page([
+            _bucket(START_ISO, END_ISO, [
+                {**_result("claude-sonnet-4-5", input_tokens=1000, output_tokens=100),
+                 "api_key_id": "apikey_A"},
+                {**_result("claude-sonnet-4-5", input_tokens=300, output_tokens=30),
+                 "api_key_id": "apikey_B"},
+            ])
+        ])
+        keys_resp = _mock_response(200, self._api_keys_page([
+            {"id": "apikey_A", "name": "prod-chat"},
+            {"id": "apikey_B", "name": "staging"},
+        ]))
+
+        adapter = AnthropicAdapter()
+        with patch(
+            "api.adapters.anthropic.httpx.get",
+            side_effect=[_mock_response(200, page), keys_resp],
+        ):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 2
+        by_label = {e.api_key_label: e for e in events}
+        assert set(by_label) == {"prod-chat", "staging"}
+        assert by_label["prod-chat"].input_tokens == 1000
+        assert by_label["staging"].input_tokens == 300
+        assert by_label["prod-chat"].raw_meta["api_key_id"] == "apikey_A"
+
+    def test_key_list_failure_falls_back_to_raw_id(self) -> None:
+        page = _usage_page([
+            _bucket(START_ISO, END_ISO, [
+                {**_result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
+                 "api_key_id": "apikey_Z"},
+            ])
+        ])
+        adapter = AnthropicAdapter()
+        with patch(
+            "api.adapters.anthropic.httpx.get",
+            side_effect=[_mock_response(200, page), _mock_response(500, {})],
+        ):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 1
+        assert events[0].api_key_label == "apikey_Z"
+
+    def test_no_api_key_id_keeps_label_none_and_skips_key_fetch(self) -> None:
+        page = _usage_page([
+            _bucket(START_ISO, END_ISO, [
+                _result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
+            ])
+        ])
+        adapter = AnthropicAdapter()
+        # Only one response: a second (key list) call would raise StopIteration
+        with patch(
+            "api.adapters.anthropic.httpx.get",
+            side_effect=[_mock_response(200, page)],
+        ):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 1
+        assert events[0].api_key_label is None

@@ -17,6 +17,7 @@ from celery import shared_task
 from supabase import create_client
 
 from api.config import settings
+from api.services.db import fetch_all_pages
 from api.services.recommendations import ModelStats, generate_recommendations
 
 log = structlog.get_logger()
@@ -50,21 +51,22 @@ def generate_org_recommendations(org_id: str) -> None:
     start_day = (today - timedelta(days=30)).isoformat()
 
     # Pull last 30d summaries - one row per (day, provider, model, feature_tag, ...).
-    result = (
-        db.table("daily_cost_summaries")
+    # Paged: 30 days x models x tag combos exceeds one PostgREST page for
+    # larger orgs, and a truncated read skews every savings estimate.
+    summary_rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("provider, model, feature_tag, total_cost_usd, total_requests, total_tokens")
         .eq("org_id", org_id)
         .gte("day", start_day)
-        .execute()
     )
 
-    if not result.data:
+    if not summary_rows:
         log.info("recommendations_no_data", org_id=org_id)
         return
 
     # Group by (provider, model, feature_tag) and sum metrics.
     grouped: dict[tuple[str, str, str | None], dict] = {}
-    for row in result.data:
+    for row in summary_rows:
         key = (row["provider"], row["model"], row.get("feature_tag") or None)
         if key not in grouped:
             grouped[key] = {

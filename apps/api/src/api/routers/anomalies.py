@@ -2,21 +2,20 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
-from supabase import create_client
 
-from api.config import settings
 from api.deps import OrgDep
 from api.schemas.anomalies import AnomalyRead, AnomalyUpdate
+from api.services.db import get_supabase
 
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 @router.get("", response_model=list[AnomalyRead])
-async def list_anomalies(
+def list_anomalies(
     org: OrgDep,
     status: Literal["open", "acked", "dismissed"] = Query(default="open"),
 ) -> list[AnomalyRead]:
@@ -36,7 +35,7 @@ async def list_anomalies(
 
 
 @router.patch("/{anomaly_id}", response_model=AnomalyRead)
-async def update_anomaly(
+def update_anomaly(
     anomaly_id: str,
     body: AnomalyUpdate,
     org: OrgDep,

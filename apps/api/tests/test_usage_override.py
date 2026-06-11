@@ -27,6 +27,20 @@ _org_ctx = OrgContext(user_id=USER_ID, org_id=ORG_ID)
 app.dependency_overrides[_require_org] = lambda: _org_ctx
 app.dependency_overrides[_require_admin_org] = lambda: _org_ctx
 
+
+@pytest.fixture(autouse=True)
+def _apply_module_auth_override():
+    """Re-apply this module's auth override before each test.
+
+    Import-time assignment alone is unreliable: every test module is imported
+    at collection, so whichever module imports LAST owns the override for the
+    whole run unless each module re-applies its own before its tests.
+    """
+    app.dependency_overrides[_require_org] = lambda: _org_ctx
+    app.dependency_overrides[_require_admin_org] = lambda: _org_ctx
+    yield
+
+
 client = TestClient(app)
 
 

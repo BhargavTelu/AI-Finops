@@ -13,6 +13,7 @@ from celery import shared_task
 from supabase import create_client
 
 from api.config import settings
+from api.services.db import fetch_all_pages
 from api.workers.notifications import send_budget_alert
 
 log = structlog.get_logger()
@@ -30,29 +31,35 @@ def _mtd_range() -> tuple[str, str]:
 def _compute_scope_spend(db, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
     """Sum total_cost_usd from daily_cost_summaries for the current calendar month, filtered by scope."""
     first_day, today = _mtd_range()
-    q = (
-        db.table("daily_cost_summaries")
-        .select("total_cost_usd")
-        .eq("org_id", org_id)
-        .gte("day", first_day)
-        .lte("day", today)
-    )
-    if scope_type == "provider":
-        q = q.eq("provider", scope_value)
-    elif scope_type == "model":
-        q = q.eq("model", scope_value)
-    elif scope_type == "feature_tag":
-        q = q.eq("feature_tag", scope_value)
-    elif scope_type == "team_tag":
-        q = q.eq("team_tag", scope_value)
-    elif scope_type == "customer_tag":
-        q = q.eq("customer_tag", scope_value)
-    elif scope_type == "env_tag":
-        q = q.eq("env_tag", scope_value)
-    # 'global' → no extra filter
 
-    result = q.execute()
-    return sum(Decimal(str(row["total_cost_usd"])) for row in result.data)
+    def build_query():
+        q = (
+            db.table("daily_cost_summaries")
+            .select("total_cost_usd")
+            .eq("org_id", org_id)
+            .gte("day", first_day)
+            .lte("day", today)
+        )
+        if scope_type == "provider":
+            q = q.eq("provider", scope_value)
+        elif scope_type == "model":
+            q = q.eq("model", scope_value)
+        elif scope_type == "feature_tag":
+            q = q.eq("feature_tag", scope_value)
+        elif scope_type == "team_tag":
+            q = q.eq("team_tag", scope_value)
+        elif scope_type == "customer_tag":
+            q = q.eq("customer_tag", scope_value)
+        elif scope_type == "env_tag":
+            q = q.eq("env_tag", scope_value)
+        # 'global' → no extra filter
+        return q
+
+    # Paged past the PostgREST max-rows cap: an unpaged sum under-counts MTD
+    # spend once the month's summary rows exceed one page, silently missing
+    # the alert thresholds.
+    rows = fetch_all_pages(build_query)
+    return sum(Decimal(str(row["total_cost_usd"])) for row in rows)
 
 
 def _same_calendar_month(ts_str: str | None) -> bool:

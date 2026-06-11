@@ -77,8 +77,7 @@ class TestSlackSettingsEndpoint:
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
-            import asyncio
-            result = asyncio.run(slack_settings(SlackSettingsUpdate(alerts_muted=True), org))
+            result = slack_settings(SlackSettingsUpdate(alerts_muted=True), org)
 
         assert result.connected is True
         assert result.alerts_muted is True
@@ -95,8 +94,7 @@ class TestSlackSettingsEndpoint:
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
-            import asyncio
-            result = asyncio.run(slack_settings(SlackSettingsUpdate(alerts_muted=False), org))
+            result = slack_settings(SlackSettingsUpdate(alerts_muted=False), org)
 
         assert result.connected is True
         assert result.alerts_muted is False
@@ -115,9 +113,8 @@ class TestSlackSettingsEndpoint:
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
-            import asyncio
             with pytest.raises(HTTPException) as exc_info:
-                asyncio.run(slack_settings(SlackSettingsUpdate(alerts_muted=False), org))
+                slack_settings(SlackSettingsUpdate(alerts_muted=False), org)
 
         assert exc_info.value.status_code == 404
 

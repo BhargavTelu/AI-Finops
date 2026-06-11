@@ -24,7 +24,7 @@ def _z_for(baseline: float, actual: float) -> float:
     """Compute the z-score the algorithm would produce for a flat baseline."""
     rolling = [baseline] * 7
     mean = statistics.mean(rolling)
-    stdev = statistics.pstdev(rolling) or 0.01
+    stdev = max(statistics.pstdev(rolling), mean * 0.05, 0.01)
     return (actual - mean) / stdev
 
 
@@ -67,16 +67,11 @@ class TestDetectAnomalies:
     # ── Severity boundary tests ────────────────────────────────────────────────
 
     def test_low_severity_at_two_sigma_boundary(self) -> None:
-        # Find an actual value that lands z just above 2.0 but below 3.0 on a
-        # stable baseline. Use a tiny stdev so we can control it.
-        # baseline=100 for 7 days → pstdev=0.01 (near-zero, clipped to 0.01)
-        # z = (actual - 100) / 0.01 = 2.5 when actual = 100.025
-        # Use a near-flat baseline of slight variance to get a real stdev.
-        # Easier: use variance-free baseline → stdev=0 → clipped to 0.01.
-        # actual = 100 + 0.01 * 2.5 = 100.025 but must be ≥ $10 - that's fine.
+        # Flat $100 baseline → pstdev=0, floored to mean*5% = $5.
+        # z = (actual - 100) / 5 = 2.5 when actual = 112.50 (delta also clears
+        # the $5 minimum absolute jump).
         baseline = 100.0
-        # z = (actual - baseline) / 0.01 between 2 and 3 → severity = "low"
-        actual = baseline + 0.01 * 2.5  # z ≈ 2.5
+        actual = baseline + 5.0 * 2.5  # z ≈ 2.5
         history = _spike_history(baseline, actual)
         result = detect_anomalies(history)
         assert result is not None
@@ -84,11 +79,23 @@ class TestDetectAnomalies:
 
     def test_medium_severity_at_three_sigma_boundary(self) -> None:
         baseline = 100.0
-        actual = baseline + 0.01 * 3.5  # z ≈ 3.5
+        actual = baseline + 5.0 * 3.5  # z ≈ 3.5 against the $5 σ floor
         history = _spike_history(baseline, actual)
         result = detect_anomalies(history)
         assert result is not None
         assert result.severity == "medium"
+
+    def test_tiny_absolute_increase_on_flat_baseline_is_not_anomalous(self) -> None:
+        # Regression: with the old `or 0.01` floor, +$0.50 on flat $100/day
+        # spend scored z=50 and fired a high-severity alert.
+        history = _spike_history(100.0, 100.50)
+        assert detect_anomalies(history) is None
+
+    def test_small_dollar_jump_below_min_delta_is_suppressed(self) -> None:
+        # Flat $12 baseline → σ floor = $0.60; +$4 gives z ≈ 6.7, but the
+        # absolute jump is under the $5 minimum, so no alert.
+        history = _spike_history(12.0, 16.0)
+        assert detect_anomalies(history) is None
 
     def test_spike_pct_zero_when_mean_is_zero(self) -> None:
         # All zeros in rolling window → mean = 0 → spike_pct should be 0, not divide-by-zero.

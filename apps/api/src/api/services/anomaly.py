@@ -21,6 +21,18 @@ class AnomalyResult:
     severity: Literal["low", "medium", "high"]
 
 
+# A near-flat baseline has σ≈0. Clipping only to a tiny absolute floor (the old
+# `or 0.01`) made a $0.50 increase on $100/day spend score z=50 and fire a
+# high-severity alert. Treat day-to-day noise as at least this fraction of the
+# mean so the z-score stays meaningful on stable spend.
+_MIN_REL_STDEV = 0.05  # 5% of the mean
+_ABS_STDEV_FLOOR = 0.01  # keeps z finite when the mean is ~0
+
+# Require a minimum absolute jump on top of the z-score, so a few dollars on a
+# small-but-above-$10 baseline can't trip an alert on its own.
+_MIN_ABS_DELTA_USD = 5.0
+
+
 def detect_anomalies(
     history: list[Decimal],  # daily costs, oldest first, len >= 15
 ) -> AnomalyResult | None:
@@ -42,10 +54,16 @@ def detect_anomalies(
         return None
 
     mean = statistics.mean(rolling)
-    stdev = statistics.pstdev(rolling) or 0.01
+    # Floor σ at both an absolute value and a fraction of the mean. The
+    # relative floor is what stops flat baselines from inflating z.
+    stdev = max(statistics.pstdev(rolling), mean * _MIN_REL_STDEV, _ABS_STDEV_FLOOR)
     z = (actual - mean) / stdev
 
     if z < 2.0:
+        return None
+
+    # Suppress trivially small absolute increases even when z clears the bar.
+    if (actual - mean) < _MIN_ABS_DELTA_USD:
         return None
 
     severity: Literal["low", "medium", "high"] = (

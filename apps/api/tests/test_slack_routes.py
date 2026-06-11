@@ -3,6 +3,7 @@ Unit tests for GET /slack/status, POST /slack/oauth/callback, POST /slack/discon
 Supabase calls and Slack client functions are mocked. Auth dependency is overridden.
 """
 
+import base64
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
@@ -11,8 +12,16 @@ from fastapi.testclient import TestClient
 
 from api.deps import OrgContext, _require_org
 from api.main import app
+from api.services.slack_state import generate_state
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
+TEST_KEY_B64 = base64.b64encode(b"\xcc" * 32).decode()
+
+
+def _valid_state(org_id: str = ORG_ID) -> str:
+    return generate_state(org_id, TEST_KEY_B64)
+
+
 NOW_ISO = datetime.now(timezone.utc).isoformat()
 
 _ORG_OVERRIDE = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)  # noqa: E731
@@ -102,10 +111,10 @@ class TestSlackStatus:
 # ── POST /slack/oauth/callback ──────────────────────────────────────────────────
 
 class TestSlackOAuthCallback:
-    def _call(self, code: str = "valid_code", state: str = "csrf_abc") -> MagicMock:
+    def _call(self, code: str = "valid_code", state: str | None = None) -> MagicMock:
         return client.post(
             "/api/v1/slack/oauth/callback",
-            json={"code": code, "state": state},
+            json={"code": code, "state": state if state is not None else _valid_state()},
         )
 
     def test_successful_connect(self) -> None:
@@ -137,7 +146,7 @@ class TestSlackOAuthCallback:
             mock_settings.slack_client_id = "test_client_id"
             mock_settings.slack_client_secret = "test_client_secret"
             mock_settings.slack_redirect_uri = "http://localhost:3000/settings/slack/callback"
-            mock_settings.encryption_key = "anything"  # bypassed by EncryptionService mock
+            mock_settings.encryption_key = TEST_KEY_B64  # real key - signs the OAuth state
             resp = self._call()
 
         assert resp.status_code == 200
@@ -160,6 +169,7 @@ class TestSlackOAuthCallback:
             mock_settings.slack_client_id = "test_client_id"
             mock_settings.slack_client_secret = "test_client_secret"
             mock_settings.slack_redirect_uri = "http://localhost:3000/callback"
+            mock_settings.encryption_key = TEST_KEY_B64
             resp = self._call(code="expired_code")
         assert resp.status_code == 400
 
@@ -178,6 +188,7 @@ class TestSlackOAuthCallback:
             mock_settings.slack_client_id = "id"
             mock_settings.slack_client_secret = "secret"
             mock_settings.slack_redirect_uri = "http://localhost:3000/callback"
+            mock_settings.encryption_key = TEST_KEY_B64
             resp = self._call()
         assert resp.status_code == 400
 
@@ -212,3 +223,81 @@ class TestSlackDisconnect:
         with patch("api.routers.slack._get_supabase", return_value=db):
             resp = client.post("/api/v1/slack/disconnect")
         assert resp.status_code == 404
+
+
+# ── BUG-H1: OAuth state endpoint + CSRF validation ──────────────────────────────
+
+class TestSlackOAuthState:
+    def test_state_endpoint_returns_valid_state(self) -> None:
+        from api.services.slack_state import validate_state
+
+        with patch("api.routers.slack.settings") as mock_settings:
+            mock_settings.slack_client_id = "id"
+            mock_settings.slack_client_secret = "secret"
+            mock_settings.encryption_key = TEST_KEY_B64
+            resp = client.get("/api/v1/slack/oauth/state")
+
+        assert resp.status_code == 200
+        state = resp.json()["state"]
+        assert validate_state(state, ORG_ID, TEST_KEY_B64)
+
+    def test_state_endpoint_503_when_unconfigured(self) -> None:
+        with patch("api.routers.slack.settings") as mock_settings:
+            mock_settings.slack_client_id = ""
+            mock_settings.slack_client_secret = ""
+            resp = client.get("/api/v1/slack/oauth/state")
+        assert resp.status_code == 503
+
+    def test_callback_rejects_forged_state(self) -> None:
+        """A state not signed by the server must 400 before any code exchange."""
+        with (
+            patch("api.routers.slack.exchange_code") as mock_exchange,
+            patch("api.routers.slack.settings") as mock_settings,
+        ):
+            mock_settings.slack_client_id = "id"
+            mock_settings.slack_client_secret = "secret"
+            mock_settings.encryption_key = TEST_KEY_B64
+            resp = client.post(
+                "/api/v1/slack/oauth/callback",
+                json={"code": "attacker_code", "state": "9999999999:deadbeef"},
+            )
+
+        assert resp.status_code == 400
+        mock_exchange.assert_not_called()
+
+    def test_callback_rejects_state_signed_for_other_org(self) -> None:
+        """CSRF core case: victim session must not accept another org's state."""
+        other_org_state = _valid_state(org_id="ffffffff-0000-0000-0000-00000000beef")
+        with (
+            patch("api.routers.slack.exchange_code") as mock_exchange,
+            patch("api.routers.slack.settings") as mock_settings,
+        ):
+            mock_settings.slack_client_id = "id"
+            mock_settings.slack_client_secret = "secret"
+            mock_settings.encryption_key = TEST_KEY_B64
+            resp = client.post(
+                "/api/v1/slack/oauth/callback",
+                json={"code": "attacker_code", "state": other_org_state},
+            )
+
+        assert resp.status_code == 400
+        mock_exchange.assert_not_called()
+
+    def test_expired_state_rejected(self) -> None:
+        import hashlib
+        import hmac as hmac_mod
+
+        from api.services.slack_state import _mac_key, validate_state
+
+        expired = 1700000000  # far in the past
+        sig = hmac_mod.new(
+            _mac_key(TEST_KEY_B64), f"{ORG_ID}:{expired}".encode(), hashlib.sha256
+        ).hexdigest()
+        assert validate_state(f"{expired}:{sig}", ORG_ID, TEST_KEY_B64) is False
+
+    def test_malformed_state_rejected(self) -> None:
+        from api.services.slack_state import validate_state
+
+        assert validate_state("", ORG_ID, TEST_KEY_B64) is False
+        assert validate_state("not-a-state", ORG_ID, TEST_KEY_B64) is False
+        assert validate_state("123", ORG_ID, TEST_KEY_B64) is False

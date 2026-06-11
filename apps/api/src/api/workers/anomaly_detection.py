@@ -15,6 +15,7 @@ from supabase import create_client
 
 from api.config import settings
 from api.services.anomaly import detect_anomalies
+from api.services.db import fetch_all_pages
 from api.workers.anomaly_explainer import explain_anomaly
 from api.workers.notifications import send_anomaly_alert
 
@@ -53,18 +54,18 @@ def detect_org(org_id: str) -> None:
     today = datetime.now(timezone.utc).date()
     from_date = today - timedelta(days=_HISTORY_DAYS)
 
-    # Pull all relevant daily rows for the period in one query.
+    # Pull all relevant daily rows for the period, paged past the PostgREST
+    # max-rows cap - one unpaged query silently drops groups for larger orgs.
     # daily_cost_summaries uses '' (empty string) for unset tags - no nulls.
-    rows_result = (
-        db.table("daily_cost_summaries")
+    summary_rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("day, model, feature_tag, team_tag, customer_tag, total_cost_usd")
         .eq("org_id", org_id)
         .gte("day", from_date.isoformat())
         .lt("day", today.isoformat())  # exclude today (partial day)
-        .execute()
     )
 
-    if not rows_result.data:
+    if not summary_rows:
         log.info("anomaly_detection_no_data", org_id=org_id)
         return
 
@@ -74,7 +75,7 @@ def detect_org(org_id: str) -> None:
     GroupKey = tuple[str, str, str, str]
     group_days: dict[GroupKey, dict[date, Decimal]] = defaultdict(dict)
 
-    for row in rows_result.data:
+    for row in summary_rows:
         key: GroupKey = (
             row["model"],
             row.get("feature_tag") or "",

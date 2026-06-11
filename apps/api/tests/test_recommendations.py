@@ -316,6 +316,7 @@ class TestWorkerDedup:
         db.eq.return_value = db
         db.gte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.execute.side_effect = [
             MagicMock(data=summaries),   # first call: summaries query
             MagicMock(data=existing_recs),  # second call: existing open recs
@@ -347,6 +348,7 @@ class TestWorkerDedup:
             db.eq.return_value = db
             db.gte.return_value = db
             db.order.return_value = db
+            db.range.return_value = db
 
             # Use list side_effect (unittest.mock handles StopIteration correctly)
             db.execute.side_effect = [
@@ -387,6 +389,7 @@ class TestWorkerDedup:
             db.eq.return_value = db
             db.gte.return_value = db
             db.order.return_value = db
+            db.range.return_value = db
 
             execute_results = iter([
                 MagicMock(data=summaries),
@@ -432,7 +435,21 @@ ORG_ID = "00000000-0000-0000-0000-000000000001"
 OTHER_ORG = "00000000-0000-0000-0000-000000000002"
 REC_ID = "rrrrrrrr-0000-0000-0000-000000000001"
 
-app.dependency_overrides[_require_org] = lambda: OrgContext(user_id="user_test", org_id=ORG_ID)
+_AUTH_OVERRIDE = lambda: OrgContext(user_id="user_test", org_id=ORG_ID)  # noqa: E731
+app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
+
+
+@pytest.fixture(autouse=True)
+def _apply_module_auth_override():
+    """Re-apply this module's auth override before each test.
+
+    Import-time assignment alone is unreliable: every test module is imported
+    at collection, so whichever module imports LAST owns the override for the
+    whole run unless each module re-applies its own before its tests.
+    """
+    app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
+    yield
+
 client = TestClient(app)
 
 NOW_ISO = datetime.now(timezone.utc).isoformat()
@@ -472,6 +489,7 @@ def _mock_db_router(rows: list[dict] | None = None) -> MagicMock:
     db.delete.return_value = db
     db.eq.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.limit.return_value = db
     db.execute.return_value = result
     return db
@@ -618,6 +636,7 @@ class TestWorkerInsertionAndAggregation:
         db.eq.return_value = db
         db.gte.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
 
         side = [
             MagicMock(data=summaries),
@@ -952,6 +971,8 @@ class TestWorkerMixedProviders:
             db.select.return_value = db
             db.eq.return_value = db
             db.gte.return_value = db
+            db.order.return_value = db
+            db.range.return_value = db
             db.execute.side_effect = [
                 MagicMock(data=summaries),
                 MagicMock(data=[]),

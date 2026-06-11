@@ -57,6 +57,9 @@ services:
     rootDir: apps/api
     buildCommand: pip install -e .
     startCommand: celery -A api.workers.celery_app worker --loglevel=info --concurrency=4
+    # NOTE: config.py (pydantic Settings) declares every secret below as
+    # REQUIRED with no default - omitting any of them crashes the process at
+    # import time. Keep this list in sync with apps/api/src/api/config.py.
     envVars:
       - key: ENV
         value: production
@@ -72,11 +75,15 @@ services:
         sync: false
       - key: CLERK_SECRET_KEY
         sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
       - key: CLERK_ISSUER
         sync: false
       - key: REDIS_URL
         sync: false
       - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: RESEND_API_KEY
         sync: false
@@ -98,6 +105,9 @@ services:
     rootDir: apps/api
     buildCommand: pip install -e .
     startCommand: celery -A api.workers.celery_app beat --loglevel=info --scheduler celery.beat.PersistentScheduler
+    # NOTE: beat imports the same Settings as the API, so every required
+    # secret must be present even though beat itself only talks to Redis.
+    # Keep this list in sync with apps/api/src/api/config.py.
     envVars:
       - key: ENV
         value: production
@@ -107,9 +117,23 @@ services:
         sync: false
       - key: SUPABASE_URL
         sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: CLERK_ISSUER
+        sync: false
       - key: REDIS_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
         sync: false
       - key: ENCRYPTION_KEY
         sync: false

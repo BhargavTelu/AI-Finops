@@ -209,3 +209,99 @@ class TestFetchCosts:
         with patch("api.adapters.openai.httpx.get", side_effect=[completions_resp, error_resp]):
             with pytest.raises(ValueError, match="429"):
                 list(adapter.fetch_costs(KEY, START, END))
+
+
+# ── BUG-C2: per-project attribution (api_key_label) ─────────────────────────────
+
+class TestProjectAttribution:
+    def _projects_page(self, projects: list[dict]) -> dict:
+        return {"object": "list", "data": projects, "has_more": False}
+
+    def test_project_id_resolves_to_project_name_label(self) -> None:
+        ts = int(START.timestamp())
+        cost_buckets = [{
+            "start_time": ts,
+            "end_time": ts + 3600,
+            "results": [
+                {"line_item": "gpt-4o", "project_id": "proj_A",
+                 "amount": {"value": 0.50, "currency": "usd"}},
+                {"line_item": "gpt-4o", "project_id": "proj_B",
+                 "amount": {"value": 0.25, "currency": "usd"}},
+            ],
+        }]
+        completion_buckets = [{
+            "start_time": ts,
+            "end_time": ts + 3600,
+            "results": [
+                {"model": "gpt-4o", "project_id": "proj_A",
+                 "input_tokens": 1000, "output_tokens": 100, "num_model_requests": 5},
+                {"model": "gpt-4o", "project_id": "proj_B",
+                 "input_tokens": 200, "output_tokens": 20, "num_model_requests": 2},
+            ],
+        }]
+        projects_resp = _mock_response(200, self._projects_page([
+            {"id": "proj_A", "name": "Chat Backend"},
+            {"id": "proj_B", "name": "Evals"},
+        ]))
+
+        adapter = OpenAIAdapter()
+        side_effects = [
+            _mock_response(200, _completions_page(completion_buckets)),
+            _mock_response(200, _costs_page(cost_buckets)),
+            projects_resp,  # lazy project-name fetch on first labeled event
+        ]
+        with patch("api.adapters.openai.httpx.get", side_effect=side_effects):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 2
+        by_label = {e.api_key_label: e for e in events}
+        assert set(by_label) == {"Chat Backend", "Evals"}
+        # Token join must be per (bucket, model, project), not per model
+        assert by_label["Chat Backend"].input_tokens == 1000
+        assert by_label["Chat Backend"].request_count == 5
+        assert by_label["Evals"].input_tokens == 200
+        assert by_label["Evals"].request_count == 2
+        assert by_label["Chat Backend"].raw_meta["project_id"] == "proj_A"
+
+    def test_project_list_failure_falls_back_to_raw_id(self) -> None:
+        ts = int(START.timestamp())
+        cost_buckets = [{
+            "start_time": ts,
+            "end_time": ts + 3600,
+            "results": [
+                {"line_item": "gpt-4o", "project_id": "proj_X",
+                 "amount": {"value": 1.00, "currency": "usd"}},
+            ],
+        }]
+        adapter = OpenAIAdapter()
+        side_effects = [
+            _mock_response(200, _completions_page([])),
+            _mock_response(200, _costs_page(cost_buckets)),
+            _mock_response(500, {}),  # project listing fails
+        ]
+        with patch("api.adapters.openai.httpx.get", side_effect=side_effects):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 1
+        assert events[0].api_key_label == "proj_X"
+
+    def test_no_project_id_keeps_label_none_and_skips_project_fetch(self) -> None:
+        ts = int(START.timestamp())
+        cost_buckets = [{
+            "start_time": ts,
+            "end_time": ts + 3600,
+            "results": [
+                {"line_item": "gpt-4o", "amount": {"value": 1.00, "currency": "usd"}},
+            ],
+        }]
+        adapter = OpenAIAdapter()
+        # Only two responses provided: a third (project list) call would raise StopIteration
+        side_effects = [
+            _mock_response(200, _completions_page([])),
+            _mock_response(200, _costs_page(cost_buckets)),
+        ]
+        with patch("api.adapters.openai.httpx.get", side_effect=side_effects):
+            events = list(adapter.fetch_costs(KEY, START, END))
+
+        assert len(events) == 1
+        assert events[0].api_key_label is None

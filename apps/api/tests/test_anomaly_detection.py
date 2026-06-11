@@ -4,7 +4,7 @@ All Supabase calls are mocked - no network, no DB.
 Pattern follows test_workers.py: mock _get_supabase, control execute() side effects.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,6 +30,7 @@ def _mock_db() -> MagicMock:
     db.gte.return_value = db
     db.lt.return_value = db
     db.order.return_value = db
+    db.range.return_value = db
     db.limit.return_value = db
     db.execute.return_value = empty
     return db
@@ -46,7 +47,9 @@ def _make_summary_rows(
     they land inside the worker's [from_date, today) window.
     If spike_day_cost is set, the last row (most recent day) gets that cost.
     """
-    today = date.today()
+    # Must match the worker's clock (UTC), not the machine's local date -
+    # using date.today() made these tests fail between local and UTC midnight.
+    today = datetime.now(timezone.utc).date()
     rows = []
     for i in range(n_days):
         # day ranges from (today - n_days) up to (today - 1); none include today itself
@@ -243,6 +246,7 @@ class TestDetectOrgContextField:
         db.lt.return_value = db
         db.insert.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.limit.return_value = db
 
         call_count = [0]
@@ -320,6 +324,7 @@ class TestDetectOrgScopeValue:
         db.lt.return_value = db
         db.insert.return_value = db
         db.order.return_value = db
+        db.range.return_value = db
         db.limit.return_value = db
 
         call_count = [0]

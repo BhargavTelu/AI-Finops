@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-import structlog
 from fastapi import APIRouter, HTTPException
-from supabase import create_client
+import structlog
 
 from api.adapters.anthropic import AnthropicAdapter
 from api.adapters.gemini import GeminiAdapter
@@ -10,6 +9,7 @@ from api.adapters.openai import OpenAIAdapter
 from api.config import settings
 from api.deps import OrgDep
 from api.schemas.integrations import IntegrationCreate, IntegrationRead
+from api.services.db import get_supabase
 from api.services.encryption import EncryptionService
 from api.workers.aggregation import aggregate_org
 from api.workers.ingestion import backfill_integration
@@ -27,11 +27,23 @@ _ADAPTERS = {
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
+
+
+def _resolve_user_uuid(db, clerk_user_id: str) -> str | None:
+    """
+    Map the Clerk sub claim to the Supabase users.id UUID.
+
+    audit_events.actor_user_id is a UUID FK to users(id) - inserting the raw
+    Clerk sub fails the cast and the surrounding try/except swallowed it, so
+    no integration audit row was ever written.
+    """
+    result = db.table("users").select("id").eq("clerk_id", clerk_user_id).limit(1).execute()
+    return result.data[0]["id"] if result.data else None
 
 
 @router.post("", status_code=201)
-async def create_integration(body: IntegrationCreate, org: OrgDep) -> IntegrationRead:
+def create_integration(body: IntegrationCreate, org: OrgDep) -> IntegrationRead:
     """
     Add a provider Admin API key.
     Validates the key, AES-256-GCM encrypts it, stores it, and enqueues backfill.
@@ -82,7 +94,7 @@ async def create_integration(body: IntegrationCreate, org: OrgDep) -> Integratio
         db.table("audit_events").insert(
             {
                 "org_id": org.org_id,
-                "actor_user_id": org.user_id,
+                "actor_user_id": _resolve_user_uuid(db, org.user_id),
                 "action": "integration.create",
                 "target_kind": "integration",
                 "target_id": row["id"],
@@ -109,7 +121,7 @@ async def create_integration(body: IntegrationCreate, org: OrgDep) -> Integratio
 
 
 @router.get("")
-async def list_integrations(org: OrgDep) -> list[IntegrationRead]:
+def list_integrations(org: OrgDep) -> list[IntegrationRead]:
     """List all integrations for the org (key redacted)."""
     db = _get_supabase()
 
@@ -138,7 +150,7 @@ async def list_integrations(org: OrgDep) -> list[IntegrationRead]:
 
 
 @router.delete("/{integration_id}", status_code=204)
-async def delete_integration(integration_id: str, org: OrgDep) -> None:
+def delete_integration(integration_id: str, org: OrgDep) -> None:
     """Soft-revoke a provider integration. Logs to audit_events."""
     db = _get_supabase()
 
@@ -175,7 +187,7 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
         db.table("audit_events").insert(
             {
                 "org_id": org.org_id,
-                "actor_user_id": org.user_id,
+                "actor_user_id": _resolve_user_uuid(db, org.user_id),
                 "action": "integration.delete",
                 "target_kind": "integration",
                 "target_id": integration_id,
@@ -188,6 +200,6 @@ async def delete_integration(integration_id: str, org: OrgDep) -> None:
 
 
 @router.post("/{integration_id}/test")
-async def test_integration(integration_id: str, org: OrgDep) -> dict:
+def test_integration(integration_id: str, org: OrgDep) -> dict:
     """Revalidate the stored key and trigger a fresh backfill job."""
     raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")

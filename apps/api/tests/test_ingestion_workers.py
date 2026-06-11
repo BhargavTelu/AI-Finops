@@ -374,3 +374,113 @@ class TestIngestWindowBatchSize:
             f"No batch should exceed _BATCH_SIZE={_BATCH_SIZE}. Got: {insert_batch_sizes}"
         )
         assert sum(insert_batch_sizes) == total
+
+
+# ── BUG-C1: delete window must match the day-floored fetch window ───────────────
+
+class TestIngestWindowDayFloorsDeleteWindow:
+    """
+    Adapters fetch complete 1d buckets (the OpenAI adapter floors the fetch
+    window to UTC day boundaries), so a mid-day refresh start (last_synced_at)
+    re-fetches today's full-day bucket stamped at 00:00. If the delete window
+    starts at the raw mid-day timestamp, the earlier snapshot of that bucket
+    survives the delete and the day is double-counted on every 4h refresh.
+    """
+
+    def test_delete_window_floored_to_utc_day(self) -> None:
+        db = _mock_db()
+        start = datetime(2026, 6, 10, 14, 23, 5, tzinfo=timezone.utc)
+        end = datetime(2026, 6, 10, 18, 23, 5, tzinfo=timezone.utc)
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter([])
+
+        with patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}):
+            _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
+
+        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+        gte_args = [c.args for c in db.gte.call_args_list]
+
+        assert ("bucket_hour", floored_iso) in gte_args, (
+            f"Delete/snapshot lower bound must be the day-floored start. Got: {gte_args}"
+        )
+        assert ("bucket_hour", start.isoformat()) not in gte_args, (
+            "Raw mid-day start must not be used as the bucket_hour lower bound - "
+            "it leaves the day's earlier bucket snapshot in place (double-count)."
+        )
+
+    def test_naive_start_treated_as_utc(self) -> None:
+        db = _mock_db()
+        # last_synced_at can parse as a naive datetime depending on the DB driver
+        start = datetime(2026, 6, 10, 4, 0, 0)
+        end = datetime(2026, 6, 10, 8, 0, 0, tzinfo=timezone.utc)
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter([])
+
+        with patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}):
+            _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
+
+        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+        gte_args = [c.args for c in db.gte.call_args_list]
+        assert ("bucket_hour", floored_iso) in gte_args
+
+
+# ── BUG-H3: errored integrations recover on successful refresh ──────────────────
+
+class TestRefreshRecoversErroredIntegration:
+    def test_success_resets_status_to_active(self) -> None:
+        """
+        A refresh that succeeds after a prior failure must set status back to
+        'active' - otherwise the integration stays in 'error' and (before the
+        sweep fix) was silently excluded from all future refreshes.
+        """
+        import base64
+        from api.services.encryption import EncryptionService
+
+        key_b64 = base64.b64encode(b"\xcc" * 32).decode()
+        cipher = EncryptionService(key_b64)
+        encrypted = cipher.encrypt(b"sk-test-key")
+
+        db = _mock_db()
+        db.execute.return_value = MagicMock(
+            data=[
+                {
+                    "provider": "openai",
+                    "api_key_enc": "\\x" + encrypted.hex(),
+                    "last_synced_at": None,
+                    "status": "error",  # previously failed
+                }
+            ]
+        )
+
+        update_payloads: list[dict] = []
+
+        def capture_update(payload: dict) -> MagicMock:
+            update_payloads.append(payload)
+            m = MagicMock()
+            m.eq.return_value = m
+            m.execute.return_value = MagicMock(data=[])
+            return m
+
+        db.update.side_effect = capture_update
+
+        mock_adapter = MagicMock()
+        mock_adapter.fetch_costs.return_value = iter([])
+
+        with (
+            patch("api.workers.ingestion._get_supabase", return_value=db),
+            patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
+            patch("api.workers.ingestion.EncryptionService", return_value=cipher),
+            patch("api.workers.ingestion.settings") as mock_settings,
+            patch("api.workers.ingestion.compile_rules", return_value=[]),
+        ):
+            mock_settings.encryption_key = key_b64
+            refresh_integration.apply(args=[INT_ID, ORG_ID])
+
+        success_updates = [p for p in update_payloads if "last_synced_at" in p]
+        assert success_updates, f"Expected a success update. Got: {update_payloads}"
+        assert success_updates[-1].get("status") == "active", (
+            "Successful refresh must reset status to 'active' so a previously "
+            f"errored integration recovers. Got: {success_updates[-1]}"
+        )

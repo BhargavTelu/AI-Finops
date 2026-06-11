@@ -43,6 +43,7 @@ def _mock_db() -> MagicMock:
     db.lte.return_value = db
     db.order.return_value = db
     db.limit.return_value = db
+    db.in_.return_value = db
     db.range.return_value = db
     empty = MagicMock()
     empty.data = []
@@ -87,28 +88,36 @@ class TestConcurrentRefreshRace:
             "status": "active",
         }
 
+        # One shared db mock - both threads only read the same constant
+        # integration row and write status updates we don't assert on.
+        shared_db = _mock_db()
+        shared_db.execute.return_value = MagicMock(data=[integration_data])
+
         def run_task():
             try:
-                db = _mock_db()
-                db.execute.return_value = MagicMock(data=[integration_data])
                 barrier.wait()
-                with (
-                    patch("api.workers.ingestion._get_supabase", return_value=db),
-                    patch("api.workers.ingestion._ingest_window", side_effect=mock_ingest_window),
-                    patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
-                    patch("api.workers.ingestion.settings") as ms,
-                ):
-                    ms.encryption_key = _KEY_B64
-                    refresh_integration.apply(args=[INT_ID, ORG_ID])
+                refresh_integration.apply(args=[INT_ID, ORG_ID])
             except Exception as exc:
                 errors.append(exc)
 
-        t1 = threading.Thread(target=run_task)
-        t2 = threading.Thread(target=run_task)
-        t1.start()
-        t2.start()
-        t1.join(timeout=10)
-        t2.join(timeout=10)
+        # Patch shared module globals ONCE, in the main thread, around both runs.
+        # Patching module globals from inside concurrent threads is a race: one
+        # thread's teardown restores the other thread's mock as the "original",
+        # leaving the module permanently patched after the test and corrupting
+        # later tests (this previously made TestPartialBatchInsertFailure flake).
+        with (
+            patch("api.workers.ingestion._get_supabase", return_value=shared_db),
+            patch("api.workers.ingestion._ingest_window", side_effect=mock_ingest_window),
+            patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
+            patch("api.workers.ingestion.settings") as ms,
+        ):
+            ms.encryption_key = _KEY_B64
+            t1 = threading.Thread(target=run_task)
+            t2 = threading.Thread(target=run_task)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
 
         assert errors == [], f"Concurrent refresh_integration raised exceptions: {errors}"
         assert ingest_call_count[0] == 2, (
@@ -302,8 +311,13 @@ class TestRefreshAllIntegrations:
         assert (INT_ID, ORG_ID) in dispatched
         assert (INT_ID_2, ORG_ID) in dispatched
 
-    def test_filters_by_active_status(self) -> None:
-        """refresh_all_integrations must query with status='active' filter."""
+    def test_sweeps_active_and_errored_but_not_revoked(self) -> None:
+        """
+        BUG-H3: the sweep previously selected status='active' only, so one
+        exhausted-retries failure permanently (and silently) stopped sync.
+        It must include 'error' so transient failures self-heal; 'revoked'
+        stays terminal.
+        """
         from api.workers.ingestion import refresh_all_integrations
 
         db = _mock_db()
@@ -315,10 +329,9 @@ class TestRefreshAllIntegrations:
         ):
             refresh_all_integrations()
 
-        # Verify .eq("status", "active") was called
-        eq_calls = [str(c) for c in db.eq.call_args_list]
-        assert any("active" in call for call in eq_calls), (
-            "Expected refresh_all_integrations to filter integrations by status='active'"
+        in_args = [c.args for c in db.in_.call_args_list]
+        assert ("status", ["active", "error"]) in in_args, (
+            f"Expected .in_('status', ['active', 'error']). Got: {in_args}"
         )
         assert mock_refresh.delay.call_count == 1
 

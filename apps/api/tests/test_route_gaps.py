@@ -57,7 +57,10 @@ class TestSlackOAuthCallbackMissingTeam:
     """
 
     def _body(self) -> bytes:
-        return json.dumps({"code": "oauth-code-test", "state": "test-csrf-state"}).encode()
+        from api.services.slack_state import generate_state
+
+        state = generate_state(ORG_ID, base64.b64encode(b"\xcc" * 32).decode())
+        return json.dumps({"code": "oauth-code-test", "state": state}).encode()
 
     def _post_callback(self, slack_resp: dict) -> MagicMock:
         """POST /slack/oauth/callback with a mocked Slack exchange response."""

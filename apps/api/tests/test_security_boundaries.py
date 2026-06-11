@@ -26,6 +26,19 @@ NOW_ISO = datetime.now(timezone.utc).isoformat()
 _ORG_A_OVERRIDE = lambda: OrgContext(user_id="user_a", org_id=ORG_A)  # noqa: E731
 app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
+
+@pytest.fixture(autouse=True)
+def _apply_module_auth_override():
+    """Re-apply this module's auth override before each test.
+
+    Import-time assignment alone is unreliable: every test module is imported
+    at collection, so whichever module imports LAST owns the override for the
+    whole run unless each module re-applies its own before its tests.
+    """
+    app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
+    yield
+
+
 client = TestClient(app)
 
 

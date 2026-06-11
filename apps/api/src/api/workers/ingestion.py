@@ -112,6 +112,13 @@ def _chunks(lst: list, n: int):
         yield lst[i : i + n]
 
 
+def _floor_utc_day(dt: datetime) -> datetime:
+    """Floor a datetime to 00:00 UTC of its calendar day (tz-aware)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 def _ingest_window(
     db,
     integration_id: str,
@@ -127,10 +134,18 @@ def _ingest_window(
 
     Delete-before-insert ensures idempotency on task retry without requiring
     a unique constraint on the high-write usage_events table.
+
+    The delete window is floored to the UTC day boundary: adapters fetch complete
+    1d buckets, so a mid-day `start` (e.g. last_synced_at from a 4h refresh) still
+    re-fetches today's full-day bucket stamped at 00:00. Deleting only [start, end)
+    would leave the earlier snapshot of that bucket in place and double-count the day.
     """
     adapter = _ADAPTERS.get(provider)
     if adapter is None:
         raise ValueError(f"Unsupported provider: {provider}")
+
+    # Must match the day-bucket window the adapters actually fetch.
+    window_start = _floor_utc_day(start)
 
     events = list(adapter.fetch_costs(key_bytes, start, end))
 
@@ -145,11 +160,11 @@ def _ingest_window(
     compiled = compile_rules(rules_result.data)
 
     # Snapshot pinned overrides before the delete so they survive re-ingestion
-    override_snapshot = _snapshot_overrides(db, org_id, integration_id, start, end)
+    override_snapshot = _snapshot_overrides(db, org_id, integration_id, window_start, end)
 
     # Remove existing rows for this integration+window before inserting
     db.table("usage_events").delete().eq("integration_id", integration_id).gte(
-        "bucket_hour", start.isoformat()
+        "bucket_hour", window_start.isoformat()
     ).lt("bucket_hour", end.isoformat()).execute()
 
     if not events:
@@ -257,11 +272,21 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
 @shared_task
 def refresh_all_integrations() -> None:
     """
-    Enqueue a refresh job for every active integration.
+    Enqueue a refresh job for every refreshable integration.
     Runs every 4 hours via Celery beat.
+
+    status='error' is included so a transient provider failure self-heals on
+    the next sweep - excluding it permanently (and silently) stopped sync for
+    any integration that exhausted its task retries once. Only 'revoked' is
+    terminal.
     """
     db = _get_supabase()
-    result = db.table("integrations").select("id, org_id").eq("status", "active").execute()
+    result = (
+        db.table("integrations")
+        .select("id, org_id")
+        .in_("status", ["active", "error"])
+        .execute()
+    )
 
     for row in result.data:
         refresh_integration.delay(row["id"], row["org_id"])
@@ -309,8 +334,10 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
 
         count = _ingest_window(db, integration_id, org_id, row["provider"], key_bytes, start, now)
 
+        # status back to 'active': a previously errored integration that
+        # refreshes successfully has recovered.
         db.table("integrations").update(
-            {"last_synced_at": now.isoformat(), "last_error": None}
+            {"last_synced_at": now.isoformat(), "last_error": None, "status": "active"}
         ).eq("id", integration_id).eq("org_id", org_id).execute()
 
         log.info(

@@ -2,20 +2,22 @@
 Slack OAuth routes.
 
 GET   /slack/status           - check whether Slack is connected for the org
+GET   /slack/oauth/state      - signed CSRF state for the OAuth install URL
 POST  /slack/oauth/callback   - exchange authorization code for bot token
 PATCH /slack/settings         - update mute preferences
 POST  /slack/disconnect       - revoke token and remove integration
 """
 
-import structlog
 from fastapi import APIRouter, HTTPException
-from supabase import create_client
+import structlog
 
 from api.config import settings
 from api.deps import OrgDep
 from api.schemas.slack import SlackOAuthCallbackBody, SlackSettingsUpdate, SlackStatusResponse
+from api.services.db import get_supabase
 from api.services.encryption import EncryptionService
 from api.services.slack_client import exchange_code, revoke_token
+from api.services.slack_state import generate_state, validate_state
 
 log = structlog.get_logger()
 
@@ -23,13 +25,13 @@ router = APIRouter(prefix="/slack", tags=["slack"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 # ── GET /slack/status ──────────────────────────────────────────────────────────
 
 @router.get("/status")
-async def slack_status(org: OrgDep) -> SlackStatusResponse:
+def slack_status(org: OrgDep) -> SlackStatusResponse:
     """Return connection state for the org's Slack integration."""
     db = _get_supabase()
     result = (
@@ -54,10 +56,32 @@ async def slack_status(org: OrgDep) -> SlackStatusResponse:
     )
 
 
+# ── GET /slack/oauth/state ─────────────────────────────────────────────────────
+
+@router.get("/oauth/state")
+def slack_oauth_state(org: OrgDep) -> dict[str, str]:
+    """
+    Issue a signed, expiring CSRF state token bound to the caller's org.
+    The frontend embeds it in the Slack authorize URL; the callback rejects
+    any code exchange whose state was not signed for the same org.
+    """
+    if not settings.slack_client_id or not settings.slack_client_secret:
+        raise HTTPException(
+            status_code=503,
+            detail="Slack integration is not configured on this server.",
+        )
+    if not settings.encryption_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Encryption key is not configured on this server.",
+        )
+    return {"state": generate_state(org.org_id, settings.encryption_key)}
+
+
 # ── POST /slack/oauth/callback ─────────────────────────────────────────────────
 
 @router.post("/oauth/callback")
-async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> SlackStatusResponse:
+def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> SlackStatusResponse:
     """
     Exchange a Slack OAuth authorization code for a bot token.
 
@@ -70,6 +94,15 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
         raise HTTPException(
             status_code=503,
             detail="Slack integration is not configured on this server.",
+        )
+
+    # CSRF guard: the state must have been issued by /slack/oauth/state for
+    # this same org. Rejects codes injected via a forged callback URL.
+    if not validate_state(body.state, org.org_id, settings.encryption_key):
+        log.warning("slack_oauth_state_invalid", org_id=org.org_id)
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired OAuth state. Please restart the Slack connection.",
         )
 
     try:
@@ -153,7 +186,7 @@ async def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> Sla
 # ── PATCH /slack/settings ─────────────────────────────────────────────────────
 
 @router.patch("/settings")
-async def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusResponse:
+def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusResponse:
     """Update mutable Slack notification preferences (currently: alerts_muted)."""
     db = _get_supabase()
 
@@ -187,7 +220,7 @@ async def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusR
 # ── POST /slack/disconnect ─────────────────────────────────────────────────────
 
 @router.post("/disconnect", status_code=204)
-async def slack_disconnect(org: OrgDep) -> None:
+def slack_disconnect(org: OrgDep) -> None:
     """
     Revoke the Slack bot token and remove the integration.
 

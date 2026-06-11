@@ -9,9 +9,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from supabase import create_client
 
-from api.config import settings
 from api.deps import AdminOrgDep, OrgDep
 from api.schemas.usage import (
     DailyPoint,
@@ -23,12 +21,13 @@ from api.schemas.usage import (
     UsageEventRead,
     UsageSummary,
 )
+from api.services.db import fetch_all_pages, get_supabase
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
 
 def _get_supabase():
-    return create_client(settings.supabase_url, settings.supabase_service_role_key)
+    return get_supabase()
 
 
 def _parse_range(range_param: str) -> tuple[date, date]:
@@ -46,7 +45,7 @@ def _parse_range(range_param: str) -> tuple[date, date]:
 
 
 @router.get("/summary")
-async def get_summary(
+def get_summary(
     org: OrgDep,
     range: str = Query(default="30d", pattern=r"^\d+d$"),
 ) -> UsageSummary:
@@ -58,18 +57,19 @@ async def get_summary(
     period_start, period_end = _parse_range(range)
     db = _get_supabase()
 
-    result = (
-        db.table("daily_cost_summaries")
+    # Paged past the PostgREST max-rows cap so totals stay correct for orgs
+    # whose range covers more than one page of summary rows.
+    rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("total_cost_usd, total_requests, total_tokens")
         .eq("org_id", org.org_id)
         .gte("day", period_start.isoformat())
         .lte("day", period_end.isoformat())
-        .execute()
     )
 
-    total_cost = sum((Decimal(str(r["total_cost_usd"])) for r in result.data), Decimal("0"))
-    total_requests = sum(r["total_requests"] for r in result.data)
-    total_tokens = sum(r["total_tokens"] for r in result.data)
+    total_cost = sum((Decimal(str(r["total_cost_usd"])) for r in rows), Decimal("0"))
+    total_requests = sum(r["total_requests"] for r in rows)
+    total_tokens = sum(r["total_tokens"] for r in rows)
 
     return UsageSummary(
         total_cost_usd=total_cost,
@@ -81,7 +81,7 @@ async def get_summary(
 
 
 @router.get("/timeseries")
-async def get_timeseries(
+def get_timeseries(
     org: OrgDep,
     range: str = Query(default="30d", pattern=r"^\d+d$"),
     group_by: str = Query(default="model"),
@@ -94,21 +94,20 @@ async def get_timeseries(
     period_start, period_end = _parse_range(range)
     db = _get_supabase()
 
-    result = (
-        db.table("daily_cost_summaries")
+    # Paged read; output order comes from the points.sort() below, not SQL.
+    rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("day, model, total_cost_usd, total_requests")
         .eq("org_id", org.org_id)
         .gte("day", period_start.isoformat())
         .lte("day", period_end.isoformat())
-        .order("day", desc=False)
-        .execute()
     )
 
     # Group by (day, model) - multiple tag combinations can produce separate rows
     # for the same day+model pair, so we aggregate in Python.
     GroupKey = tuple[date, str]
     groups: dict[GroupKey, dict] = defaultdict(lambda: {"cost": Decimal("0"), "reqs": 0})
-    for r in result.data:
+    for r in rows:
         k: GroupKey = (date.fromisoformat(r["day"]), r["model"])
         groups[k]["cost"] += Decimal(str(r["total_cost_usd"]))
         groups[k]["reqs"] += r["total_requests"]
@@ -132,7 +131,7 @@ _EXPLORE_DIMENSIONS = frozenset(
 
 
 @router.get("/explore")
-async def get_explore(
+def get_explore(
     org: OrgDep,
     range: str = Query(default="30d", pattern=r"^\d+d$"),
     group_by: str = Query(default="model"),
@@ -159,14 +158,6 @@ async def get_explore(
     period_start, period_end = _parse_range(range)
     db = _get_supabase()
 
-    q = (
-        db.table("daily_cost_summaries")
-        .select(f"{group_by}, total_cost_usd, total_requests, total_tokens")
-        .eq("org_id", org.org_id)
-        .gte("day", period_start.isoformat())
-        .lte("day", period_end.isoformat())
-    )
-
     # Apply any active dimension filters
     _filters = {
         "provider": provider,
@@ -176,17 +167,27 @@ async def get_explore(
         "customer_tag": customer_tag,
         "env_tag": env_tag,
     }
-    for col, val in _filters.items():
-        if val is not None:
-            q = q.eq(col, val)
 
-    result = q.execute()
+    def build_query():
+        q = (
+            db.table("daily_cost_summaries")
+            .select(f"{group_by}, total_cost_usd, total_requests, total_tokens")
+            .eq("org_id", org.org_id)
+            .gte("day", period_start.isoformat())
+            .lte("day", period_end.isoformat())
+        )
+        for col, val in _filters.items():
+            if val is not None:
+                q = q.eq(col, val)
+        return q
+
+    rows_data = fetch_all_pages(build_query)
 
     # Group in Python - multiple rows per dimension value when other tag columns differ
     groups: dict[str, dict] = defaultdict(
         lambda: {"cost": Decimal("0"), "reqs": 0, "tokens": 0}
     )
-    for r in result.data:
+    for r in rows_data:
         key: str = r[group_by] or ""  # tags default to "" in DB; guard against None
         groups[key]["cost"] += Decimal(str(r["total_cost_usd"]))
         groups[key]["reqs"] += r["total_requests"]
@@ -209,7 +210,7 @@ async def get_explore(
 
 
 @router.get("/dashboard")
-async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
+def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     """
     All four dashboard time-window periods in a single DB query.
     Covers: latest day, 7 days, 30 days, MTD - each with delta vs prior equal window.
@@ -225,18 +226,17 @@ async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     fetch_from = min(first_of_last_month, yesterday - timedelta(days=60))
 
     db = _get_supabase()
-    result = (
-        db.table("daily_cost_summaries")
+    summary_rows = fetch_all_pages(
+        lambda: db.table("daily_cost_summaries")
         .select("day, total_cost_usd, total_requests, total_tokens")
         .eq("org_id", org.org_id)
         .gte("day", fetch_from.isoformat())
         .lte("day", yesterday.isoformat())
-        .execute()
     )
 
     # Multiple tag-dimension rows can exist per day - aggregate them all in Python.
     day_totals: dict[date, dict] = {}
-    for row in result.data:
+    for row in summary_rows:
         d = date.fromisoformat(row["day"])
         if d not in day_totals:
             day_totals[d] = {"cost": Decimal("0"), "requests": 0, "tokens": 0}
@@ -331,13 +331,13 @@ async def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
 
 
 @router.get("/forecast")
-async def get_forecast(org: OrgDep) -> ForecastResult:
+def get_forecast(org: OrgDep) -> ForecastResult:
     """Month-end spend forecast via linear regression on daily_cost_summaries."""
     raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
 
 
 @router.get("/export.csv")
-async def export_csv(org: OrgDep) -> StreamingResponse:
+def export_csv(org: OrgDep) -> StreamingResponse:
     """Stream a CSV export of the Cost Explorer result set."""
     raise HTTPException(status_code=501, detail="Not yet implemented - available in M4")
 
@@ -345,7 +345,7 @@ async def export_csv(org: OrgDep) -> StreamingResponse:
 # ── Usage event admin endpoints ────────────────────────────────────────────────
 
 @router.get("/events")
-async def list_usage_events(
+def list_usage_events(
     org: AdminOrgDep,
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> list[UsageEventRead]:
@@ -373,7 +373,7 @@ async def list_usage_events(
 
 
 @router.patch("/events/{event_id}/tags")
-async def override_event_tags(
+def override_event_tags(
     event_id: str,
     body: TagOverridePatch,
     org: AdminOrgDep,
