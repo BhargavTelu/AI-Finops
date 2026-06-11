@@ -127,7 +127,7 @@ class TestExplainAnomalyDispatch:
     """
 
     def test_explain_dispatched_for_medium_severity(self) -> None:  # TC-M3-D01
-        _, mock_explain = _run_detect_org_with_explain(100.035)
+        _, mock_explain = _run_detect_org_with_explain(117.5)
         mock_explain.delay.assert_called_once()
 
     def test_explain_dispatched_for_high_severity(self) -> None:  # TC-M3-D02
@@ -135,7 +135,7 @@ class TestExplainAnomalyDispatch:
         mock_explain.delay.assert_called_once()
 
     def test_explain_not_dispatched_for_low_severity(self) -> None:  # TC-M3-D03
-        _, mock_explain = _run_detect_org_with_explain(100.025)
+        _, mock_explain = _run_detect_org_with_explain(112.5)
         mock_explain.delay.assert_not_called()
 
 
@@ -143,18 +143,18 @@ class TestSeverityAlerts:
     def test_low_severity_no_slack_alert(self) -> None:  # TC-DET-10
         """
         z ≈ 2.5 (low severity) → send_anomaly_alert.delay must NOT be called.
-        Flat $100 baseline, stdev ≈ 0 → stdev clipped to 0.01.
-        actual = 100 + 0.01*2.5 = 100.025 → z = 2.5 → low.
+        Flat $100 baseline → pstdev=0, floored to mean*5% = $5.
+        actual = 100 + 5*2.5 = 112.5 → z = 2.5 → low.
         """
-        mock_alert = _run_detect_org(100.025)
+        mock_alert = _run_detect_org(112.5)
         mock_alert.delay.assert_not_called()
 
     def test_medium_severity_triggers_slack_alert(self) -> None:  # TC-DET-11
         """
         z ≈ 3.5 (medium severity) → send_anomaly_alert.delay IS called.
-        actual = 100 + 0.01*3.5 = 100.035 → z = 3.5 → medium.
+        actual = 100 + 5*3.5 = 117.5 → z = 3.5 → medium.
         """
-        mock_alert = _run_detect_org(100.035)
+        mock_alert = _run_detect_org(117.5)
         mock_alert.delay.assert_called_once()
 
     def test_high_severity_triggers_slack_alert(self) -> None:  # TC-DET-12
