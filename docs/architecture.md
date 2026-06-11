@@ -158,7 +158,7 @@ GET    /usage/summary?range=30d         headline numbers
 GET    /usage/timeseries?range=30d&group_by=model
 GET    /usage/explore                   pivot data
 GET    /usage/forecast                  linear projection
-GET    /usage/export.csv
+# CSV export is client-side (cost-explorer/export-button.tsx) - no server endpoint
 
 # Tags
 GET/POST/PATCH/DELETE /tags
