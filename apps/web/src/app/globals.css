@@ -4,66 +4,95 @@
 
 @layer base {
   :root {
-    /* ── Core palette ─────────────────────────────────────────────── */
-    --background: 210 20% 98%;       /* near-white page surface */
-    --foreground: 222 47% 11%;       /* near-black primary text */
+    /* ── Core palette ─────────────────────────────────────────────────
+       Cool, low-saturation neutral ramp. Surfaces separate via subtle
+       value steps + hairline borders rather than heavy shadows. */
+    --background: 220 23% 97.5%;     /* cool near-white page surface */
+    --foreground: 224 36% 11%;       /* deep ink primary text */
 
     --card: 0 0% 100%;               /* white card surface */
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 224 36% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 224 36% 11%;
 
-    /* Blue-600 - single primary action color (buttons, links, CTAs) */
-    --primary: 221 83% 53%;
+    /* Authoritative trust blue - single primary action color */
+    --primary: 223 80% 51%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 220 18% 93%;
+    --secondary-foreground: 224 36% 11%;
 
-    --muted: 214 32% 91%;            /* secondary backgrounds, hover states */
-    --muted-foreground: 215 16% 47%; /* secondary text, labels */
+    --muted: 220 18% 93%;            /* secondary backgrounds, hover states */
+    --muted-foreground: 222 12% 44%; /* secondary text, labels */
 
-    --accent: 214 32% 91%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 220 20% 94.5%;
+    --accent-foreground: 224 36% 11%;
 
     /* Form error / destructive action color */
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 214 32% 88%;           /* subtle dividers, card outlines */
-    --input: 214 32% 88%;
-    --ring: 221 83% 53%;             /* focus ring matches primary */
+    --border: 220 16% 89%;           /* hairline dividers, card outlines */
+    --input: 220 16% 87%;
+    --ring: 223 80% 51%;             /* focus ring matches primary */
+
+    /* Sidebar - one value step below the page so the shell reads as
+       chrome and content surfaces stay visually dominant */
+    --sidebar: 220 22% 96%;
+    --sidebar-foreground: 224 36% 11%;
 
     /* ── Semantic status colors ────────────────────────────────────── */
 
     /* Success - savings, positive trends, healthy/active status */
-    --success: 142 71% 45%;          /* emerald-600 */
+    --success: 158 64% 34%;          /* deep emerald - reads "verified" not "neon" */
     --success-foreground: 0 0% 100%;
-    --success-subtle: 142 76% 95%;   /* emerald-50: badge/alert backgrounds */
+    --success-subtle: 152 68% 95%;
 
     /* Warning - budget alerts, approaching limits, caution states */
-    --warning: 38 92% 50%;           /* amber-500 */
-    --warning-foreground: 222 47% 11%; /* dark text - amber is bright, needs contrast */
-    --warning-subtle: 48 100% 94%;   /* amber-50 */
+    --warning: 35 92% 40%;           /* amber-700 leaning - passes contrast on white */
+    --warning-foreground: 0 0% 100%;
+    --warning-subtle: 45 96% 92%;
 
     /* Critical - overages, urgent alerts (badge/alert semantic) */
-    --critical: 0 84% 60%;           /* red-500, same family as destructive */
+    --critical: 0 72% 46%;
     --critical-foreground: 0 0% 100%;
-    --critical-subtle: 0 86% 96%;    /* red-50 */
+    --critical-subtle: 0 86% 96%;
 
     /* Info - syncing, loading, neutral informational state */
-    --info: 211 100% 50%;            /* sky-500 */
+    --info: 211 92% 43%;
     --info-foreground: 0 0% 100%;
-    --info-subtle: 211 100% 95%;     /* sky-50 */
+    --info-subtle: 211 100% 95%;
+
+    /* ── Data-viz categorical palette ──────────────────────────────────
+       Use in order for every multi-series chart. Hues are spaced for
+       colorblind separation and tuned to equal perceived weight. */
+    --chart-1: 223 80% 55%;          /* blue       - primary series */
+    --chart-2: 258 72% 60%;          /* violet     */
+    --chart-3: 172 60% 36%;          /* teal       */
+    --chart-4: 35 92% 50%;           /* amber      */
+    --chart-5: 340 68% 54%;          /* rose       */
+    --chart-6: 220 12% 56%;          /* slate      - "other" bucket */
 
     /* ── Geometry ──────────────────────────────────────────────────── */
     /* 8px base radius: buttons=rounded-lg(8px), inputs=rounded-md(6px), cards=rounded-xl(12px) */
     --radius: 0.5rem;
 
-    /* ── Elevation ─────────────────────────────────────────────────── */
-    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
-    --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.10), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+    /* ── Elevation ─────────────────────────────────────────────────────
+       Hairline ring + two soft layers. The ring carries the edge so the
+       blur layers can stay nearly invisible - Stripe-style restraint. */
+    --shadow-card:
+      0 0 0 1px rgba(18, 25, 38, 0.04),
+      0 1px 2px rgba(18, 25, 38, 0.04),
+      0 2px 4px -2px rgba(18, 25, 38, 0.04);
+    --shadow-card-hover:
+      0 0 0 1px rgba(18, 25, 38, 0.05),
+      0 4px 8px -2px rgba(18, 25, 38, 0.07),
+      0 12px 24px -8px rgba(18, 25, 38, 0.09);
+    --shadow-overlay:
+      0 0 0 1px rgba(18, 25, 38, 0.05),
+      0 8px 16px -4px rgba(18, 25, 38, 0.10),
+      0 24px 48px -12px rgba(18, 25, 38, 0.16);
 
     /* ── Transitions ────────────────────────────────────────────────── */
     --transition-fast: 150ms ease-in-out;   /* hover color shifts */
@@ -71,57 +100,78 @@
   }
 
   .dark {
-    /* Deep navy - professional, low eyestrain for long analysis sessions */
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
+    /* Deep blue-black - professional, low eyestrain for long analysis sessions */
+    --background: 224 36% 6%;
+    --foreground: 216 28% 94%;
 
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 96%;
+    --card: 224 32% 9%;
+    --card-foreground: 216 28% 94%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 224 32% 11%;
+    --popover-foreground: 216 28% 94%;
 
-    /* Blue-500 - slightly lighter for readability on dark backgrounds */
-    --primary: 217 91% 60%;
-    --primary-foreground: 222 47% 6%;
+    /* Lighter blue for readability on dark backgrounds */
+    --primary: 219 92% 64%;
+    --primary-foreground: 224 36% 6%;
 
-    --secondary: 217 32% 17%;
-    --secondary-foreground: 210 40% 96%;
+    --secondary: 222 28% 16%;
+    --secondary-foreground: 216 28% 94%;
 
-    --muted: 217 32% 17%;
-    --muted-foreground: 215 20% 60%;
+    --muted: 222 28% 16%;
+    --muted-foreground: 218 16% 62%;
 
-    --accent: 217 32% 17%;
-    --accent-foreground: 210 40% 96%;
+    --accent: 222 28% 16%;
+    --accent-foreground: 216 28% 94%;
 
-    --destructive: 0 63% 55%;
-    --destructive-foreground: 210 40% 96%;
+    --destructive: 0 66% 58%;
+    --destructive-foreground: 216 28% 94%;
 
-    --border: 217 32% 22%;           /* slightly lighter than muted - keeps dividers visible */
-    --input: 217 32% 20%;
-    --ring: 217 91% 60%;
+    --border: 222 26% 20%;           /* slightly lighter than muted - keeps dividers visible */
+    --input: 222 26% 18%;
+    --ring: 219 92% 64%;
+
+    --sidebar: 224 36% 7.5%;
+    --sidebar-foreground: 216 28% 94%;
 
     /* ── Semantic status colors (dark mode) ─────────────────────────── */
 
-    --success: 142 71% 50%;          /* brighter emerald for dark bg contrast */
-    --success-foreground: 222 47% 6%;
-    --success-subtle: 142 71% 11%;   /* dark tinted emerald background */
+    --success: 158 60% 48%;          /* brighter emerald for dark bg contrast */
+    --success-foreground: 224 36% 6%;
+    --success-subtle: 158 60% 11%;
 
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 6%;
-    --warning-subtle: 38 92% 11%;    /* dark tinted amber background */
+    --warning: 38 92% 56%;
+    --warning-foreground: 224 36% 6%;
+    --warning-subtle: 38 92% 11%;
 
-    --critical: 0 63% 55%;
-    --critical-foreground: 210 40% 96%;
-    --critical-subtle: 0 63% 12%;    /* dark tinted red background */
+    --critical: 0 72% 60%;
+    --critical-foreground: 216 28% 94%;
+    --critical-subtle: 0 60% 12%;
 
-    --info: 211 100% 65%;            /* lighter sky-blue for dark bg */
-    --info-foreground: 222 47% 6%;
-    --info-subtle: 211 100% 12%;     /* dark tinted blue background */
+    --info: 211 96% 64%;
+    --info-foreground: 224 36% 6%;
+    --info-subtle: 211 96% 12%;
 
-    /* ── Elevation (dark mode - stronger opacity for visible depth) ── */
-    --shadow-card: 0 1px 3px 0 rgba(0, 0, 0, 0.30), 0 1px 2px -1px rgba(0, 0, 0, 0.20);
-    --shadow-card-hover: 0 4px 12px 0 rgba(0, 0, 0, 0.40), 0 2px 4px -2px rgba(0, 0, 0, 0.25);
+    /* ── Data-viz categorical palette (dark - lifted lightness) ─────── */
+    --chart-1: 219 92% 64%;
+    --chart-2: 258 80% 70%;
+    --chart-3: 172 56% 48%;
+    --chart-4: 38 92% 58%;
+    --chart-5: 340 74% 64%;
+    --chart-6: 218 14% 58%;
+
+    /* ── Elevation (dark - ring lightens, blur deepens) ─────────────── */
+    --shadow-card:
+      0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 1px 2px rgba(0, 0, 0, 0.32),
+      0 2px 4px -2px rgba(0, 0, 0, 0.24);
+    --shadow-card-hover:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 4px 8px -2px rgba(0, 0, 0, 0.40),
+      0 12px 24px -8px rgba(0, 0, 0, 0.44);
+    --shadow-overlay:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 8px 16px -4px rgba(0, 0, 0, 0.48),
+      0 24px 48px -12px rgba(0, 0, 0, 0.56);
   }
 }
 
@@ -131,9 +181,29 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    /* Inter optical refinements: contextual alternates plus the
+       single-storey a (cv11) and open digits Stripe/Linear use */
+    font-feature-settings: "rlig" 1, "calt" 1, "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.18);
+  }
+
+  /* Honor OS-level motion preferences across every animation source
+     (Tailwind keyframes, Framer Motion inline transforms, CSS transitions) */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 
@@ -146,6 +216,16 @@
   .text-mono {
     font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", monospace;
     font-variant-numeric: tabular-nums;
+  }
+
+  /*
+   * Tabular numerals without the monospace face - for large display
+   * numbers (KPI cards) where Inter's tighter glyphs read better but
+   * digits still need fixed widths so counters don't jitter.
+   */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
   }
 
   /* Thin scrollbar - sidebar, cost explorer table, overflow containers */

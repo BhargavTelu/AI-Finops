@@ -15,7 +15,7 @@ export default function IntegrationsLoading() {
 
       {/* Integration card skeletons */}
       {[1, 2].map((i) => (
-        <div key={i} className="rounded-xl border bg-card shadow-card">
+        <div key={i} className="rounded-xl bg-card shadow-card">
           {/* Card header */}
           <div className="flex items-start justify-between gap-4 p-6">
             <div className="flex items-start gap-3">

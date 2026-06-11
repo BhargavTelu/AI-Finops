@@ -22,7 +22,7 @@ export function DataTableSkeleton({
   className,
 }: DataTableSkeletonProps) {
   return (
-    <div className={cn("w-full overflow-hidden rounded-xl border", className)}>
+    <div className={cn("w-full overflow-hidden rounded-xl bg-card shadow-card", className)}>
       {/* Header row */}
       <div className="flex items-center gap-4 border-b bg-muted/50 px-4 py-3">
         {Array.from({ length: columns }).map((_, i) => (

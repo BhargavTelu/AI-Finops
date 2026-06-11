@@ -15,7 +15,7 @@ export default function TagsLoading() {
         </div>
 
         {/* Tags table skeleton */}
-        <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+        <div className="rounded-xl bg-card overflow-hidden shadow-card">
           {/* Table header */}
           <div className="flex items-center gap-4 border-b border-border/60 bg-muted/40 px-4 py-3">
             <Skeleton className="h-3 w-14" />
@@ -50,7 +50,7 @@ export default function TagsLoading() {
         </div>
 
         {/* Rules table skeleton */}
-        <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+        <div className="rounded-xl bg-card overflow-hidden shadow-card">
           {/* Table header */}
           <div className="flex items-center gap-6 border-b border-border/60 bg-muted/40 px-4 py-3">
             <Skeleton className="h-3 w-14" />

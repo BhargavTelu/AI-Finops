@@ -237,7 +237,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             action={{ label: "Create tag", onClick: openTagDialog }}
           />
         ) : (
-          <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+          <div className="rounded-xl bg-card overflow-hidden shadow-card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -329,7 +329,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
             }
           />
         ) : (
-          <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
+          <div className="rounded-xl bg-card overflow-hidden shadow-card">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60 bg-muted/40 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">

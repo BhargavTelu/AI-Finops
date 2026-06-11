@@ -9,7 +9,7 @@ export default function UsageEventsLoading() {
       </div>
 
       {/* Table skeleton - matches the UsageEventsClient table layout */}
-      <div className="overflow-hidden rounded-xl border">
+      <div className="overflow-hidden rounded-xl bg-card shadow-card">
         <div className="border-b bg-muted/40 px-4 py-3">
           <div className="grid grid-cols-8 gap-4">
             {Array.from({ length: 8 }).map((_, i) => (

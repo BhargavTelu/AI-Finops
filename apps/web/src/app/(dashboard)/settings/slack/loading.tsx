@@ -11,7 +11,7 @@ export default function SlackLoading() {
       </div>
 
       {/* Connection status card */}
-      <div className="rounded-xl border bg-card shadow-card">
+      <div className="rounded-xl bg-card shadow-card">
         {/* Card header: channel + badge + actions */}
         <div className="flex items-center justify-between gap-4 p-6">
           <div className="flex items-center gap-3">
@@ -50,7 +50,7 @@ export default function SlackLoading() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="flex gap-3 rounded-lg border border-border/60 bg-card px-4 py-3"
+              className="flex gap-3 rounded-lg bg-card px-4 py-3 shadow-card"
             >
               <Skeleton className="mt-0.5 h-4 w-4 shrink-0 rounded-full" />
               <div className="space-y-1.5">

@@ -368,7 +368,7 @@ function IntegrationCard({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card shadow-card transition-shadow hover:shadow-card-hover",
+        "rounded-xl border border-transparent bg-card shadow-card transition-shadow hover:shadow-card-hover",
         isError && "border-critical/30",
         isRevoked && "opacity-60"
       )}

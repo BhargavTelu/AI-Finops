@@ -113,7 +113,7 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
 
         {status.connected ? (
           /* ── Connected state ──────────────────────────────────────────── */
-          <div className="rounded-xl border bg-card shadow-card">
+          <div className="rounded-xl bg-card shadow-card">
             {/* Connection status header */}
             <div className="flex items-center justify-between gap-4 p-6">
               <div className="flex items-center gap-3">
@@ -197,7 +197,7 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
           </div>
         ) : (
           /* ── Not connected state ──────────────────────────────────────── */
-          <div className="rounded-xl border bg-card shadow-card">
+          <div className="rounded-xl bg-card shadow-card">
             {oauthUrl ? (
               <div className="flex flex-col items-center py-14 px-8 text-center">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
@@ -239,7 +239,7 @@ export function SlackClient({ status: initialStatus, oauthUrl, successMsg, error
             {FEATURES.map((feature) => (
               <div
                 key={feature.title}
-                className="flex gap-3 rounded-lg border border-border/60 bg-card px-4 py-3"
+                className="flex gap-3 rounded-lg bg-card px-4 py-3 shadow-card"
               >
                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
                 <div>

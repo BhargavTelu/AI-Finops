@@ -35,11 +35,18 @@ function fmtDay(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 function fmtCost(raw: string | number): string {
   const n = typeof raw === "string" ? parseFloat(raw) : raw;
   if (n === 0) return "$0.00";
   if (n < 0.01) return `$${n.toFixed(6)}`;
-  return `$${n.toFixed(2)}`;
+  return usd.format(n);
 }
 
 export default async function DashboardPage({
@@ -172,7 +179,7 @@ export default async function DashboardPage({
         {/* ── Spend trend (2/3 width) + Provider split (1/3 width) ─────── */}
         <div className="grid gap-4 lg:grid-cols-3">
           {/* Spend trend area chart */}
-          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card lg:col-span-2">
+          <div className="rounded-xl bg-card p-6 shadow-card lg:col-span-2">
             <div className="mb-4">
               <h2 className="text-sm font-semibold text-foreground">Spend trend</h2>
               <p className="text-xs text-muted-foreground">
@@ -183,7 +190,7 @@ export default async function DashboardPage({
           </div>
 
           {/* Provider split donut */}
-          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card">
+          <div className="rounded-xl bg-card p-6 shadow-card">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-foreground">By provider</h2>
@@ -200,7 +207,7 @@ export default async function DashboardPage({
         {/* ── Top models (1/2) + Recent alerts (1/2) ───────────────────── */}
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Top-10 models bar chart */}
-          <div className="rounded-xl border border-border/60 bg-card p-6 shadow-card">
+          <div className="rounded-xl bg-card p-6 shadow-card">
             <div className="mb-4">
               <h2 className="text-sm font-semibold text-foreground">Cost by model</h2>
               <p className="text-xs text-muted-foreground">
