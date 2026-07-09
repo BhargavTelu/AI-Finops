@@ -13,6 +13,7 @@ a month-to-date partial never blocks the full month-end report.
 
 import calendar
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from celery import shared_task
 import resend
@@ -32,7 +33,7 @@ log = structlog.get_logger()
 _REPORT_TYPE = "cfo_pdf"
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
@@ -87,7 +88,7 @@ def generate_monthly_reports() -> None:
     log.info("monthly_reports_dispatched", count=len(org_ids), period=period_start.isoformat())
 
 
-def _fetch_summaries(db, org_id: str, start: date, end: date) -> list[dict]:
+def _fetch_summaries(db: Any, org_id: str, start: date, end: date) -> list[dict[str, Any]]:
     return fetch_all_pages(
         lambda: db.table("daily_cost_summaries")
         .select(
@@ -101,8 +102,8 @@ def _fetch_summaries(db, org_id: str, start: date, end: date) -> list[dict]:
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=120)
-def generate_org_report(  # type: ignore[misc]
-    self,
+def generate_org_report(
+    self: Any,
     org_id: str,
     period_start: str,
     period_end: str,
@@ -154,9 +155,7 @@ def generate_org_report(  # type: ignore[misc]
         .execute()
     ).data
 
-    org_result = (
-        db.table("organizations").select("name").eq("id", org_id).limit(1).execute()
-    )
+    org_result = db.table("organizations").select("name").eq("id", org_id).limit(1).execute()
     org_name = org_result.data[0]["name"] if org_result.data else "Your organization"
 
     data = build_report_data(
@@ -172,10 +171,11 @@ def generate_org_report(  # type: ignore[misc]
     pdf_bytes = render_pdf(data)
 
     # Stable key per month: a fuller regeneration overwrites the partial.
-    object_key: str | None = f"reports/{org_id}/{period_start}.pdf"
+    month_key = f"reports/{org_id}/{period_start}.pdf"
+    object_key: str | None = month_key
     if r2_configured():
         try:
-            upload_pdf(object_key, pdf_bytes)
+            upload_pdf(month_key, pdf_bytes)
         except ValueError as exc:
             log.error("report_upload_failed", org_id=org_id, error=str(exc))
             raise self.retry(exc=exc) from exc
@@ -226,7 +226,7 @@ def _report_email_html(month_label: str, reports_url: str) -> str:
     """
 
 
-def _send_report_email(db, org_id: str, period_start: date) -> None:
+def _send_report_email(db: Any, org_id: str, period_start: date) -> None:
     """Best-effort: a failed email never fails (or retries) report generation."""
     to_email = _get_org_admin_email(db, org_id)
     if not to_email:

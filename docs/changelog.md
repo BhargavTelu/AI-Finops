@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - Phases 0-3 (2026-06-11) - MVP code-complete
 
+### Maintenance - Repository audit (2026-07-10)
+
+- **Fixed: tags settings page mutations failed with 401 after ~60s** - `tags-client.tsx` reused a Clerk session token minted at page render (tokens expire in ~60s) and embedded it in the RSC payload; it now fetches a fresh token per request via `useAuth()` like every other client component
+- API lint/type debt cleared: `ruff check`, `black --check`, and `mypy --strict` now pass on `apps/api` (previously 362 ruff violations and 200 strict-mypy errors); behavior unchanged - 750 tests passing, 95% coverage
+- Removed outdated `types-stripe` stubs (masked stripe 15's inline types); checkout now omits the `customer` param instead of passing `None`; removed unused `python-multipart` and `python-dotenv` deps
+- Removed dead `packages/types` workspace package (consumed by nothing; its camelCase shapes contradicted the real snake_case API types in `apps/web/src/lib/types.ts`) and the unused `SettingsTabs` alias export
+- Integrations page: revoke failures now surface as a toast (was `console.error` only); "Copy key identifier" actually copies the integration id
+- Renamed pending migration `20260611000000_add_email_digest_opt_out.sql` to `20260611010000` (version collided with the applied RLS migration); removed a dead root-`.env.example` copy from `bootstrap.sh`
+
 ### Maintenance - Documentation audit (2026-07-09)
 
 - Docs audited and consolidated: historical docs deleted (build checklist, test plan + results snapshot, UI redesign roadmap + brief, strategic review .docx - all in git history), `project_status.md` rewritten as a current-state snapshot, this changelog's 0.6.0/0.6.1 gap backfilled, stale claims corrected in `architecture.md` (AI layer, `slack_digests` schema), `project_spec.md` (M3/M4 completion, fpdf2), and `setup.md`; `launch_setup_guide.md` added (founder ops to go live)
@@ -58,7 +67,7 @@ A no-assumptions audit of Phase 2 (the money path) found three issues, all fixed
 - **Month-end forecast** (`api/services/forecast.py` + `/usage/forecast`) - pure least-squares regression over current-month daily totals (gap-filled $0 days, predictions clamped >= 0, confidence band from residual std x sqrt(remaining days), low bound never below actual MTD); trailing-30d-average fallback under 5 elapsed days; 404 distinguishes "no history" from a genuine zero-spend month. `ForecastResult` extended with `method` / `last_month_cost_usd` / `delta_vs_last_month_pct`. Dashboard gains a "Projected month-end" stat card (5-col grid when present) with delta badge and confidence range. TC-STUB-02 retired.
 - **Activation checklist** - `GET /onboarding/status` (4 org-scoped existence queries: provider, tag rule, Slack, budget) + dismissible `ActivationChecklist` dashboard card (localStorage, hydration-safe, auto-hides at 4/4); rendered on the empty-state dashboard too, where a fresh org needs it most. Replaces the spec's multi-step onboarding wizard.
 - **Landing page** - `/` redirect stub replaced with a marketing page in the existing design system: cost-statement hero vignette (ledger rows, dot leaders, flagged anomaly), numbered section rules, three feature blocks, 3-step how-it-works, spend-tiered pricing ($299/$599/$1,500 - every plan includes all features; 14-day trial, no card), navy security band linking `/security`, native-details FAQ, sign-up CTA (signed-in visitors see "Open dashboard").
-- **Weekly email digest** - `send_weekly_email_digests` beat (Mondays 09:00 UTC) reusing `_fetch_digest_data()`; targets orgs with active integrations minus Slack-connected (Slack-first: no double-notify) minus opted-out; migration `20260611000000_add_email_digest_opt_out.sql` adds `organizations.email_digest_opt_out`.
+- **Weekly email digest** - `send_weekly_email_digests` beat (Mondays 09:00 UTC) reusing `_fetch_digest_data()`; targets orgs with active integrations minus Slack-connected (Slack-first: no double-notify) minus opted-out; migration `20260611010000_add_email_digest_opt_out.sql` adds `organizations.email_digest_opt_out`.
 - **PostHog funnel wired** - capture functions existed as stubs with zero call sites; now firing: `provider_connected`, `tag_created`, `budget_created` (signature widened from 3 to 7 scope types), `pdf_downloaded`; `identify(user.id)` + organization `group()` in the provider (Clerk ids only - no PII in analytics). `signup`/`org_created` deferred to server-side Clerk-webhook capture (Phase 2, alongside `checkout_completed`).
 - **22 new tests** - `test_forecast.py` (regression math: flat/trend/clamp/band/fallbacks), `test_forecast_and_onboarding_routes.py` (404 vs 200 contract, org scoping), `test_notifications_weekly.py` (fan-out exclusions, send paths, HTML content, MoM colors).
 

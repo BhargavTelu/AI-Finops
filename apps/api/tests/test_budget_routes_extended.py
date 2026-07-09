@@ -3,21 +3,18 @@ Additional budget route tests not covered by test_budget_routes.py.
 TC-BUD-11 and TC-BUD-12.
 """
 
-from decimal import Decimal
-import pytest
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 BUDGET_ID = "bbbbbbbb-0000-0000-0000-000000000099"
-
-from datetime import datetime, timezone
-
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 _AUTH_OVERRIDE = lambda: OrgContext(user_id="user_test", org_id=ORG_ID)  # noqa: E731
 app.dependency_overrides[_require_org] = _AUTH_OVERRIDE

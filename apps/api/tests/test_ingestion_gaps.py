@@ -7,12 +7,10 @@ Gap-07 (high):     refresh_all_integrations enqueues exactly one task per active
 """
 
 import base64
-import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from decimal import Decimal
+import threading
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from api.services.encryption import EncryptionService
 
@@ -52,6 +50,7 @@ def _mock_db() -> MagicMock:
 
 
 # ── Gap-05: Concurrent refresh race ────────────────────────────────────────────
+
 
 class TestConcurrentRefreshRace:
     """
@@ -129,6 +128,7 @@ class TestConcurrentRefreshRace:
 
 # ── Gap-06: Partial batch failure ──────────────────────────────────────────────
 
+
 class TestPartialBatchInsertFailure:
     """
     Gap-06 (critical): If a mid-batch insert fails, last_synced_at must NOT be
@@ -143,8 +143,8 @@ class TestPartialBatchInsertFailure:
           - Update status='error' and last_error=<message>
           - NOT update last_synced_at (so retry re-ingests from the beginning)
         """
-        from api.workers.ingestion import backfill_integration
         from api.adapters.base import NormalizedUsageEvent
+        from api.workers.ingestion import backfill_integration
 
         # 501 events → two batches (500 + 1); second batch raises
         fake_event = NormalizedUsageEvent(
@@ -199,10 +199,15 @@ class TestPartialBatchInsertFailure:
             patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
             patch("api.workers.ingestion.settings") as ms,
             patch("api.workers.ingestion.compile_rules", return_value=[]),
-            patch("api.workers.ingestion.apply_rules", return_value={
-                "feature_tag": None, "team_tag": None,
-                "customer_tag": None, "env_tag": None,
-            }),
+            patch(
+                "api.workers.ingestion.apply_rules",
+                return_value={
+                    "feature_tag": None,
+                    "team_tag": None,
+                    "customer_tag": None,
+                    "env_tag": None,
+                },
+            ),
         ):
             ms.encryption_key = _KEY_B64
             backfill_integration.apply(args=[INT_ID, ORG_ID])
@@ -226,8 +231,8 @@ class TestPartialBatchInsertFailure:
 
     def test_successful_ingest_updates_last_synced_at(self) -> None:
         """Baseline: a successful backfill must update last_synced_at."""
-        from api.workers.ingestion import backfill_integration
         from api.adapters.base import NormalizedUsageEvent
+        from api.workers.ingestion import backfill_integration
 
         fake_event = NormalizedUsageEvent(
             provider="openai",
@@ -268,22 +273,28 @@ class TestPartialBatchInsertFailure:
             patch("api.workers.ingestion.EncryptionService", return_value=_CIPHER),
             patch("api.workers.ingestion.settings") as ms,
             patch("api.workers.ingestion.compile_rules", return_value=[]),
-            patch("api.workers.ingestion.apply_rules", return_value={
-                "feature_tag": None, "team_tag": None,
-                "customer_tag": None, "env_tag": None,
-            }),
+            patch(
+                "api.workers.ingestion.apply_rules",
+                return_value={
+                    "feature_tag": None,
+                    "team_tag": None,
+                    "customer_tag": None,
+                    "env_tag": None,
+                },
+            ),
             patch("api.workers.aggregation.aggregate_org"),
         ):
             ms.encryption_key = _KEY_B64
             backfill_integration.apply(args=[INT_ID, ORG_ID])
 
         success_updates = [p for p in updated_payloads if "last_synced_at" in p]
-        assert success_updates, (
-            f"Expected last_synced_at to be set on success. Updates: {updated_payloads}"
-        )
+        assert (
+            success_updates
+        ), f"Expected last_synced_at to be set on success. Updates: {updated_payloads}"
 
 
 # ── Gap-07: refresh_all_integrations task ──────────────────────────────────────
+
 
 class TestRefreshAllIntegrations:
     """Gap-07 (high): refresh_all_integrations enqueues exactly one task per active integration."""
@@ -330,9 +341,10 @@ class TestRefreshAllIntegrations:
             refresh_all_integrations()
 
         in_args = [c.args for c in db.in_.call_args_list]
-        assert ("status", ["active", "error"]) in in_args, (
-            f"Expected .in_('status', ['active', 'error']). Got: {in_args}"
-        )
+        assert (
+            "status",
+            ["active", "error"],
+        ) in in_args, f"Expected .in_('status', ['active', 'error']). Got: {in_args}"
         assert mock_refresh.delay.call_count == 1
 
     def test_no_active_integrations_enqueues_nothing(self) -> None:

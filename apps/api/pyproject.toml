@@ -14,7 +14,6 @@ dependencies = [
     # Web framework
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.30.0",
-    "python-multipart>=0.0.9",
     # Task queue
     "celery[redis]>=5.4.0",
     "redis>=5.0.0",
@@ -41,7 +40,6 @@ dependencies = [
     # cryptography package - no new transitive deps added.
     "PyJWT[cryptography]>=2.8.0",
     # Utilities
-    "python-dotenv>=1.0.0",
     "cryptography>=42.0.0",
     "pyyaml>=6.0.0",
 ]
@@ -57,7 +55,6 @@ dev = [
     "black>=24.4.0",
     # Type stubs
     "types-pyyaml>=6.0.0",
-    "types-stripe>=3.0.0",
 ]
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,6 +83,11 @@ python_version = "3.11"
 strict = true
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
+
+# Celery's @shared_task is untyped; the task bodies themselves stay strict.
+[[tool.mypy.overrides]]
+module = "api.workers.*"
+disallow_untyped_decorators = false
 
 # ─────────────────────────────────────────────────────────────────────────────
 [tool.black]

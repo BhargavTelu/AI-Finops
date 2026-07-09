@@ -68,10 +68,15 @@ class TestGetBilling:
         assert resp.json()["access_blocked"] is True
 
     def test_subscribed_state(self) -> None:
-        billing = [{
-            "plan": "growth", "status": "active", "stripe_customer_id": "cus_1",
-            "stripe_subscription_id": "sub_1", "current_period_end": FUTURE,
-        }]
+        billing = [
+            {
+                "plan": "growth",
+                "status": "active",
+                "stripe_customer_id": "cus_1",
+                "stripe_subscription_id": "sub_1",
+                "current_period_end": FUTURE,
+            }
+        ]
         db = _db([{"trial_ends_at": PAST, "plan": "growth"}], billing)
         with patch("api.routers.billing._get_supabase", return_value=db):
             resp = client.get("/api/v1/billing")
@@ -90,8 +95,9 @@ class TestCheckout:
         with (
             patch("api.routers.billing._get_supabase", return_value=_db([], [])),
             patch("api.routers.billing.settings.stripe_price_growth", "price_growth_1"),
-            patch("api.routers.billing.stripe.checkout.Session.create", return_value=session)
-            as mock_create,
+            patch(
+                "api.routers.billing.stripe.checkout.Session.create", return_value=session
+            ) as mock_create,
         ):
             resp = self._post("growth")
         assert resp.status_code == 200
@@ -105,14 +111,21 @@ class TestCheckout:
 
     def test_reuses_existing_stripe_customer(self) -> None:
         session = MagicMock(url="https://checkout.stripe.com/x")
-        billing = [{"stripe_customer_id": "cus_existing", "plan": "trial",
-                    "status": "canceled", "stripe_subscription_id": None,
-                    "current_period_end": None}]
+        billing = [
+            {
+                "stripe_customer_id": "cus_existing",
+                "plan": "trial",
+                "status": "canceled",
+                "stripe_subscription_id": None,
+                "current_period_end": None,
+            }
+        ]
         with (
             patch("api.routers.billing._get_supabase", return_value=_db([], billing)),
             patch("api.routers.billing.settings.stripe_price_starter", "price_starter_1"),
-            patch("api.routers.billing.stripe.checkout.Session.create", return_value=session)
-            as mock_create,
+            patch(
+                "api.routers.billing.stripe.checkout.Session.create", return_value=session
+            ) as mock_create,
         ):
             resp = self._post("starter")
         assert resp.status_code == 200
@@ -135,8 +148,15 @@ class TestPortal:
         assert resp.status_code == 404
 
     def test_returns_portal_url(self) -> None:
-        billing = [{"stripe_customer_id": "cus_1", "plan": "growth", "status": "active",
-                    "stripe_subscription_id": "sub_1", "current_period_end": None}]
+        billing = [
+            {
+                "stripe_customer_id": "cus_1",
+                "plan": "growth",
+                "status": "active",
+                "stripe_subscription_id": "sub_1",
+                "current_period_end": None,
+            }
+        ]
         session = MagicMock(url="https://billing.stripe.com/p/session")
         with (
             patch("api.routers.billing._get_supabase", return_value=_db([], billing)),

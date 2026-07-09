@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 import os
 from pathlib import Path
 import re
-from typing import Any, Iterator
+from typing import Any, cast
 
 import httpx
 import structlog
@@ -15,10 +16,12 @@ log = structlog.get_logger()
 
 # Reference:
 #   GET /v1/organizations/usage_report/messages  - token counts per model per day bucket
-#   Costs computed from pricing.yaml (Anthropic does not expose a per-org cost API with model granularity)
+#   Costs computed from pricing.yaml (Anthropic does not expose a per-org
+#   cost API with model granularity)
 _BASE_URL = "https://api.anthropic.com"
 _ANTHROPIC_VERSION = "2023-06-01"
 _PAGE_LIMIT = 30  # days per page; 30 covers a full month backfill in one request
+
 
 def _find_pricing_file() -> Path | None:
     """
@@ -53,7 +56,10 @@ def _load_anthropic_pricing() -> dict[str, dict[str, float]]:
         return {}
     with open(path) as f:
         data = yaml.safe_load(f)
-    return data.get("providers", {}).get("anthropic", {}).get("models", {})
+    return cast(
+        dict[str, dict[str, float]],
+        data.get("providers", {}).get("anthropic", {}).get("models", {}),
+    )
 
 
 _ANTHROPIC_PRICING: dict[str, dict[str, float]] = _load_anthropic_pricing()
@@ -114,7 +120,7 @@ class AnthropicAdapter:
         Ping /v1/organizations/usage_report/messages with a 1-day window to confirm key works.
         Raises ValueError with a human-readable message if the key is invalid.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today_midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
         start_iso = (today_midnight - timedelta(days=1)).replace(tzinfo=None).isoformat() + "Z"
         end_iso = today_midnight.replace(tzinfo=None).isoformat() + "Z"
@@ -179,7 +185,9 @@ class AnthropicAdapter:
             bucket_start_str: str = bucket.get("starting_at", "")
             # Parse ISO 8601 bucket start → naive UTC datetime for bucket_hour
             try:
-                bucket_dt = datetime.fromisoformat(bucket_start_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                bucket_dt = datetime.fromisoformat(bucket_start_str.replace("Z", "+00:00")).replace(
+                    tzinfo=None
+                )
             except (ValueError, AttributeError):
                 continue
 
@@ -253,9 +261,7 @@ class AnthropicAdapter:
             log.warning("anthropic_api_key_list_error", error=str(exc))
         return names
 
-    def _paginate(
-        self, key: bytes, path: str, params: dict[str, Any]
-    ) -> Iterator[dict[str, Any]]:
+    def _paginate(self, key: bytes, path: str, params: dict[str, Any]) -> Iterator[dict[str, Any]]:
         """Yield each bucket dict from a cursor-paginated Anthropic response."""
         cursor: str | None = None
         while True:
@@ -277,8 +283,7 @@ class AnthropicAdapter:
                 raise ValueError(f"Anthropic {path} returned {resp.status_code}: {resp.text[:200]}")
 
             body = resp.json()
-            for bucket in body.get("data", []):
-                yield bucket
+            yield from body.get("data", [])
 
             if not body.get("has_more"):
                 break

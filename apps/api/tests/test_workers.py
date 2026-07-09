@@ -3,17 +3,17 @@ Unit tests for Celery workers (ingestion + aggregation).
 All external calls (Supabase, provider adapters) are mocked.
 """
 
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from api.adapters.base import NormalizedUsageEvent
 from api.workers.ingestion import _ingest_window
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_event(model: str, cost: float, hour: datetime) -> NormalizedUsageEvent:
     return NormalizedUsageEvent(
@@ -54,8 +54,8 @@ def _mock_db() -> MagicMock:
     return db
 
 
-START = datetime(2025, 1, 1, tzinfo=timezone.utc)
-END = datetime(2025, 1, 2, tzinfo=timezone.utc)
+START = datetime(2025, 1, 1, tzinfo=UTC)
+END = datetime(2025, 1, 2, tzinfo=UTC)
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 INTEGRATION_ID = "00000000-0000-0000-0000-000000000002"
 KEY_BYTES = b"sk-admin-testkey1234567890"
@@ -63,13 +63,17 @@ KEY_BYTES = b"sk-admin-testkey1234567890"
 
 # ── _ingest_window ─────────────────────────────────────────────────────────────
 
+
 class TestIngestWindow:
     def test_inserts_rows_for_events(self) -> None:
         db = _mock_db()
-        hour = datetime(2025, 1, 1, 10, tzinfo=timezone.utc)
+        hour = datetime(2025, 1, 1, 10, tzinfo=UTC)
         events = [_make_event("gpt-4o", 1.50, hour)]
 
-        with patch("api.workers.ingestion._ADAPTERS", {"openai": MagicMock(fetch_costs=MagicMock(return_value=events))}):
+        with patch(
+            "api.workers.ingestion._ADAPTERS",
+            {"openai": MagicMock(fetch_costs=MagicMock(return_value=events))},
+        ):
             count = _ingest_window(db, INTEGRATION_ID, ORG_ID, "openai", KEY_BYTES, START, END)
 
         assert count == 1
@@ -88,7 +92,10 @@ class TestIngestWindow:
 
     def test_returns_zero_when_no_events(self) -> None:
         db = _mock_db()
-        with patch("api.workers.ingestion._ADAPTERS", {"openai": MagicMock(fetch_costs=MagicMock(return_value=[]))}):
+        with patch(
+            "api.workers.ingestion._ADAPTERS",
+            {"openai": MagicMock(fetch_costs=MagicMock(return_value=[]))},
+        ):
             count = _ingest_window(db, INTEGRATION_ID, ORG_ID, "openai", KEY_BYTES, START, END)
 
         assert count == 0
@@ -102,10 +109,13 @@ class TestIngestWindow:
     def test_batches_large_event_sets(self) -> None:
         """Events > 500 should be inserted in multiple batches."""
         db = _mock_db()
-        hour = datetime(2025, 1, 1, 10, tzinfo=timezone.utc)
+        hour = datetime(2025, 1, 1, 10, tzinfo=UTC)
         events = [_make_event("gpt-4o", 0.01, hour) for _ in range(1050)]
 
-        with patch("api.workers.ingestion._ADAPTERS", {"openai": MagicMock(fetch_costs=MagicMock(return_value=events))}):
+        with patch(
+            "api.workers.ingestion._ADAPTERS",
+            {"openai": MagicMock(fetch_costs=MagicMock(return_value=events))},
+        ):
             count = _ingest_window(db, INTEGRATION_ID, ORG_ID, "openai", KEY_BYTES, START, END)
 
         assert count == 1050
@@ -115,7 +125,10 @@ class TestIngestWindow:
     def test_delete_called_with_correct_window(self) -> None:
         """Existing rows for the time window must be cleared before insert."""
         db = _mock_db()
-        with patch("api.workers.ingestion._ADAPTERS", {"openai": MagicMock(fetch_costs=MagicMock(return_value=[]))}):
+        with patch(
+            "api.workers.ingestion._ADAPTERS",
+            {"openai": MagicMock(fetch_costs=MagicMock(return_value=[]))},
+        ):
             _ingest_window(db, INTEGRATION_ID, ORG_ID, "openai", KEY_BYTES, START, END)
 
         db.gte.assert_any_call("bucket_hour", START.isoformat())
@@ -123,6 +136,7 @@ class TestIngestWindow:
 
 
 # ── aggregate_org ─────────────────────────────────────────────────────────────
+
 
 class TestAggregateOrg:
     def _run_aggregate(self, usage_rows: list[dict]) -> list[dict]:
@@ -142,7 +156,13 @@ class TestAggregateOrg:
         # 3. usage_events page 1 (actual data)
         # 4. usage_events page 2 (empty - terminates pagination)
         # 5. daily_cost_summaries upsert().execute() (captured by db.upsert side_effect)
-        db.execute.side_effect = [exec_integration, exec_empty, exec_with_data, exec_empty, exec_empty]
+        db.execute.side_effect = [
+            exec_integration,
+            exec_empty,
+            exec_with_data,
+            exec_empty,
+            exec_empty,
+        ]
 
         upserted: list[dict] = []
 
@@ -154,6 +174,7 @@ class TestAggregateOrg:
 
         with patch("api.workers.aggregation._get_supabase", return_value=db):
             from api.workers.aggregation import aggregate_org
+
             aggregate_org(ORG_ID)
 
         return upserted
@@ -162,15 +183,48 @@ class TestAggregateOrg:
         day1 = "2025-01-01T10:00:00+00:00"
         day2 = "2025-01-02T10:00:00+00:00"
         rows = [
-            {"provider": "openai", "model": "gpt-4o", "feature_tag": None, "team_tag": None,
-             "customer_tag": None, "env_tag": None, "cost_usd": "1.00", "request_count": 2,
-             "input_tokens": 1000, "output_tokens": 200, "cached_tokens": 0, "bucket_hour": day1},
-            {"provider": "openai", "model": "gpt-4o", "feature_tag": None, "team_tag": None,
-             "customer_tag": None, "env_tag": None, "cost_usd": "2.00", "request_count": 3,
-             "input_tokens": 2000, "output_tokens": 400, "cached_tokens": 0, "bucket_hour": day1},
-            {"provider": "openai", "model": "gpt-4o-mini", "feature_tag": None, "team_tag": None,
-             "customer_tag": None, "env_tag": None, "cost_usd": "0.50", "request_count": 5,
-             "input_tokens": 500, "output_tokens": 100, "cached_tokens": 0, "bucket_hour": day2},
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "team_tag": None,
+                "customer_tag": None,
+                "env_tag": None,
+                "cost_usd": "1.00",
+                "request_count": 2,
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cached_tokens": 0,
+                "bucket_hour": day1,
+            },
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "team_tag": None,
+                "customer_tag": None,
+                "env_tag": None,
+                "cost_usd": "2.00",
+                "request_count": 3,
+                "input_tokens": 2000,
+                "output_tokens": 400,
+                "cached_tokens": 0,
+                "bucket_hour": day1,
+            },
+            {
+                "provider": "openai",
+                "model": "gpt-4o-mini",
+                "feature_tag": None,
+                "team_tag": None,
+                "customer_tag": None,
+                "env_tag": None,
+                "cost_usd": "0.50",
+                "request_count": 5,
+                "input_tokens": 500,
+                "output_tokens": 100,
+                "cached_tokens": 0,
+                "bucket_hour": day2,
+            },
         ]
         upserted = self._run_aggregate(rows)
 
@@ -188,10 +242,20 @@ class TestAggregateOrg:
 
     def test_null_tags_coerced_to_empty_string(self) -> None:
         rows = [
-            {"provider": "openai", "model": "gpt-4o", "feature_tag": None, "team_tag": None,
-             "customer_tag": None, "env_tag": None, "cost_usd": "1.00", "request_count": 1,
-             "input_tokens": 100, "output_tokens": 10, "cached_tokens": 0,
-             "bucket_hour": "2025-01-01T00:00:00+00:00"},
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "team_tag": None,
+                "customer_tag": None,
+                "env_tag": None,
+                "cost_usd": "1.00",
+                "request_count": 1,
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "cached_tokens": 0,
+                "bucket_hour": "2025-01-01T00:00:00+00:00",
+            },
         ]
         upserted = self._run_aggregate(rows)
 
@@ -204,10 +268,20 @@ class TestAggregateOrg:
 
     def test_org_id_set_correctly(self) -> None:
         rows = [
-            {"provider": "openai", "model": "gpt-4o", "feature_tag": None, "team_tag": None,
-             "customer_tag": None, "env_tag": None, "cost_usd": "1.00", "request_count": 1,
-             "input_tokens": 100, "output_tokens": 10, "cached_tokens": 0,
-             "bucket_hour": "2025-01-01T00:00:00+00:00"},
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "team_tag": None,
+                "customer_tag": None,
+                "env_tag": None,
+                "cost_usd": "1.00",
+                "request_count": 1,
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "cached_tokens": 0,
+                "bucket_hour": "2025-01-01T00:00:00+00:00",
+            },
         ]
         upserted = self._run_aggregate(rows)
 
@@ -217,6 +291,7 @@ class TestAggregateOrg:
         db = _mock_db()
         with patch("api.workers.aggregation._get_supabase", return_value=db):
             from api.workers.aggregation import aggregate_org
+
             aggregate_org(ORG_ID)
 
         db.upsert.assert_not_called()

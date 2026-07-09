@@ -38,6 +38,7 @@ def _patch_client(resp: MagicMock):
 
 # ── exchange_code ──────────────────────────────────────────────────────────────
 
+
 class TestExchangeCode:
     def test_success_returns_full_dict(self) -> None:  # TC-SLK-01
         resp = _mock_http_resp(200, {"ok": True, "access_token": "xoxb-123"})
@@ -70,6 +71,7 @@ class TestExchangeCode:
 
 # ── revoke_token ───────────────────────────────────────────────────────────────
 
+
 class TestRevokeToken:
     def test_api_error_logs_warning_does_not_raise(self) -> None:  # TC-SLK-05
         resp = _mock_http_resp(200, {"ok": False, "error": "token_revoked"})
@@ -86,6 +88,7 @@ class TestRevokeToken:
 
 
 # ── post_message ───────────────────────────────────────────────────────────────
+
 
 class TestPostMessage:
     def test_success_does_not_raise(self) -> None:  # TC-SLK-07

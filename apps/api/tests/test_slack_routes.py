@@ -4,11 +4,11 @@ Supabase calls and Slack client functions are mocked. Auth dependency is overrid
 """
 
 import base64
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -22,7 +22,7 @@ def _valid_state(org_id: str = ORG_ID) -> str:
     return generate_state(org_id, TEST_KEY_B64)
 
 
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 _ORG_OVERRIDE = lambda: OrgContext(user_id="clerk_user_1", org_id=ORG_ID)  # noqa: E731
 app.dependency_overrides[_require_org] = _ORG_OVERRIDE
@@ -44,6 +44,7 @@ def _restore_auth_override():
 
 
 # ── DB mock helpers ─────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     db = MagicMock()
@@ -72,6 +73,7 @@ def _slack_row(alerts_muted: bool = False) -> dict:
 
 
 # ── GET /slack/status ───────────────────────────────────────────────────────────
+
 
 class TestSlackStatus:
     def test_not_connected(self) -> None:
@@ -110,6 +112,7 @@ class TestSlackStatus:
 
 # ── POST /slack/oauth/callback ──────────────────────────────────────────────────
 
+
 class TestSlackOAuthCallback:
     def _call(self, code: str = "valid_code", state: str | None = None) -> MagicMock:
         return client.post(
@@ -122,7 +125,7 @@ class TestSlackOAuthCallback:
         # user lookup returns a DB user
         db.execute.side_effect = [
             MagicMock(data=[{"id": "user-uuid-1"}]),  # users lookup
-            MagicMock(data=[]),                        # upsert
+            MagicMock(data=[]),  # upsert
         ]
         slack_response = {
             "ok": True,
@@ -202,18 +205,19 @@ class TestSlackOAuthCallback:
 
 # ── POST /slack/disconnect ──────────────────────────────────────────────────────
 
+
 class TestSlackDisconnect:
     def test_disconnect_removes_row(self) -> None:
         db = _mock_db()
         fake_token_enc = "\\x" + "00" * 28  # hex string; won't decrypt but we mock both
         db.execute.side_effect = [
             MagicMock(data=[{"bot_token_enc": fake_token_enc}]),  # select
-            MagicMock(data=[]),                                    # delete
+            MagicMock(data=[]),  # delete
         ]
         with (
             patch("api.routers.slack._get_supabase", return_value=db),
-            patch("api.routers.slack.revoke_token"),          # skip actual revoke
-            patch("api.routers.slack.EncryptionService"),     # skip decrypt
+            patch("api.routers.slack.revoke_token"),  # skip actual revoke
+            patch("api.routers.slack.EncryptionService"),  # skip decrypt
         ):
             resp = client.post("/api/v1/slack/disconnect")
         assert resp.status_code == 204
@@ -226,6 +230,7 @@ class TestSlackDisconnect:
 
 
 # ── BUG-H1: OAuth state endpoint + CSRF validation ──────────────────────────────
+
 
 class TestSlackOAuthState:
     def test_state_endpoint_returns_valid_state(self) -> None:

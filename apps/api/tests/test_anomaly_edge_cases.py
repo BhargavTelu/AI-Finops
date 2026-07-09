@@ -18,7 +18,7 @@ class TestAnomalyEdgeCases:
         assert detect_anomalies(_costs([100.0] * 14)) is None
 
     def test_all_zero_baseline_spike_50(self) -> None:  # TC-ANO-13
-        """14× $0 then $50: z = (50−0)/0.01 = 5000 → high severity."""
+        """14x $0 then $50: z = (50-0)/0.01 = 5000 → high severity."""
         history = _costs([0.0] * 14 + [50.0])
         result = detect_anomalies(history)
         assert result is not None
@@ -26,7 +26,7 @@ class TestAnomalyEdgeCases:
 
     def test_negative_value_in_history_no_crash(self) -> None:  # TC-ANO-14
         """A negative value in the rolling window must not raise an exception."""
-        # Put −5 at position −9 (inside the rolling window slice [−8:−1])
+        # Put -5 at position -9 (inside the rolling window slice [-8:-1])
         history = _costs([100.0] * 6 + [-5.0] + [100.0] * 7 + [500.0])
         # pstdev handles negative values - should not crash
         detect_anomalies(history)  # just assert no exception

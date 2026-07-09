@@ -4,7 +4,7 @@ Mocks httpx to avoid real network calls.
 fetch_costs() is intentionally a no-op (billing API deferred to V1).
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import httpx
@@ -13,8 +13,8 @@ import pytest
 from api.adapters.gemini import GeminiAdapter
 
 KEY = b"AIzaSyTestKey1234567890abcdefghijkl"
-START = datetime(2025, 1, 1, tzinfo=timezone.utc)
-END = datetime(2025, 1, 2, tzinfo=timezone.utc)
+START = datetime(2025, 1, 1, tzinfo=UTC)
+END = datetime(2025, 1, 2, tzinfo=UTC)
 
 
 def _mock_response(status_code: int) -> MagicMock:
@@ -24,6 +24,7 @@ def _mock_response(status_code: int) -> MagicMock:
 
 
 # ── validate() ────────────────────────────────────────────────────────────────
+
 
 class TestValidate:
     def test_returns_true_on_200(self) -> None:
@@ -66,11 +67,14 @@ class TestValidate:
         with patch("api.adapters.gemini.httpx.get", mock_get):
             adapter.validate(KEY)
         call_kwargs = mock_get.call_args
-        params = call_kwargs[1].get("params", {}) or (call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {})
+        params = call_kwargs[1].get("params", {}) or (
+            call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
+        )
         assert "key" in params
 
 
 # ── fetch_costs() ─────────────────────────────────────────────────────────────
+
 
 class TestFetchCosts:
     def test_returns_empty_iterator(self) -> None:

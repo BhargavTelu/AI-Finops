@@ -5,6 +5,7 @@ TC-ENC-01 to TC-ENC-07.
 
 import base64
 
+from cryptography.exceptions import InvalidTag
 import pytest
 
 from api.services.encryption import EncryptionService
@@ -22,7 +23,7 @@ class TestEncryptionServiceInit:
             EncryptionService(_SHORT_KEY_B64)
 
     def test_empty_key_raises(self) -> None:  # TC-ENC-03
-        with pytest.raises(Exception):  # binascii.Error or ValueError
+        with pytest.raises(ValueError):
             EncryptionService("")
 
 
@@ -42,7 +43,7 @@ class TestEncryptDecrypt:
     def test_tampered_ciphertext_raises(self) -> None:  # TC-ENC-05
         blob = bytearray(self.svc.encrypt(b"secret"))
         blob[-1] ^= 0xFF  # flip last byte of GCM auth tag
-        with pytest.raises(Exception):  # InvalidTag or ValueError
+        with pytest.raises(InvalidTag):
             self.svc.decrypt(bytes(blob))
 
     def test_nonce_is_first_12_bytes(self) -> None:  # TC-ENC-06
@@ -62,5 +63,5 @@ class TestEncryptDecrypt:
         key2 = base64.b64encode(b"\x22" * 32).decode()
         svc2 = EncryptionService(key2)
         blob = self.svc.encrypt(b"secret-payload")
-        with pytest.raises(Exception):  # InvalidTag or ValueError from Cryptography
+        with pytest.raises(InvalidTag):
             svc2.decrypt(blob)

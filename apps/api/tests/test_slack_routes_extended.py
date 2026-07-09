@@ -3,10 +3,10 @@ Additional Slack route tests not covered by test_slack_routes.py.
 TC-SLACK-08 and TC-SLACK-09.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -55,7 +55,7 @@ class TestSlackDisconnectExtended:
         fake_token_enc = "\\x" + "aa" * 28
         db.execute.side_effect = [
             MagicMock(data=[{"bot_token_enc": fake_token_enc}]),  # select
-            MagicMock(data=[]),                                    # delete
+            MagicMock(data=[]),  # delete
         ]
         with (
             patch("api.routers.slack._get_supabase", return_value=db),
@@ -74,7 +74,7 @@ class TestSlackDisconnectExtended:
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[{"id": "user-uuid-1"}]),  # users lookup
-            MagicMock(data=[]),                        # upsert
+            MagicMock(data=[]),  # upsert
         ]
         slack_response = {
             "ok": True,
@@ -99,6 +99,7 @@ class TestSlackDisconnectExtended:
 
         # Use a real EncryptionService with a known key so we can verify encryption
         import base64
+
         from api.services.encryption import EncryptionService
 
         test_key = base64.b64encode(b"\xbb" * 32).decode()
@@ -115,6 +116,7 @@ class TestSlackDisconnectExtended:
             mock_settings.slack_redirect_uri = "http://localhost:3000/callback"
             mock_settings.encryption_key = test_key
             from api.services.slack_state import generate_state
+
             resp = client.post(
                 "/api/v1/slack/oauth/callback",
                 json={"code": "valid_code", "state": generate_state(ORG_ID, test_key)},

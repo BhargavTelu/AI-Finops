@@ -36,6 +36,7 @@ def _make_anomaly(
 
 # ── _anomaly_slack_blocks ──────────────────────────────────────────────────────
 
+
 class TestAnomalySlackBlocks:
     def test_high_severity_has_rotating_light(self) -> None:  # TC-NOT-01
         blocks = _anomaly_slack_blocks(_make_anomaly(severity="high"))
@@ -61,6 +62,7 @@ class TestAnomalySlackBlocks:
 
 # ── _budget_slack_blocks ───────────────────────────────────────────────────────
 
+
 class TestBudgetSlackBlocks:
     def test_warning_block_contains_warning_emoji(self) -> None:  # TC-NOT-04
         blocks = _budget_slack_blocks(
@@ -78,6 +80,7 @@ class TestBudgetSlackBlocks:
 
 
 # ── _digest_slack_blocks ───────────────────────────────────────────────────────
+
 
 class TestDigestSlackBlocks:
     def _blocks(self, mom_pct: int | None) -> list[dict[str, Any]]:
@@ -112,6 +115,7 @@ class TestDigestSlackBlocks:
 
 # ── _scope_label ───────────────────────────────────────────────────────────────
 
+
 class TestScopeLabel:
     def test_global_scope(self) -> None:  # TC-NOT-10
         assert _scope_label("global", None) == "all providers (global)"
@@ -122,17 +126,14 @@ class TestScopeLabel:
 
 # ── Email HTML renderers ───────────────────────────────────────────────────────
 
+
 class TestEmailHtml:
     def test_warning_html_renders_with_pct(self) -> None:  # TC-NOT-12
-        html = _warning_email_html(
-            "model: gpt-4o", Decimal("1000"), Decimal("800"), 80
-        )
+        html = _warning_email_html("model: gpt-4o", Decimal("1000"), Decimal("800"), 80)
         assert html  # non-empty string
         assert "80" in html  # pct is in the output
 
     def test_exceeded_html_contains_exceeded(self) -> None:  # TC-NOT-13
-        html = _exceeded_email_html(
-            "model: gpt-4o", Decimal("1000"), Decimal("1200"), 120
-        )
+        html = _exceeded_email_html("model: gpt-4o", Decimal("1000"), Decimal("1200"), 120)
         assert html  # non-empty string
         assert "exceeded" in html.lower()

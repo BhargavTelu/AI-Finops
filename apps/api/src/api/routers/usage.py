@@ -7,6 +7,7 @@ import calendar
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -26,8 +27,11 @@ from api.services.forecast import forecast_month_end
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
+# (day, model) grouping key for the timeseries endpoint
+_DayModelKey = tuple[date, str]
 
-def _get_supabase():
+
+def _get_supabase() -> Any:
     return get_supabase()
 
 
@@ -48,14 +52,14 @@ def _parse_range(range_param: str) -> tuple[date, date]:
 @router.get("/summary")
 def get_summary(
     org: OrgDep,
-    range: str = Query(default="30d", pattern=r"^\d+d$"),
+    range_: str = Query(default="30d", alias="range", pattern=r"^\d+d$"),
 ) -> UsageSummary:
     """
     Headline numbers for the dashboard.
     Reads from daily_cost_summaries - never raw usage_events.
     Target: p95 ≤ 800ms.
     """
-    period_start, period_end = _parse_range(range)
+    period_start, period_end = _parse_range(range_)
     db = _get_supabase()
 
     # Paged past the PostgREST max-rows cap so totals stay correct for orgs
@@ -84,15 +88,17 @@ def get_summary(
 @router.get("/timeseries")
 def get_timeseries(
     org: OrgDep,
-    range: str = Query(default="30d", pattern=r"^\d+d$"),
+    range_: str = Query(default="30d", alias="range", pattern=r"^\d+d$"),
     group_by: str = Query(default="model"),
 ) -> list[DailyPoint]:
     """Daily time-series for line/bar charts."""
     # Only "model" is supported in M1. Tags grouping comes in M2 with the tag engine.
     if group_by != "model":
-        raise HTTPException(status_code=400, detail=f"Unsupported group_by: {group_by}. Use 'model'.")
+        raise HTTPException(
+            status_code=400, detail=f"Unsupported group_by: {group_by}. Use 'model'."
+        )
 
-    period_start, period_end = _parse_range(range)
+    period_start, period_end = _parse_range(range_)
     db = _get_supabase()
 
     # Paged read; output order comes from the points.sort() below, not SQL.
@@ -106,10 +112,11 @@ def get_timeseries(
 
     # Group by (day, model) - multiple tag combinations can produce separate rows
     # for the same day+model pair, so we aggregate in Python.
-    GroupKey = tuple[date, str]
-    groups: dict[GroupKey, dict] = defaultdict(lambda: {"cost": Decimal("0"), "reqs": 0})
+    groups: dict[_DayModelKey, dict[str, Any]] = defaultdict(
+        lambda: {"cost": Decimal("0"), "reqs": 0}
+    )
     for r in rows:
-        k: GroupKey = (date.fromisoformat(r["day"]), r["model"])
+        k: _DayModelKey = (date.fromisoformat(r["day"]), r["model"])
         groups[k]["cost"] += Decimal(str(r["total_cost_usd"]))
         groups[k]["reqs"] += r["total_requests"]
 
@@ -134,7 +141,7 @@ _EXPLORE_DIMENSIONS = frozenset(
 @router.get("/explore")
 def get_explore(
     org: OrgDep,
-    range: str = Query(default="30d", pattern=r"^\d+d$"),
+    range_: str = Query(default="30d", alias="range", pattern=r"^\d+d$"),
     group_by: str = Query(default="model"),
     provider: str | None = Query(default=None),
     model: str | None = Query(default=None),
@@ -153,10 +160,13 @@ def get_explore(
     if group_by not in _EXPLORE_DIMENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid group_by '{group_by}'. Must be one of: {', '.join(sorted(_EXPLORE_DIMENSIONS))}",
+            detail=(
+                f"Invalid group_by '{group_by}'. "
+                f"Must be one of: {', '.join(sorted(_EXPLORE_DIMENSIONS))}"
+            ),
         )
 
-    period_start, period_end = _parse_range(range)
+    period_start, period_end = _parse_range(range_)
     db = _get_supabase()
 
     # Apply any active dimension filters
@@ -169,7 +179,7 @@ def get_explore(
         "env_tag": env_tag,
     }
 
-    def build_query():
+    def build_query() -> Any:
         q = (
             db.table("daily_cost_summaries")
             .select(f"{group_by}, total_cost_usd, total_requests, total_tokens")
@@ -185,7 +195,7 @@ def get_explore(
     rows_data = fetch_all_pages(build_query)
 
     # Group in Python - multiple rows per dimension value when other tag columns differ
-    groups: dict[str, dict] = defaultdict(
+    groups: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"cost": Decimal("0"), "reqs": 0, "tokens": 0}
     )
     for r in rows_data:
@@ -236,7 +246,7 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     )
 
     # Multiple tag-dimension rows can exist per day - aggregate them all in Python.
-    day_totals: dict[date, dict] = {}
+    day_totals: dict[date, dict[str, Any]] = {}
     for row in summary_rows:
         d = date.fromisoformat(row["day"])
         if d not in day_totals:
@@ -280,8 +290,10 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
 
     # Latest complete day (yesterday) vs the day before
     day_period = make_period(
-        yesterday, yesterday,
-        yesterday - timedelta(days=1), yesterday - timedelta(days=1),
+        yesterday,
+        yesterday,
+        yesterday - timedelta(days=1),
+        yesterday - timedelta(days=1),
         "Latest day",
     )
 
@@ -289,8 +301,10 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     w_end = yesterday
     w_start = yesterday - timedelta(days=6)
     week_period = make_period(
-        w_start, w_end,
-        w_start - timedelta(days=7), w_end - timedelta(days=7),
+        w_start,
+        w_end,
+        w_start - timedelta(days=7),
+        w_end - timedelta(days=7),
         "7 days",
     )
 
@@ -298,8 +312,10 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     m_end = yesterday
     m_start = yesterday - timedelta(days=29)
     month_period = make_period(
-        m_start, m_end,
-        m_start - timedelta(days=30), m_end - timedelta(days=30),
+        m_start,
+        m_end,
+        m_start - timedelta(days=30),
+        m_end - timedelta(days=30),
         "30 days",
     )
 
@@ -313,8 +329,10 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     mtd_days = max(0, (mtd_end - mtd_start).days)
     prev_mtd_end = last_month_first + timedelta(days=mtd_days)
     mtd_period = make_period(
-        mtd_start, mtd_end,
-        last_month_first, prev_mtd_end,
+        mtd_start,
+        mtd_end,
+        last_month_first,
+        prev_mtd_end,
         "Month to date",
     )
 
@@ -331,7 +349,7 @@ def get_dashboard_summary(org: OrgDep) -> DashboardSummary:
     )
 
 
-def _fetch_daily_totals(db, org_id: str, start: date, end: date) -> dict[date, Decimal]:
+def _fetch_daily_totals(db: Any, org_id: str, start: date, end: date) -> dict[date, Decimal]:
     """Sum daily_cost_summaries per day over [start, end]. Paged."""
     if start > end:
         return {}
@@ -372,9 +390,7 @@ def get_forecast(org: OrgDep) -> ForecastResult:
     mtd_totals = _fetch_daily_totals(db, org.org_id, month_start, yesterday)
     mtd_daily = _fill_gaps(mtd_totals, month_start, yesterday)
 
-    trailing_totals = _fetch_daily_totals(
-        db, org.org_id, yesterday - timedelta(days=29), yesterday
-    )
+    trailing_totals = _fetch_daily_totals(db, org.org_id, yesterday - timedelta(days=29), yesterday)
     trailing_daily = _fill_gaps(trailing_totals, yesterday - timedelta(days=29), yesterday)
     # Gap-filling turns "no rows at all" into an all-zeros series, which the
     # regression would dutifully forecast as $0.00 - distinguish real zero
@@ -412,6 +428,7 @@ def get_forecast(org: OrgDep) -> ForecastResult:
 
 
 # ── Usage event admin endpoints ────────────────────────────────────────────────
+
 
 @router.get("/events")
 def list_usage_events(
@@ -470,7 +487,7 @@ def override_event_tags(
         raise HTTPException(status_code=404, detail="Usage event not found")
 
     now = datetime.now(UTC).isoformat()
-    patch: dict = {
+    patch: dict[str, Any] = {
         "manual_override": True,
         "manual_override_at": now,
         # manual_override_by stores the Clerk user_id (sub claim); resolved to
@@ -489,22 +506,12 @@ def override_event_tags(
         patch["env_tag"] = body.env_tag
 
     # Best-effort: resolve Clerk sub → Supabase user UUID for the audit column
-    user_lookup = (
-        db.table("users")
-        .select("id")
-        .eq("clerk_id", org.user_id)
-        .limit(1)
-        .execute()
-    )
+    user_lookup = db.table("users").select("id").eq("clerk_id", org.user_id).limit(1).execute()
     if user_lookup.data:
         patch["manual_override_by"] = user_lookup.data[0]["id"]
 
     result = (
-        db.table("usage_events")
-        .update(patch)
-        .eq("id", event_id)
-        .eq("org_id", org.org_id)
-        .execute()
+        db.table("usage_events").update(patch).eq("id", event_id).eq("org_id", org.org_id).execute()
     )
 
     # Trigger re-aggregation so daily_cost_summaries reflect the new tags

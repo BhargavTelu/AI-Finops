@@ -5,17 +5,17 @@ Unit tests for:
   - Anomaly explainer (Feature D): rate-limit, service, Celery task.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     db = MagicMock()
@@ -76,6 +76,7 @@ class TestSlackSettingsEndpoint:
 
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
+
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
             result = slack_settings(SlackSettingsUpdate(alerts_muted=True), org)
 
@@ -93,6 +94,7 @@ class TestSlackSettingsEndpoint:
 
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
+
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
             result = slack_settings(SlackSettingsUpdate(alerts_muted=False), org)
 
@@ -104,6 +106,7 @@ class TestSlackSettingsEndpoint:
 
     def test_returns_404_when_not_connected(self) -> None:
         from fastapi import HTTPException
+
         from api.routers.slack import slack_settings
         from api.schemas.slack import SlackSettingsUpdate
 
@@ -112,6 +115,7 @@ class TestSlackSettingsEndpoint:
 
         with patch("api.routers.slack._get_supabase", return_value=db):
             from api.deps import OrgContext
+
             org = OrgContext(org_id=ORG_ID, user_id="user-1")
             with pytest.raises(HTTPException) as exc_info:
                 slack_settings(SlackSettingsUpdate(alerts_muted=False), org)
@@ -178,10 +182,14 @@ class TestAlertsMutedWorkerGuard:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            patch("api.workers.notifications._get_org_admin_email", return_value="admin@example.com"),
+            patch(
+                "api.workers.notifications._get_org_admin_email", return_value="admin@example.com"
+            ),
             patch("api.workers.budget_checks._compute_scope_spend", return_value=Decimal("420.00")),
-            patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-token", "C1", True)),  # muted
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-token", "C1", True),
+            ),  # muted
             patch("api.workers.notifications.resend"),
             patch("api.workers.notifications.post_message") as mock_post,
         ):
@@ -246,7 +254,9 @@ class TestAnomalyExplainerService:
             patch("api.services.anomaly_explainer.anthropic") as mock_anthropic,
         ):
             mock_settings.anthropic_api_key = "sk-test"
-            mock_anthropic.Anthropic.return_value.messages.create.side_effect = Exception("API error")
+            mock_anthropic.Anthropic.return_value.messages.create.side_effect = Exception(
+                "API error"
+            )
             result = generate_explanation(_anomaly_row(), ORG_ID)
 
         assert result is None
@@ -316,7 +326,7 @@ class TestExplainAnomalyTask:
         from api.workers.anomaly_explainer import explain_anomaly
 
         # Set generated_at to 1 hour ago - within the 24h cache
-        recent_ts = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+        recent_ts = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
         row = {**_anomaly_row(), "explanation_generated_at": recent_ts}
 
         db = _mock_db()
@@ -335,7 +345,7 @@ class TestExplainAnomalyTask:
         from api.workers.anomaly_explainer import explain_anomaly
 
         # Set generated_at to 25 hours ago - past the 24h cache TTL
-        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+        stale_ts = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
         row = {**_anomaly_row(), "explanation_generated_at": stale_ts}
 
         db = _mock_db()

@@ -28,6 +28,7 @@ def headers() -> dict:
 
 # ── TC-E2E-02: Multi-provider ingestion + Cost Explorer ───────────────────────
 
+
 class TestM2MultiProviderCostExplorer:
     """
     TC-E2E-02 (High) - Connect two integrations, seed usage, apply tags, verify explorer.
@@ -64,6 +65,7 @@ class TestM2MultiProviderCostExplorer:
         try:
             # Step 2: Poll for data (backfill + aggregation)
             import time
+
             deadline = time.time() + 300  # 5 minutes
             explorer_data = None
             while time.time() < deadline:
@@ -99,13 +101,15 @@ class TestM2MultiProviderCostExplorer:
                 )
 
             # Step 4: Verify both providers appear in explorer
-            assert explorer_data is not None, (
-                "Cost Explorer returned no data after 5 minutes. Check Celery workers."
-            )
-            providers_returned = {row.get("provider") or row.get("group_value") for row in explorer_data}
-            assert "openai" in providers_returned, (
-                f"OpenAI not in explorer results: {providers_returned}"
-            )
+            assert (
+                explorer_data is not None
+            ), "Cost Explorer returned no data after 5 minutes. Check Celery workers."
+            providers_returned = {
+                row.get("provider") or row.get("group_value") for row in explorer_data
+            }
+            assert (
+                "openai" in providers_returned
+            ), f"OpenAI not in explorer results: {providers_returned}"
 
             # Step 5: Verify feature_tag grouping
             ft_resp = httpx.get(

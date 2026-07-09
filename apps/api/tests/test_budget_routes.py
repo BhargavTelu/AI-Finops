@@ -3,12 +3,12 @@ Unit tests for GET/POST/PATCH/DELETE /budgets.
 Supabase calls are mocked. Auth dependency is overridden.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -36,10 +36,11 @@ def _apply_module_auth_override():
 
 client = TestClient(app)
 
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 
 # ── DB mock helper ─────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     db = MagicMock()
@@ -83,6 +84,7 @@ def _budget_row(
 
 # ── GET /budgets ───────────────────────────────────────────────────────────────
 
+
 class TestListBudgets:
     def test_empty_list(self) -> None:
         db = _mock_db([])
@@ -121,6 +123,7 @@ class TestListBudgets:
 
 # ── POST /budgets ──────────────────────────────────────────────────────────────
 
+
 class TestCreateBudget:
     def _post(self, payload: dict, db: MagicMock) -> tuple:
         with (
@@ -133,9 +136,9 @@ class TestCreateBudget:
         db = _mock_db()
         # Calls: (1) dupe check, (2) user lookup for created_by, (3) insert
         db.execute.side_effect = [
-            MagicMock(data=[]),                              # dupe check → none found
-            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup → resolve clerk_id to UUID
-            MagicMock(data=[_budget_row()]),                  # insert result
+            MagicMock(data=[]),  # dupe check → none found
+            MagicMock(data=[{"id": "user-uuid-001"}]),  # user lookup → resolve clerk_id to UUID
+            MagicMock(data=[_budget_row()]),  # insert result
         ]
         resp = self._post(
             {"scope_type": "global", "monthly_limit": 1000, "alert_at_pct": 80},
@@ -155,8 +158,8 @@ class TestCreateBudget:
     def test_create_model_budget_with_scope_value(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),                              # dupe check
-            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
+            MagicMock(data=[]),  # dupe check
+            MagicMock(data=[{"id": "user-uuid-001"}]),  # user lookup
             MagicMock(data=[_budget_row(scope_type="model", scope_value="gpt-4o")]),  # insert
         ]
         resp = self._post(
@@ -195,9 +198,9 @@ class TestCreateBudget:
     def test_alert_at_pct_defaults_to_80(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),                              # dupe check
-            MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
-            MagicMock(data=[_budget_row()]),                  # insert
+            MagicMock(data=[]),  # dupe check
+            MagicMock(data=[{"id": "user-uuid-001"}]),  # user lookup
+            MagicMock(data=[_budget_row()]),  # insert
         ]
         resp = self._post({"scope_type": "global", "monthly_limit": 1000}, db)
         # If no alert_at_pct provided, the budget row has 80
@@ -205,14 +208,12 @@ class TestCreateBudget:
         assert resp.json()["alert_at_pct"] == 80
 
     def test_all_scope_types_accepted(self) -> None:
-        scope_types = [
-            "provider", "model", "feature_tag", "team_tag", "customer_tag", "env_tag"
-        ]
+        scope_types = ["provider", "model", "feature_tag", "team_tag", "customer_tag", "env_tag"]
         for st in scope_types:
             db = _mock_db()
             db.execute.side_effect = [
-                MagicMock(data=[]),                              # dupe check
-                MagicMock(data=[{"id": "user-uuid-001"}]),       # user lookup
+                MagicMock(data=[]),  # dupe check
+                MagicMock(data=[{"id": "user-uuid-001"}]),  # user lookup
                 MagicMock(data=[_budget_row(scope_type=st, scope_value="test")]),  # insert
             ]
             resp = self._post(
@@ -224,13 +225,14 @@ class TestCreateBudget:
 
 # ── PATCH /budgets/:id ──────────────────────────────────────────────────────────
 
+
 class TestUpdateBudget:
     def test_update_monthly_limit(self) -> None:
         updated = _budget_row(monthly_limit="2000.00")
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[{"id": BUDGET_ID}]),  # ownership check
-            MagicMock(data=[updated]),             # update result
+            MagicMock(data=[updated]),  # update result
         ]
         with (
             patch("api.routers.budgets._get_supabase", return_value=db),
@@ -262,12 +264,13 @@ class TestUpdateBudget:
 
 # ── DELETE /budgets/:id ──────────────────────────────────────────────────────────
 
+
 class TestDeleteBudget:
     def test_delete_own_budget_returns_204(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[{"id": BUDGET_ID}]),  # ownership check
-            MagicMock(data=[]),                   # delete
+            MagicMock(data=[]),  # delete
         ]
         with patch("api.routers.budgets._get_supabase", return_value=db):
             resp = client.delete(f"/api/v1/budgets/{BUDGET_ID}")
@@ -281,6 +284,7 @@ class TestDeleteBudget:
 
 
 # ── TC-BUD-20: PATCH /budgets/:id with hard_cap only ─────────────────────────
+
 
 class TestBudgetPatchHardCapNotPatchable:
     """TC-BUD-20 - PATCH with only hard_cap (not in patchable set) → 422."""
@@ -310,6 +314,7 @@ class TestBudgetPatchHardCapNotPatchable:
 
 # ── TC-BUD-21: _compute_mtd_spend with env_tag scope ─────────────────────────
 
+
 class TestComputeMtdSpendEnvTagScope:
     """TC-BUD-21 - _compute_mtd_spend filters by env_tag when scope_type='env_tag'."""
 
@@ -319,8 +324,6 @@ class TestComputeMtdSpendEnvTagScope:
         db = _mock_db([{"total_cost_usd": "150.00"}, {"total_cost_usd": "50.00"}])
         eq_calls: list = []
 
-        original_eq = db.eq.side_effect
-
         def track_eq(col, val):
             eq_calls.append((col, val))
             return db
@@ -329,20 +332,24 @@ class TestComputeMtdSpendEnvTagScope:
 
         result = _compute_mtd_spend(db, "org-111", "env_tag", "production")
 
-        assert ("env_tag", "production") in eq_calls, (
-            f"Expected .eq('env_tag', 'production') filter, got eq calls: {eq_calls}"
-        )
+        assert (
+            "env_tag",
+            "production",
+        ) in eq_calls, f"Expected .eq('env_tag', 'production') filter, got eq calls: {eq_calls}"
         from decimal import Decimal
+
         assert result == Decimal("200.00"), f"Expected 200.00, got {result}"
 
 
 # ── TC-BUD-22: _to_budget_read with zero monthly_limit ───────────────────────
+
 
 class TestToBudgetReadZeroMonthlyLimit:
     """TC-BUD-22 - _to_budget_read with monthly_limit=0.00 must not raise ZeroDivisionError."""
 
     def test_zero_monthly_limit_returns_zero_spent_pct(self) -> None:
         from decimal import Decimal
+
         from api.routers.budgets import _to_budget_read
 
         row = _budget_row(monthly_limit="0.00")

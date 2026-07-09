@@ -14,8 +14,8 @@ import json
 
 import pytest
 
-
 # ── Gap-28: Encryption key validation ─────────────────────────────────────────
+
 
 class TestEncryptionKeyValidation:
     """Gap-28 (medium): Settings silently accepts encryption_key="" - no startup guard."""
@@ -47,9 +47,9 @@ class TestEncryptionKeyValidation:
         with pytest.raises(ValueError) as exc_info:
             EncryptionService(short_key)
 
-        assert "32" in str(exc_info.value), (
-            f"Gap-28: Expected '32 bytes' in error message. Got: {exc_info.value}"
-        )
+        assert "32" in str(
+            exc_info.value
+        ), f"Gap-28: Expected '32 bytes' in error message. Got: {exc_info.value}"
 
     def test_non_base64_key_raises_decode_error(self) -> None:
         """
@@ -58,7 +58,7 @@ class TestEncryptionKeyValidation:
         """
         from api.services.encryption import EncryptionService
 
-        with pytest.raises(Exception):
+        with pytest.raises(ValueError):
             EncryptionService("not-valid-base64-!!!$%^&*")
 
     def test_valid_32_byte_key_accepted(self) -> None:
@@ -82,7 +82,6 @@ class TestEncryptionKeyValidation:
         """
         # Test the validator logic directly (avoid constructing full Settings with all
         # required env vars which would need real values or extensive mocking)
-        import base64 as _b64
 
         # These are the values that SHOULD be rejected by Settings but currently aren't:
         bad_keys = ["", "not-base64", "too-short", "a" * 10]
@@ -100,6 +99,7 @@ class TestEncryptionKeyValidation:
 
 
 # ── Gap-29: CORS_ORIGINS validation ───────────────────────────────────────────
+
 
 class TestCorsOriginsValidation:
     """Gap-29 (medium): parse_cors raises JSONDecodeError for plain string CORS_ORIGINS."""
@@ -158,9 +158,9 @@ class TestCorsOriginsValidation:
         # parse_cors itself won't raise for valid JSON - it returns whatever json.loads gives
         result = Settings.parse_cors('{"origins": ["http://localhost:3000"]}')
         # Returns a dict, which Pydantic field validation would later reject
-        assert isinstance(result, dict), (
-            "parse_cors returns a dict for a JSON object - Pydantic will reject it as list[str]"
-        )
+        assert isinstance(
+            result, dict
+        ), "parse_cors returns a dict for a JSON object - Pydantic will reject it as list[str]"
 
     def test_empty_json_array_produces_empty_list(self) -> None:
         """'[]' (empty JSON array) → empty list of CORS origins."""

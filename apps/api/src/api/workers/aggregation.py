@@ -6,11 +6,12 @@ Uses UPSERT so it's idempotent - safe to re-run on failure.
 """
 
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.config import settings
@@ -20,8 +21,11 @@ log = structlog.get_logger()
 
 _PAGE_SIZE = 1000
 
+# (day, provider, model, feature_tag, team_tag, customer_tag, env_tag)
+_SummaryKey = tuple[date, str, str, str, str, str, str]
 
-def _get_supabase():
+
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
@@ -47,7 +51,7 @@ def aggregate_org(org_id: str) -> None:
     """
     db = _get_supabase()
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     from_date = today - timedelta(days=31)
 
     # Only aggregate events from non-revoked integrations so revoking an
@@ -73,7 +77,7 @@ def aggregate_org(org_id: str) -> None:
 
     # Paginate through usage_events scoped to active integrations only
     offset = 0
-    all_rows: list[dict] = []
+    all_rows: list[dict[str, Any]] = []
     while True:
         result = (
             db.table("usage_events")
@@ -103,8 +107,7 @@ def aggregate_org(org_id: str) -> None:
 
     # Group in Python: (day, provider, model, feature_tag, team_tag, customer_tag, env_tag)
     # → {total_cost_usd, total_requests, total_tokens}
-    GroupKey = tuple[date, str, str, str, str, str, str]
-    groups: dict[GroupKey, dict] = defaultdict(
+    groups: dict[_SummaryKey, dict[str, Any]] = defaultdict(
         lambda: {"total_cost_usd": Decimal("0"), "total_requests": 0, "total_tokens": 0}
     )
 
@@ -112,10 +115,10 @@ def aggregate_org(org_id: str) -> None:
         # Supabase returns TIMESTAMPTZ as an ISO string; parse it and floor to UTC date
         bucket_dt = datetime.fromisoformat(row["bucket_hour"])
         if bucket_dt.tzinfo is None:
-            bucket_dt = bucket_dt.replace(tzinfo=timezone.utc)
-        row_date = bucket_dt.astimezone(timezone.utc).date()
+            bucket_dt = bucket_dt.replace(tzinfo=UTC)
+        row_date = bucket_dt.astimezone(UTC).date()
 
-        key: GroupKey = (
+        key: _SummaryKey = (
             row_date,
             row["provider"],
             row["model"],

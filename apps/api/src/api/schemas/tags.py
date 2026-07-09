@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -35,7 +35,7 @@ class TagRuleRead(BaseModel):
     match_pattern: str
     priority: int
     enabled: bool
-    tags: dict | None = None  # joined tag info: {"type": ..., "name": ...}
+    tags: dict[str, Any] | None = None  # joined tag info: {"type": ..., "name": ...}
 
     model_config = {"from_attributes": True}
 

@@ -9,6 +9,7 @@ CFO PDF report endpoints (Phase 1 / FR-22).
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 import redis as redis_lib
@@ -28,11 +29,11 @@ _DOWNLOAD_TTL_SECONDS = 600
 _GENERATE_LIMIT_PER_DAY = 3
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
-def _to_read(row: dict) -> ReportRead:
+def _to_read(row: dict[str, Any]) -> ReportRead:
     return ReportRead(
         id=row["id"],
         org_id=row["org_id"],

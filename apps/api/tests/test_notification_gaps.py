@@ -7,11 +7,8 @@ Gap-24 (high): send_budget_alert retry exhaustion - alert lost after max_retries
                Slack must not be called when email fails (design intent: email first).
 """
 
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 BUDGET_ID = "cccccccc-0000-0000-0000-000000000001"
@@ -39,6 +36,7 @@ def _mock_db() -> MagicMock:
 
 # ── Gap-23: Digest idempotency race ───────────────────────────────────────────
 
+
 class TestDigestIdempotencyRace:
     """
     Gap-23 (high): send_slack_digest checks slack_digests BEFORE posting, writes AFTER.
@@ -64,16 +62,21 @@ class TestDigestIdempotencyRace:
 
         with (
             patch("api.workers.notifications._get_supabase") as mock_get_db,
-            patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-test-token", "C1234567", False)),
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-test-token", "C1234567", False),
+            ),
             patch("api.workers.notifications.post_message", side_effect=mock_post),
-            patch("api.workers.notifications._fetch_digest_data", return_value={
-                "yesterday_usd": Decimal("10.00"),
-                "avg_7d_usd": Decimal("8.00"),
-                "mom_pct": 5,
-                "top_drivers": [],
-                "open_anomaly_count": 0,
-            }),
+            patch(
+                "api.workers.notifications._fetch_digest_data",
+                return_value={
+                    "yesterday_usd": Decimal("10.00"),
+                    "avg_7d_usd": Decimal("8.00"),
+                    "mom_pct": 5,
+                    "top_drivers": [],
+                    "open_anomaly_count": 0,
+                },
+            ),
         ):
             db = _mock_db()
             mock_get_db.return_value = db
@@ -92,9 +95,9 @@ class TestDigestIdempotencyRace:
             send_slack_digest.apply(args=[ORG_ID])
 
         # The digest was posted (Slack received the message)
-        assert post_call_count[0] == 1, (
-            "post_message should have been called once even though DB write failed."
-        )
+        assert (
+            post_call_count[0] == 1
+        ), "post_message should have been called once even though DB write failed."
         # On a retry: idempotency_check.data would still be [] (no DB record exists)
         # → post_message would be called again → duplicate digest.
 
@@ -142,17 +145,23 @@ class TestDigestIdempotencyRace:
 
         with (
             patch("api.workers.notifications._get_supabase") as mock_get_db,
-            patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-test", "C1234", False)),
-            patch("api.workers.notifications.post_message",
-                  side_effect=ValueError("Slack API error")),
-            patch("api.workers.notifications._fetch_digest_data", return_value={
-                "yesterday_usd": Decimal("5.00"),
-                "avg_7d_usd": Decimal("5.00"),
-                "mom_pct": None,
-                "top_drivers": [],
-                "open_anomaly_count": 0,
-            }),
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-test", "C1234", False),
+            ),
+            patch(
+                "api.workers.notifications.post_message", side_effect=ValueError("Slack API error")
+            ),
+            patch(
+                "api.workers.notifications._fetch_digest_data",
+                return_value={
+                    "yesterday_usd": Decimal("5.00"),
+                    "avg_7d_usd": Decimal("5.00"),
+                    "mom_pct": None,
+                    "top_drivers": [],
+                    "open_anomaly_count": 0,
+                },
+            ),
         ):
             db = _mock_db()
             mock_get_db.return_value = db
@@ -166,6 +175,7 @@ class TestDigestIdempotencyRace:
 
 
 # ── Gap-24: Budget alert retry exhaustion ─────────────────────────────────────
+
 
 class TestBudgetAlertRetryExhaustion:
     """
@@ -217,10 +227,11 @@ class TestBudgetAlertRetryExhaustion:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            patch("api.workers.budget_checks._compute_scope_spend",
-                  return_value=Decimal("850.00")),
-            patch("api.workers.notifications.resend.Emails.send",
-                  side_effect=Exception("Resend API rate limit")),
+            patch("api.workers.budget_checks._compute_scope_spend", return_value=Decimal("850.00")),
+            patch(
+                "api.workers.notifications.resend.Emails.send",
+                side_effect=Exception("Resend API rate limit"),
+            ),
             patch("api.workers.notifications.post_message", side_effect=track_slack),
             patch("api.workers.notifications.settings") as ms,
         ):
@@ -250,11 +261,12 @@ class TestBudgetAlertRetryExhaustion:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            patch("api.workers.budget_checks._compute_scope_spend",
-                  return_value=Decimal("850.00")),
+            patch("api.workers.budget_checks._compute_scope_spend", return_value=Decimal("850.00")),
             patch("api.workers.notifications.resend.Emails.send", return_value={}),
-            patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-token", "C1234", False)),
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-token", "C1234", False),
+            ),
             patch("api.workers.notifications.post_message", side_effect=track_slack),
             patch("api.workers.notifications.settings") as ms,
         ):
@@ -299,8 +311,7 @@ class TestBudgetAlertRetryExhaustion:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            patch("api.workers.budget_checks._compute_scope_spend",
-                  return_value=Decimal("850.00")),
+            patch("api.workers.budget_checks._compute_scope_spend", return_value=Decimal("850.00")),
             patch("api.workers.notifications.resend.Emails.send") as mock_send,
             patch("api.workers.notifications.settings") as ms,
         ):
@@ -326,14 +337,15 @@ class TestBudgetAlertRetryExhaustion:
 
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
-            patch("api.workers.budget_checks._compute_scope_spend",
-                  return_value=Decimal("850.00")),
-            patch("api.workers.notifications.resend.Emails.send",
-                  side_effect=count_email),
-            patch("api.workers.notifications._get_slack_channel",
-                  return_value=("xoxb-token", "C1234", False)),
-            patch("api.workers.notifications.post_message",
-                  side_effect=Exception("Slack API down")),
+            patch("api.workers.budget_checks._compute_scope_spend", return_value=Decimal("850.00")),
+            patch("api.workers.notifications.resend.Emails.send", side_effect=count_email),
+            patch(
+                "api.workers.notifications._get_slack_channel",
+                return_value=("xoxb-token", "C1234", False),
+            ),
+            patch(
+                "api.workers.notifications.post_message", side_effect=Exception("Slack API down")
+            ),
             patch("api.workers.notifications.settings") as ms,
         ):
             ms.resend_api_key = "re_test"
@@ -341,6 +353,6 @@ class TestBudgetAlertRetryExhaustion:
             send_budget_alert.apply(args=[BUDGET_ID, 80, ORG_ID])
 
         # Email was sent exactly once despite Slack failing
-        assert email_call_count[0] == 1, (
-            "Email must be sent exactly once regardless of Slack failure."
-        )
+        assert (
+            email_call_count[0] == 1
+        ), "Email must be sent exactly once regardless of Slack failure."

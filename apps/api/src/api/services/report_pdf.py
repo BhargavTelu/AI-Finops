@@ -90,14 +90,14 @@ def _summary_cards(pdf: _ReportPDF, data: MonthlyReportData) -> None:
 
     card_w = _page_width(pdf) / len(cards)
     y = pdf.get_y()
-    for i, (label, value, color) in enumerate(cards):
+    for i, (label, value, card_color) in enumerate(cards):
         x = _MARGIN + i * card_w
         pdf.set_xy(x, y)
         pdf.set_font("helvetica", size=8)
         pdf.set_text_color(*_SLATE)
         pdf.cell(card_w, 5, label.upper(), new_x="LEFT", new_y="NEXT")
         pdf.set_font("helvetica", style="B", size=13)
-        pdf.set_text_color(*(color or _BODY_TEXT))
+        pdf.set_text_color(*(card_color or _BODY_TEXT))
         pdf.cell(card_w, 7, value)
     pdf.set_y(y + 16)
 
@@ -143,8 +143,13 @@ def _spend_table(pdf: _ReportPDF, lines: list[SpendLine], label_header: str) -> 
         pdf.cell(cols[1], 6, f"{_money(line.cost_usd)}  ", fill=fill, align="R")
         pdf.cell(cols[2], 6, f"{_count(line.requests)}  ", fill=fill, align="R")
         pdf.cell(
-            cols[3], 6, f"{line.pct_of_total:.1f}%  ",
-            fill=fill, align="R", new_x="LMARGIN", new_y="NEXT",
+            cols[3],
+            6,
+            f"{line.pct_of_total:.1f}%  ",
+            fill=fill,
+            align="R",
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
 
 
@@ -166,13 +171,15 @@ def _anomaly_section(pdf: _ReportPDF, count: int, anomalies: list[AnomalyLine]) 
         pdf.set_font("helvetica", size=9)
         pdf.set_text_color(*_BODY_TEXT)
         pdf.cell(
-            0, 6,
+            0,
+            6,
             _latin1(
                 f"{anomaly.detected_on}  {anomaly.scope_value[:40]}: "
                 f"{_money(anomaly.baseline_usd)}/day baseline to {_money(anomaly.actual_usd)} "
                 f"(+{anomaly.spike_pct}%)"
             ),
-            new_x="LMARGIN", new_y="NEXT",
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
 
 
@@ -181,19 +188,23 @@ def _savings_section(pdf: _ReportPDF, data: MonthlyReportData) -> None:
     pdf.set_text_color(*_BODY_TEXT)
     if data.applied_recs_count == 0:
         pdf.cell(
-            0, 6,
+            0,
+            6,
             "No savings recommendations were applied this period.",
-            new_x="LMARGIN", new_y="NEXT",
+            new_x="LMARGIN",
+            new_y="NEXT",
         )
         return
     plural = "recommendation" if data.applied_recs_count == 1 else "recommendations"
     pdf.set_text_color(*_GREEN)
     pdf.set_font("helvetica", style="B", size=9)
     pdf.cell(
-        0, 6,
+        0,
+        6,
         f"{data.applied_recs_count} savings {plural} applied, "
         f"projected {_money(data.applied_savings_usd)}/month saved.",
-        new_x="LMARGIN", new_y="NEXT",
+        new_x="LMARGIN",
+        new_y="NEXT",
     )
 
 
@@ -231,7 +242,8 @@ def render_pdf(data: MonthlyReportData) -> bytes:
     pdf.set_text_color(*_SLATE)
     pdf.ln(4)
     pdf.multi_cell(
-        0, 4,
+        0,
+        4,
         f"Generated on {data.generated_on:%Y-%m-%d}. OpenAI figures come from the provider "
         "Cost API. Anthropic figures are computed from list pricing and may drift slightly "
         "from your invoice.",

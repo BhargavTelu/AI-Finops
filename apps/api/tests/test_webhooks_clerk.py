@@ -9,12 +9,12 @@ Svix signature verification uses HMAC-SHA256:
 """
 
 import base64
+from datetime import UTC
 import hashlib
 import hmac
 import json
 import time
 from unittest.mock import MagicMock, patch
-from uuid import UUID
 
 from fastapi.testclient import TestClient
 
@@ -28,6 +28,7 @@ _SECRET_KEY = base64.b64decode(_WEBHOOK_SECRET.removeprefix("whsec_"))
 
 
 # ── Signature helpers ──────────────────────────────────────────────────────────
+
 
 def _make_signature(svix_id: str, svix_timestamp: str, body: bytes) -> str:
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
@@ -55,6 +56,7 @@ def _post_webhook(payload: dict, ts: int | None = None, bad_sig: bool = False) -
 
 
 # ── Signature verification ─────────────────────────────────────────────────────
+
 
 class TestSvixSignatureVerification:
     def test_valid_signature_passes(self) -> None:  # TC-WH-01
@@ -99,11 +101,10 @@ class TestSvixSignatureVerification:
 
 # ── user.created handler ───────────────────────────────────────────────────────
 
+
 class TestUserCreatedHandler:
     def _user_payload(self, email: str | None = "test@example.com") -> dict:
-        emails = (
-            [{"id": "email_1", "email_address": email}] if email else []
-        )
+        emails = [{"id": "email_1", "email_address": email}] if email else []
         return {
             "type": "user.created",
             "data": {
@@ -119,9 +120,7 @@ class TestUserCreatedHandler:
         db = MagicMock()
         db.table.return_value = db
         db.upsert.return_value = db
-        db.execute.return_value = MagicMock(
-            data=[{"id": "aaaaaaaa-0000-0000-0000-000000000001"}]
-        )
+        db.execute.return_value = MagicMock(data=[{"id": "aaaaaaaa-0000-0000-0000-000000000001"}])
 
         with (
             patch("api.routers.webhooks._service_db", return_value=db),
@@ -147,6 +146,7 @@ class TestUserCreatedHandler:
 
 # ── organization.created handler ──────────────────────────────────────────────
 
+
 class TestOrgCreatedHandler:
     def _org_payload(self) -> dict:
         return {
@@ -161,9 +161,7 @@ class TestOrgCreatedHandler:
         db = MagicMock()
         db.table.return_value = db
         db.upsert.return_value = db
-        db.execute.return_value = MagicMock(
-            data=[{"id": "bbbbbbbb-0000-0000-0000-000000000001"}]
-        )
+        db.execute.return_value = MagicMock(data=[{"id": "bbbbbbbb-0000-0000-0000-000000000001"}])
 
         with (
             patch("api.routers.webhooks._service_db", return_value=db),
@@ -178,14 +176,12 @@ class TestOrgCreatedHandler:
         assert upsert_data["plan"] == "trial"
 
     def test_org_created_sets_14_day_trial(self) -> None:  # TC-WH-08
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime
 
         db = MagicMock()
         db.table.return_value = db
         db.upsert.return_value = db
-        db.execute.return_value = MagicMock(
-            data=[{"id": "bbbbbbbb-0000-0000-0000-000000000001"}]
-        )
+        db.execute.return_value = MagicMock(data=[{"id": "bbbbbbbb-0000-0000-0000-000000000001"}])
 
         with (
             patch("api.routers.webhooks._service_db", return_value=db),
@@ -198,13 +194,14 @@ class TestOrgCreatedHandler:
         # Parse and check it's ~14 days from now
         trial_ends = datetime.fromisoformat(trial_ends_str)
         if trial_ends.tzinfo is None:
-            trial_ends = trial_ends.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+            trial_ends = trial_ends.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
         diff_days = (trial_ends - now).days
         assert 13 <= diff_days <= 14
 
 
 # ── organizationMembership.created handler ────────────────────────────────────
+
 
 class TestMembershipCreatedHandler:
     def _membership_payload(self, role: str = "org:admin") -> dict:
@@ -225,9 +222,9 @@ class TestMembershipCreatedHandler:
         db.upsert.return_value = db
         db.single.return_value = db
         db.execute.side_effect = [
-            MagicMock(data={"id": "user-db-uuid"}),   # users.single()
-            MagicMock(data={"id": "org-db-uuid"}),    # organizations.single()
-            MagicMock(data=[]),                        # upsert
+            MagicMock(data={"id": "user-db-uuid"}),  # users.single()
+            MagicMock(data={"id": "org-db-uuid"}),  # organizations.single()
+            MagicMock(data=[]),  # upsert
         ]
         return db
 
@@ -248,6 +245,7 @@ class TestMembershipCreatedHandler:
 
 # ── Unhandled event ────────────────────────────────────────────────────────────
 
+
 class TestUnhandledEvent:
     def test_unhandled_event_type_returns_200_no_db_write(self) -> None:  # TC-WH-11
         db = MagicMock()
@@ -261,6 +259,7 @@ class TestUnhandledEvent:
 
 
 # ── TC-WH-21: Unhandled event logs at DEBUG ───────────────────────────────────
+
 
 class TestUnhandledEventLogging:
     """TC-WH-21 - Clerk webhook logs clerk_webhook_unhandled_event at DEBUG for unknown events."""
@@ -286,8 +285,9 @@ class TestUnhandledEventLogging:
 
 # ── TC-WH-22: _write_clerk_metadata httpx failure is non-fatal ───────────────
 
+
 class TestWriteClerkMetadataHttpxFailure:
-    """TC-WH-22 - httpx.ConnectError in _write_clerk_metadata is caught; webhook still returns 200."""
+    """TC-WH-22 - httpx.ConnectError in _write_clerk_metadata is caught; webhook returns 200."""
 
     def test_httpx_connect_error_is_non_fatal(self) -> None:
         """TC-WH-22 - ConnectError logged as warning, webhook handler returns 200."""
@@ -296,9 +296,7 @@ class TestWriteClerkMetadataHttpxFailure:
         db = MagicMock()
         db.table.return_value = db
         db.upsert.return_value = db
-        db.execute.return_value = MagicMock(
-            data=[{"id": "aaaaaaaa-0000-0000-0000-000000000001"}]
-        )
+        db.execute.return_value = MagicMock(data=[{"id": "aaaaaaaa-0000-0000-0000-000000000001"}])
 
         payload = {
             "type": "user.created",
@@ -326,6 +324,7 @@ class TestWriteClerkMetadataHttpxFailure:
 
 
 # ── TC-WH-24: Membership race condition - PostgREST error dict returns 500 ────
+
 
 class TestMembershipErrorDictGuard:
     """TC-WH-24 - PostgREST error dict ({"code": "PGRST116"}) triggers 500 for Svix retry."""

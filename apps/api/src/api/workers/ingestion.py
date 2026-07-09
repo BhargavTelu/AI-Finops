@@ -5,11 +5,12 @@ Ingestion workers.
   refresh_integration - incremental fetch since last_synced_at
 """
 
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.adapters.anthropic import AnthropicAdapter
@@ -27,17 +28,18 @@ _BATCH_SIZE = 500
 
 # ── Manual override helpers ────────────────────────────────────────────────────
 
+
 def _norm_bucket_hour(ts: str) -> str:
     """Normalise a timestamptz string (DB or ISO) to a canonical UTC isoformat."""
     dt = datetime.fromisoformat(ts.replace(" ", "T"))
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).isoformat()
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
 
 
 def _snapshot_overrides(
-    db, org_id: str, integration_id: str, start: datetime, end: datetime
-) -> dict[tuple[str, str, str], dict]:
+    db: Any, org_id: str, integration_id: str, start: datetime, end: datetime
+) -> dict[tuple[str, str, str], dict[str, Any]]:
     """
     Before delete-before-insert, fetch all manually-pinned rows for this window.
     Returns a dict keyed by (model, api_key_label, normalised_bucket_hour) so
@@ -57,7 +59,7 @@ def _snapshot_overrides(
         .lt("bucket_hour", end.isoformat())
         .execute()
     )
-    snapshot: dict[tuple[str, str, str], dict] = {}
+    snapshot: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in result.data:
         # 'model' is NOT NULL in the schema; skip malformed rows defensively.
         if not row.get("model") or not row.get("bucket_hour"):
@@ -76,7 +78,11 @@ def _snapshot_overrides(
 
 
 def _restore_overrides(
-    db, org_id: str, integration_id: str, rows: list[dict], snapshot: dict
+    db: Any,
+    org_id: str,
+    integration_id: str,
+    rows: list[dict[str, Any]],
+    snapshot: dict[tuple[str, str, str], dict[str, Any]],
 ) -> None:
     """Patch back pinned tag values for any re-inserted row that had a manual override."""
     for row in rows:
@@ -94,6 +100,7 @@ def _restore_overrides(
             .execute()
         )
 
+
 # Map provider slug → adapter instance
 _ADAPTERS: dict[str, Any] = {
     "openai": OpenAIAdapter(),
@@ -102,11 +109,11 @@ _ADAPTERS: dict[str, Any] = {
 }
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
-def _chunks(lst: list, n: int):
+def _chunks(lst: list[Any], n: int) -> Iterator[list[Any]]:
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
@@ -115,12 +122,12 @@ def _chunks(lst: list, n: int):
 def _floor_utc_day(dt: datetime) -> datetime:
     """Floor a datetime to 00:00 UTC of its calendar day (tz-aware)."""
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _ingest_window(
-    db,
+    db: Any,
     integration_id: str,
     org_id: str,
     provider: str,
@@ -200,7 +207,7 @@ def _ingest_window(
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def backfill_integration(self, integration_id: str, org_id: str) -> None:  # type: ignore[misc]
+def backfill_integration(self: Any, integration_id: str, org_id: str) -> None:
     """
     Pull 30 days of historical data from the provider.
     Triggered immediately after a new integration is created.
@@ -233,7 +240,7 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
             enc_hex = enc_hex[2:]
         key_bytes = cipher.decrypt(bytes.fromhex(enc_hex))
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = now - timedelta(days=_BACKFILL_DAYS)
 
         count = _ingest_window(db, integration_id, org_id, row["provider"], key_bytes, start, now)
@@ -242,8 +249,11 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
             {"last_synced_at": now.isoformat(), "last_error": None, "status": "active"}
         ).eq("id", integration_id).eq("org_id", org_id).execute()
 
-        # Trigger aggregation immediately so charts are populated without waiting for the nightly run
-        from api.workers.aggregation import aggregate_org  # local import avoids circular dep at module load
+        # Trigger aggregation immediately so charts are populated without
+        # waiting for the nightly run
+        from api.workers.aggregation import (
+            aggregate_org,  # local import avoids circular dep at module load
+        )
 
         aggregate_org.delay(org_id)
 
@@ -256,9 +266,9 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
         )
 
     except Exception as exc:
-        db.table("integrations").update(
-            {"last_error": str(exc)[:500], "status": "error"}
-        ).eq("id", integration_id).eq("org_id", org_id).execute()
+        db.table("integrations").update({"last_error": str(exc)[:500], "status": "error"}).eq(
+            "id", integration_id
+        ).eq("org_id", org_id).execute()
 
         log.error(
             "backfill_failed",
@@ -266,7 +276,7 @@ def backfill_integration(self, integration_id: str, org_id: str) -> None:  # typ
             integration_id=integration_id,
             error=str(exc),
         )
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc
 
 
 @shared_task
@@ -282,10 +292,7 @@ def refresh_all_integrations() -> None:
     """
     db = _get_supabase()
     result = (
-        db.table("integrations")
-        .select("id, org_id")
-        .in_("status", ["active", "error"])
-        .execute()
+        db.table("integrations").select("id, org_id").in_("status", ["active", "error"]).execute()
     )
 
     for row in result.data:
@@ -295,7 +302,7 @@ def refresh_all_integrations() -> None:
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=60)
-def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type: ignore[misc]
+def refresh_integration(self: Any, integration_id: str, org_id: str) -> None:
     """Fetch incremental data (since last_synced_at) for a single integration."""
     db = _get_supabase()
 
@@ -323,12 +330,12 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
             enc_hex = enc_hex[2:]
         key_bytes = cipher.decrypt(bytes.fromhex(enc_hex))
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Fall back to 4h lookback if no prior sync - matches the beat cadence
         if row.get("last_synced_at"):
             start = datetime.fromisoformat(row["last_synced_at"])
             if start.tzinfo is None:
-                start = start.replace(tzinfo=timezone.utc)
+                start = start.replace(tzinfo=UTC)
         else:
             start = now - timedelta(hours=4)
 
@@ -349,9 +356,9 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
         )
 
     except Exception as exc:
-        db.table("integrations").update(
-            {"last_error": str(exc)[:500], "status": "error"}
-        ).eq("id", integration_id).eq("org_id", org_id).execute()
+        db.table("integrations").update({"last_error": str(exc)[:500], "status": "error"}).eq(
+            "id", integration_id
+        ).eq("org_id", org_id).execute()
 
         log.error(
             "refresh_failed",
@@ -359,4 +366,4 @@ def refresh_integration(self, integration_id: str, org_id: str) -> None:  # type
             integration_id=integration_id,
             error=str(exc),
         )
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from exc

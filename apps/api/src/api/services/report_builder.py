@@ -10,6 +10,7 @@ import calendar
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ def _to_decimal(value: object) -> Decimal:
     return Decimal(str(value or "0"))
 
 
-def _group_spend(rows: list[dict], key: str, total: Decimal) -> list[SpendLine]:
+def _group_spend(rows: list[dict[str, Any]], key: str, total: Decimal) -> list[SpendLine]:
     """Group summary rows by a column, sorted by cost desc, top N + pct of total."""
     costs: dict[str, Decimal] = {}
     requests: dict[str, int] = {}
@@ -106,10 +107,10 @@ def build_report_data(
     period_start: date,
     period_end: date,
     generated_on: date,
-    current_rows: list[dict],
-    prev_month_rows: list[dict],
-    anomaly_rows: list[dict],
-    applied_rec_rows: list[dict],
+    current_rows: list[dict[str, Any]],
+    prev_month_rows: list[dict[str, Any]],
+    anomaly_rows: list[dict[str, Any]],
+    applied_rec_rows: list[dict[str, Any]],
 ) -> MonthlyReportData:
     """
     current_rows / prev_month_rows: daily_cost_summaries dicts.
@@ -120,9 +121,7 @@ def build_report_data(
     total_requests = sum(int(r.get("total_requests") or 0) for r in current_rows)
     total_tokens = sum(int(r.get("total_tokens") or 0) for r in current_rows)
 
-    prev_total = sum(
-        (_to_decimal(r.get("total_cost_usd")) for r in prev_month_rows), Decimal("0")
-    )
+    prev_total = sum((_to_decimal(r.get("total_cost_usd")) for r in prev_month_rows), Decimal("0"))
     has_prev = bool(prev_month_rows) and prev_total > 0
     mom_delta_pct = float((total - prev_total) / prev_total * 100) if has_prev else None
 
@@ -138,9 +137,9 @@ def build_report_data(
             spike_pct=int(row.get("spike_pct") or 0),
             severity=str(row.get("severity") or "low"),
         )
-        for row in sorted(
-            anomaly_rows, key=lambda r: int(r.get("spike_pct") or 0), reverse=True
-        )[:3]
+        for row in sorted(anomaly_rows, key=lambda r: int(r.get("spike_pct") or 0), reverse=True)[
+            :3
+        ]
     ]
 
     applied_savings = sum(

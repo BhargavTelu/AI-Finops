@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { Plus, Tag as TagIcon, Trash2, Layers } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +34,6 @@ import { Separator } from "@/components/ui/separator";
 interface Props {
   tags: Tag[];
   rules: TagRule[];
-  token: string;
 }
 
 const TAG_TYPE_LABELS: Record<TagType, string> = {
@@ -56,10 +56,16 @@ const MATCH_TYPE_LABELS: Record<MatchType, string> = {
   regex: "Regex",
 };
 
-export function TagsClient({ tags: initialTags, rules: initialRules, token }: Props) {
+export function TagsClient({ tags: initialTags, rules: initialRules }: Props) {
   const router = useRouter();
   const { toast } = useToast();
-  const api = createApiClient(token);
+  const { getToken } = useAuth();
+
+  // Clerk session tokens expire after ~60s - fetch a fresh one per request
+  // instead of reusing a token minted at page render time.
+  async function api() {
+    return createApiClient((await getToken())!);
+  }
 
   const [tags, setTags] = useState<Tag[]>(initialTags);
   const [rules, setRules] = useState<TagRule[]>(initialRules);
@@ -113,7 +119,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
     setTagError("");
     setTagSubmitting(true);
     try {
-      const created = await api.post<Tag>("/tags", {
+      const created = await (await api()).post<Tag>("/tags", {
         type: newTagType,
         name: newTagName.trim(),
         color: newTagColor,
@@ -133,7 +139,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
     if (!deleteTagTarget) return;
     setDeleting(true);
     try {
-      await api.delete(`/tags/${deleteTagTarget.id}`);
+      await (await api()).delete(`/tags/${deleteTagTarget.id}`);
       setTags((prev) => prev.filter((t) => t.id !== deleteTagTarget.id));
       setRules((prev) => prev.filter((r) => r.tag_id !== deleteTagTarget.id));
       router.refresh();
@@ -158,7 +164,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
     }
     setRuleSubmitting(true);
     try {
-      const created = await api.post<TagRule>("/tag-rules", {
+      const created = await (await api()).post<TagRule>("/tag-rules", {
         tag_id: ruleTagId,
         match_type: ruleMatchType,
         match_pattern: rulePattern.trim(),
@@ -182,7 +188,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
     if (!deleteRuleTarget) return;
     setDeleting(true);
     try {
-      await api.delete(`/tag-rules/${deleteRuleTarget.id}`);
+      await (await api()).delete(`/tag-rules/${deleteRuleTarget.id}`);
       setRules((prev) => prev.filter((r) => r.id !== deleteRuleTarget.id));
       router.refresh();
     } catch (err: unknown) {
@@ -202,7 +208,7 @@ export function TagsClient({ tags: initialTags, rules: initialRules, token }: Pr
     setPreviewLoading(true);
     setPreviewMatches(null);
     try {
-      const matches = await api.post<PreviewMatch[]>("/tag-rules/preview", {
+      const matches = await (await api()).post<PreviewMatch[]>("/tag-rules/preview", {
         match_type: ruleMatchType,
         match_pattern: rulePattern.trim(),
       });

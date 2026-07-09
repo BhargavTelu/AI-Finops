@@ -7,7 +7,7 @@ Pure function - no DB access here. Side effects belong in the Celery task.
 """
 
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 import anthropic
 import redis as redis_lib
@@ -24,7 +24,7 @@ _REDIS_KEY_PREFIX = "ai:calls"
 _MODEL = "claude-haiku-4-5"
 
 
-def _redis() -> redis_lib.Redis:  # type: ignore[type-arg]
+def _redis() -> redis_lib.Redis:
     return redis_lib.Redis.from_url(settings.redis_url, decode_responses=True)
 
 
@@ -36,7 +36,7 @@ def _rate_key(org_id: str) -> str:
 def is_rate_limited(org_id: str) -> bool:
     """Return True when the org has exhausted its daily AI call budget."""
     r = _redis()
-    raw = r.get(_rate_key(org_id))
+    raw = cast(str | None, r.get(_rate_key(org_id)))
     if raw is None:
         return False
     return int(raw) >= settings.ai_calls_per_org_per_day
@@ -80,9 +80,7 @@ def generate_explanation(anomaly: dict[str, Any], org_id: str) -> str | None:
 
     context = anomaly.get("context") or {}
     tag_parts = [
-        f"{k.replace('_tag', '')}: {v}"
-        for k, v in context.items()
-        if v and k.endswith("_tag")
+        f"{k.replace('_tag', '')}: {v}" for k, v in context.items() if v and k.endswith("_tag")
     ]
     context_str = ", ".join(tag_parts) if tag_parts else "none"
 

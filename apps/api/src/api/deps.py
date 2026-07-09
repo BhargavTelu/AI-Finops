@@ -1,6 +1,6 @@
 import json
 import time
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
@@ -35,7 +35,7 @@ async def _fetch_jwks() -> dict[str, dict[str, Any]]:
         resp = await client.get(url)
         resp.raise_for_status()
     # Any is unavoidable here - JWKS is untyped JSON from an external endpoint.
-    keys: list[dict[str, Any]] = resp.json().get("keys", [])  # type: ignore[assignment]
+    keys: list[dict[str, Any]] = resp.json().get("keys", [])
     return {k["kid"]: k for k in keys}
 
 
@@ -65,15 +65,10 @@ def _resolve_org_id_from_clerk_claim(o_claim: Any) -> str | None:
     if not clerk_org_id:
         return None
     db = create_client(settings.supabase_url, settings.supabase_service_role_key)
-    result = (
-        db.table("organizations")
-        .select("id")
-        .eq("clerk_id", clerk_org_id)
-        .limit(1)
-        .execute()
-    )
-    if result.data:
-        return result.data[0]["id"]  # type: ignore[no-any-return]
+    result = db.table("organizations").select("id").eq("clerk_id", clerk_org_id).limit(1).execute()
+    rows = cast(list[dict[str, Any]], result.data)
+    if rows:
+        return cast(str, rows[0]["id"])
     return None
 
 
@@ -114,7 +109,9 @@ async def _require_org(
     try:
         header = jwt.get_unverified_header(token)
     except jwt.DecodeError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed JWT")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Malformed JWT"
+        ) from None
 
     if header.get("alg") != "RS256":
         # Clerk session tokens are always RS256. Reject anything else to
@@ -141,11 +138,11 @@ async def _require_org(
 
     # RSAAlgorithm.from_jwk returns a union of key types; Any is the correct
     # annotation here - PyJWT does not expose a narrower public type.
-    public_key: Any = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))  # type: ignore[attr-defined]
+    public_key: Any = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
 
     try:
         # Clerk session tokens don't carry an aud claim - disable that check.
-        claims: dict[str, Any] = jwt.decode(  # type: ignore[assignment]
+        claims: dict[str, Any] = jwt.decode(
             token,
             public_key,
             algorithms=["RS256"],
@@ -153,12 +150,18 @@ async def _require_org(
             options={"verify_aud": False},
         )
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired"
+        ) from None
     except jwt.InvalidIssuerError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer"
+        ) from None
     except jwt.InvalidTokenError as exc:
         log.warning("jwt_verification_failed", error=str(exc))
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        ) from exc
 
     user_id: str | None = claims.get("sub")
     # Prefer the custom session-token claim (Supabase UUID); fall back to
@@ -202,17 +205,11 @@ def _require_admin_org(org: OrgDep) -> OrgContext:
     db = create_client(settings.supabase_url, settings.supabase_service_role_key)
 
     # Resolve the Supabase user UUID from the Clerk sub claim (stored in users.clerk_id)
-    user_result = (
-        db.table("users")
-        .select("id")
-        .eq("clerk_id", org.user_id)
-        .limit(1)
-        .execute()
-    )
+    user_result = db.table("users").select("id").eq("clerk_id", org.user_id).limit(1).execute()
     if not user_result.data:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User not found")
 
-    supabase_user_id: str = user_result.data[0]["id"]
+    supabase_user_id = cast(str, cast(list[dict[str, Any]], user_result.data)[0]["id"])
 
     member_result = (
         db.table("organization_members")
@@ -222,7 +219,8 @@ def _require_admin_org(org: OrgDep) -> OrgContext:
         .limit(1)
         .execute()
     )
-    if not member_result.data or member_result.data[0].get("role") != "admin":
+    member_rows = cast(list[dict[str, Any]], member_result.data)
+    if not member_rows or member_rows[0].get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin role required",
@@ -273,9 +271,11 @@ def _require_active_org(org: OrgDep) -> OrgContext:
         .execute()
     )
 
+    org_rows = cast(list[dict[str, Any]], org_result.data)
+    billing_rows = cast(list[dict[str, Any]], billing_result.data)
     state = evaluate_access(
-        org_result.data[0] if org_result.data else None,
-        billing_result.data[0] if billing_result.data else None,
+        org_rows[0] if org_rows else None,
+        billing_rows[0] if billing_rows else None,
     )
     if state.access_blocked:
         raise HTTPException(

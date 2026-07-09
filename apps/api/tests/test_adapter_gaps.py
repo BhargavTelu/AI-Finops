@@ -7,18 +7,19 @@ Gap-20 (high):     Anthropic adapter validate() / fetch_costs() basic coverage.
 Gap-21 (high):     Anthropic pagination stops when has_more is absent/False.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
-START = datetime(2026, 5, 1, tzinfo=timezone.utc)
-END = datetime(2026, 5, 31, tzinfo=timezone.utc)
+START = datetime(2026, 5, 1, tzinfo=UTC)
+END = datetime(2026, 5, 31, tzinfo=UTC)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
+
 
 def _mock_httpx_response(status_code: int, body: dict) -> MagicMock:
     resp = MagicMock(spec=httpx.Response)
@@ -69,6 +70,7 @@ def _cost_page(model: str = "gpt-4o", start_ts: int = 1_746_057_600, cost: float
 
 
 # ── Gap-18: OpenAI two-pass fetch failure ─────────────────────────────────────
+
 
 class TestOpenAITwoPassFetch:
     """Gap-18 (critical): If Pass 1 (usage/completions) fails, Pass 2 (costs) never runs."""
@@ -179,6 +181,7 @@ class TestOpenAITwoPassFetch:
 
 # ── Gap-19: Provider 429 rate limiting ────────────────────────────────────────
 
+
 class TestProviderRateLimiting:
     """Gap-19 (high): 429 from provider must raise ValueError (not propagate silently)."""
 
@@ -244,6 +247,7 @@ class TestProviderRateLimiting:
 
 
 # ── Gap-20: Anthropic adapter basic coverage ─────────────────────────────────
+
 
 class TestAnthropicAdapterCoverage:
     """Gap-20 (high): Anthropic adapter validate() and fetch_costs() have 0% direct coverage."""
@@ -369,12 +373,13 @@ class TestAnthropicAdapterCoverage:
 
         assert captured_headers, "No HTTP calls were made"
         for hdrs in captured_headers:
-            assert "anthropic-beta" in hdrs, (
-                "BUG-01 regression: anthropic-beta header missing from request"
-            )
+            assert (
+                "anthropic-beta" in hdrs
+            ), "BUG-01 regression: anthropic-beta header missing from request"
 
 
 # ── Gap-21: Anthropic pagination terminates on has_more=False ────────────────
+
 
 class TestAnthropicPaginationTermination:
     """Gap-21 (high): Pagination must stop when has_more is absent or False."""
@@ -411,11 +416,11 @@ class TestAnthropicPaginationTermination:
             )
 
         with patch("api.adapters.anthropic.httpx.get", side_effect=mock_get):
-            events = list(adapter.fetch_costs(b"sk-ant-test", START, END))
+            list(adapter.fetch_costs(b"sk-ant-test", START, END))
 
-        assert call_count[0] == 1, (
-            f"Gap-21: Expected 1 pagination call when has_more=False. Got {call_count[0]}."
-        )
+        assert (
+            call_count[0] == 1
+        ), f"Gap-21: Expected 1 pagination call when has_more=False. Got {call_count[0]}."
 
     def test_pagination_continues_when_has_more_true(self) -> None:
         """Two pages (has_more=True on first, False on second) → two HTTP calls."""

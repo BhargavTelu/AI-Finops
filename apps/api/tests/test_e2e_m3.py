@@ -8,8 +8,8 @@ Require a live stack or skip via E2E env var. Run with:
 TC-E2E-03 - M3 milestone: anomaly detection + budget threshold alert.
 """
 
-import os
 from decimal import Decimal
+import os
 
 import pytest
 
@@ -29,12 +29,13 @@ def headers() -> dict:
 
 # ── TC-E2E-03: Anomaly + Budget + Alert pipeline ───────────────────────────────
 
+
 class TestM3AnomalyBudgetAlertPipeline:
     """
     TC-E2E-03 (High) - M3 subsystems end-to-end without real Slack or email.
 
     Scenario:
-      1. Seed daily_cost_summaries with 15 days of baseline + a 5× spike.
+      1. Seed daily_cost_summaries with 15 days of baseline + a 5x spike.
       2. Run detect_org → verify anomaly inserted with severity='high'.
       3. Create a budget at $100. Seed MTD spend at $85.
       4. Run check_org → verify send_budget_alert.delay called (budget at 85%).
@@ -49,37 +50,41 @@ class TestM3AnomalyBudgetAlertPipeline:
             pytest.skip("E2E_SUPABASE_URL and E2E_SERVICE_KEY required for TC-E2E-03")
 
         from supabase import create_client
+
         from api.workers.anomaly_detection import detect_org
 
         db = create_client(_SUPABASE_URL, _SERVICE_KEY)
 
         # Use a fake org_id to avoid polluting real data
         import uuid
+
         org_id = str(uuid.uuid4())
 
         today = date.today()
         summaries = []
 
-        # 15 days of baseline at $10/day, then 1 spike at $50 (5×)
+        # 15 days of baseline at $10/day, then 1 spike at $50 (5x)
         for i in range(16, 1, -1):
             day = today - timedelta(days=i)
             cost = "50.00" if i == 2 else "10.00"
-            summaries.append({
-                "org_id": org_id,
-                "day": day.isoformat(),
-                "provider": "openai",
-                "model": "gpt-4o",
-                "feature_tag": None,
-                "team_tag": None,
-                "customer_tag": None,
-                "env_tag": None,
-                "total_cost_usd": cost,
-                "total_requests": 100,
-                "total_tokens": 100_000,
-                "total_input_tokens": 70_000,
-                "total_output_tokens": 30_000,
-                "total_cached_tokens": 0,
-            })
+            summaries.append(
+                {
+                    "org_id": org_id,
+                    "day": day.isoformat(),
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "feature_tag": None,
+                    "team_tag": None,
+                    "customer_tag": None,
+                    "env_tag": None,
+                    "total_cost_usd": cost,
+                    "total_requests": 100,
+                    "total_tokens": 100_000,
+                    "total_input_tokens": 70_000,
+                    "total_output_tokens": 30_000,
+                    "total_cached_tokens": 0,
+                }
+            )
 
         try:
             db.table("daily_cost_summaries").insert(summaries).execute()
@@ -94,9 +99,11 @@ class TestM3AnomalyBudgetAlertPipeline:
                 return mock
 
             # Run detect_org with partial real DB (summaries) and mocked anomaly insert
-            with patch.object(
-                db.table("anomalies"), "insert", side_effect=_capture_insert
-            ) if False else patch("api.workers.anomaly_detection.create_client", return_value=db):
+            with (
+                patch.object(db.table("anomalies"), "insert", side_effect=_capture_insert)
+                if False
+                else patch("api.workers.anomaly_detection.create_client", return_value=db)
+            ):
                 detect_org(org_id)
 
         finally:
@@ -108,8 +115,9 @@ class TestM3AnomalyBudgetAlertPipeline:
 
     def test_budget_alert_triggered_at_85_pct(self, headers: dict) -> None:
         """TC-E2E-03 part 2 - budget check fires alert at 85% spend."""
-        import httpx
         from unittest.mock import MagicMock, patch
+
+        import httpx
 
         # Create a budget at $100 via the API
         resp = httpx.post(
@@ -124,7 +132,6 @@ class TestM3AnomalyBudgetAlertPipeline:
         budget_id = resp.json()["id"]
 
         try:
-            from api.workers.budget_checks import check_org
 
             alert_calls: list = []
             with (

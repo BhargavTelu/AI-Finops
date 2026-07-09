@@ -1,3 +1,6 @@
+from datetime import UTC
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 import structlog
 
@@ -19,22 +22,18 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 tag_rules_router = APIRouter(prefix="/tag-rules", tags=["tags"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
 # ── Tags CRUD ─────────────────────────────────────────────────────────────────
 
+
 @router.get("")
 def list_tags(org: OrgDep) -> list[TagRead]:
     db = _get_supabase()
     result = (
-        db.table("tags")
-        .select("*")
-        .eq("org_id", org.org_id)
-        .order("type")
-        .order("name")
-        .execute()
+        db.table("tags").select("*").eq("org_id", org.org_id).order("type").order("name").execute()
     )
     return [TagRead(**row) for row in result.data]
 
@@ -87,18 +86,13 @@ def update_tag(tag_id: str, body: TagCreate, org: OrgDep) -> TagRead:
 def delete_tag(tag_id: str, org: OrgDep) -> None:
     db = _get_supabase()
     # tag_rules cascade-delete via FK ON DELETE CASCADE
-    result = (
-        db.table("tags")
-        .delete()
-        .eq("id", tag_id)
-        .eq("org_id", org.org_id)
-        .execute()
-    )
+    result = db.table("tags").delete().eq("id", tag_id).eq("org_id", org.org_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Tag not found")
 
 
 # ── Tag rules ─────────────────────────────────────────────────────────────────
+
 
 @tag_rules_router.get("")
 def list_tag_rules(org: OrgDep) -> list[TagRuleRead]:
@@ -119,11 +113,7 @@ def create_tag_rule(body: TagRuleCreate, org: OrgDep) -> TagRuleRead:
 
     # Verify tag_id belongs to this org before creating the rule
     tag_check = (
-        db.table("tags")
-        .select("id")
-        .eq("id", body.tag_id)
-        .eq("org_id", org.org_id)
-        .execute()
+        db.table("tags").select("id").eq("id", body.tag_id).eq("org_id", org.org_id).execute()
     )
     if not tag_check.data:
         raise HTTPException(status_code=404, detail="Tag not found")
@@ -170,13 +160,7 @@ def update_tag_rule(rule_id: str, body: TagRuleCreate, org: OrgDep) -> TagRuleRe
 @tag_rules_router.delete("/{rule_id}", status_code=204)
 def delete_tag_rule(rule_id: str, org: OrgDep) -> None:
     db = _get_supabase()
-    result = (
-        db.table("tag_rules")
-        .delete()
-        .eq("id", rule_id)
-        .eq("org_id", org.org_id)
-        .execute()
-    )
+    result = db.table("tag_rules").delete().eq("id", rule_id).eq("org_id", org.org_id).execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Tag rule not found")
 
@@ -188,11 +172,11 @@ def preview_tag_rule(body: TagRulePreview, org: OrgDep) -> list[PreviewMatch]:
     Returns up to 20 matching (api_key_label, provider, model) tuples from the
     last 7 days of this org's usage events.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
     db = _get_supabase()
 
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
     rows_result = (
         db.table("usage_events")
         .select("api_key_label, provider, model")

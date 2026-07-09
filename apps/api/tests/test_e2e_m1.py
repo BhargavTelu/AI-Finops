@@ -29,6 +29,7 @@ def headers() -> dict:
 
 # ── M1-E-001: Connect → backfill → dashboard populates ────────────────────────
 
+
 class TestConnectIntegrationPopulatesDashboard:
     """
     M1-E-001 (Critical): POST a real (or sandbox) integration key, wait for the
@@ -38,6 +39,7 @@ class TestConnectIntegrationPopulatesDashboard:
 
     def test_connect_integration_populates_dashboard(self, headers: dict) -> None:
         import time
+
         import httpx
 
         if not _OPENAI_KEY:
@@ -58,7 +60,10 @@ class TestConnectIntegrationPopulatesDashboard:
         dashboard = None
         while time.time() < deadline:
             d = httpx.get(f"{_API}/api/v1/usage/dashboard", headers=headers, timeout=10)
-            if d.status_code == 200 and float(d.json().get("month", {}).get("total_cost_usd", 0)) > 0:
+            if (
+                d.status_code == 200
+                and float(d.json().get("month", {}).get("total_cost_usd", 0)) > 0
+            ):
                 dashboard = d.json()
                 break
             time.sleep(10)
@@ -67,13 +72,13 @@ class TestConnectIntegrationPopulatesDashboard:
         httpx.delete(f"{_API}/api/v1/integrations/{integration_id}", headers=headers, timeout=10)
 
         assert dashboard is not None, (
-            "Dashboard did not show non-zero data after 5 minutes. "
-            "Check Celery worker logs."
+            "Dashboard did not show non-zero data after 5 minutes. " "Check Celery worker logs."
         )
         assert float(dashboard["month"]["total_cost_usd"]) > 0
 
 
 # ── M1-E-002: Fresh org shows empty-state ─────────────────────────────────────
+
 
 class TestFreshOrgEmptyState:
     """
@@ -95,6 +100,7 @@ class TestFreshOrgEmptyState:
 
 
 # ── M1-E-003: Delete integration clears summaries ─────────────────────────────
+
 
 class TestDeleteIntegrationClearsSummaries:
     """
@@ -142,6 +148,7 @@ class TestDeleteIntegrationClearsSummaries:
 
 # ── M1-E-004: Nightly aggregation rebuilds summaries ─────────────────────────
 
+
 class TestNightlyAggregationRebuilds:
     """
     M1-E-004 (Critical): Seeding usage_events directly and running aggregate_org
@@ -172,6 +179,7 @@ class TestNightlyAggregationRebuilds:
 
 # ── M1-E-005: 4h refresh incremental sync ────────────────────────────────────
 
+
 class TestRefreshIntegrationIncrementalSync:
     """
     M1-E-005 (Medium): After an integration's last_synced_at is set, running
@@ -185,6 +193,7 @@ class TestRefreshIntegrationIncrementalSync:
         assert last_synced_at advanced.
         """
         import time
+
         import httpx
 
         if not _OPENAI_KEY:

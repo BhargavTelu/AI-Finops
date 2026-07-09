@@ -92,7 +92,5 @@ class TestOnboardingStatus:
         db = _chain_db([])
         with patch("api.routers.onboarding._get_supabase", return_value=db):
             client.get("/api/v1/onboarding/status")
-        org_filters = [
-            c for c in db.eq.call_args_list if c.args == ("org_id", ORG_ID)
-        ]
+        org_filters = [c for c in db.eq.call_args_list if c.args == ("org_id", ORG_ID)]
         assert len(org_filters) == 4  # one per checked table

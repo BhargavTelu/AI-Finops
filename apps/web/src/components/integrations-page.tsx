@@ -147,7 +147,11 @@ export function IntegrationsPage({ integrations: initial }: Props) {
       await api.delete(`/integrations/${id}`);
       setList((prev) => prev.filter((i) => i.id !== id));
     } catch (err: unknown) {
-      console.error("Revoke failed:", err);
+      toast({
+        title: "Revoke failed",
+        description: err instanceof Error ? err.message : "Could not revoke the integration.",
+        variant: "destructive",
+      });
     } finally {
       setRevokingId(null);
       setRevokeTarget(null);
@@ -155,7 +159,9 @@ export function IntegrationsPage({ integrations: initial }: Props) {
   }
 
   function handleCopyMasked(id: string) {
-    // Visual feedback only - actual key is not returned by API (security)
+    // Copies the integration id (the visible identifier) - the actual key is
+    // never returned by the API (security).
+    void navigator.clipboard?.writeText(id).catch(() => {});
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 1500);
   }

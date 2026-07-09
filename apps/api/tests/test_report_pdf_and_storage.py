@@ -17,11 +17,22 @@ FROZEN_NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
 
 
 def _data(current_rows: list[dict] | None = None):
-    rows = current_rows if current_rows is not None else [
-        {"total_cost_usd": "100.00", "total_requests": 10, "total_tokens": 1000,
-         "provider": "openai", "model": "gpt-4o", "feature_tag": "chat",
-         "team_tag": "core", "customer_tag": "acme"}
-    ]
+    rows = (
+        current_rows
+        if current_rows is not None
+        else [
+            {
+                "total_cost_usd": "100.00",
+                "total_requests": 10,
+                "total_tokens": 1000,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": "chat",
+                "team_tag": "core",
+                "customer_tag": "acme",
+            }
+        ]
+    )
     return build_report_data(
         org_name="Acme",
         period_start=date(2026, 5, 1),
@@ -45,9 +56,20 @@ class TestRenderPdf:
         # An org with one summary row, no tags, no anomalies, no recs must
         # still produce a valid document (empty-state strings per section).
         pdf = render_pdf(
-            _data([{"total_cost_usd": "5.00", "total_requests": 1, "total_tokens": 10,
-                    "provider": "openai", "model": "gpt-4o", "feature_tag": None,
-                    "team_tag": None, "customer_tag": None}])
+            _data(
+                [
+                    {
+                        "total_cost_usd": "5.00",
+                        "total_requests": 1,
+                        "total_tokens": 10,
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "feature_tag": None,
+                        "team_tag": None,
+                        "customer_tag": None,
+                    }
+                ]
+            )
         )
         assert pdf.startswith(b"%PDF")
 
@@ -73,13 +95,25 @@ class TestRenderPdf:
             period_end=date(2026, 5, 31),
             generated_on=date(2026, 6, 1),
             current_rows=[
-                {"total_cost_usd": "1.00", "provider": "openai", "model": "gpt-4o",
-                 "feature_tag": "чат-бот", "team_tag": "团队", "customer_tag": None}
+                {
+                    "total_cost_usd": "1.00",
+                    "provider": "openai",
+                    "model": "gpt-4o",
+                    "feature_tag": "чат-бот",
+                    "team_tag": "团队",
+                    "customer_tag": None,
+                }
             ],
             prev_month_rows=[],
             anomaly_rows=[
-                {"detected_at": "2026-05-14", "scope_value": "模型-x", "baseline_usd": "1",
-                 "actual_usd": "5", "spike_pct": 400, "severity": "high"}
+                {
+                    "detected_at": "2026-05-14",
+                    "scope_value": "模型-x",
+                    "baseline_usd": "1",
+                    "actual_usd": "5",
+                    "spike_pct": 400,
+                    "severity": "high",
+                }
             ],
             applied_rec_rows=[],
         )

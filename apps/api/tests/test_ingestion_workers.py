@@ -6,11 +6,9 @@ TC-ING-08: refresh_integration falls back to 4h lookback when last_synced_at is 
 TC-ING-09: _ingest_window applies tag rules to events.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from api.workers.ingestion import _ingest_window, backfill_integration, refresh_integration
 
@@ -19,6 +17,7 @@ INT_ID = "aaaaaaaa-0000-0000-0000-000000000001"
 
 
 # ── DB mock helpers ─────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     db = MagicMock()
@@ -42,6 +41,7 @@ def _mock_db() -> MagicMock:
 
 def _integration_row(status: str = "active") -> dict:
     import base64
+
     from api.services.encryption import EncryptionService
 
     key_b64 = base64.b64encode(b"\xcc" * 32).decode()
@@ -60,6 +60,7 @@ def _integration_row(status: str = "active") -> dict:
 
 # ── TC-ING-06: revoked integration returns early ───────────────────────────────
 
+
 class TestBackfillRevoked:
     def test_revoked_integration_returns_early(self) -> None:  # TC-ING-06
         db = _mock_db()
@@ -77,9 +78,11 @@ class TestBackfillRevoked:
 
 # ── TC-ING-07: stores error on adapter exception ───────────────────────────────
 
+
 class TestBackfillStoresError:
     def test_adapter_exception_stores_error_in_db(self) -> None:  # TC-ING-07
         import base64
+
         from api.services.encryption import EncryptionService
 
         key_b64 = base64.b64encode(b"\xcc" * 32).decode()
@@ -109,7 +112,7 @@ class TestBackfillStoresError:
         ):
             mock_settings.encryption_key = key_b64
             # apply() runs the task synchronously; max_retries=3 means it may retry
-            result = backfill_integration.apply(args=[INT_ID, ORG_ID])
+            backfill_integration.apply(args=[INT_ID, ORG_ID])
 
         # DB update with status="error" and last_error set must have been called
         update_calls = str(db.update.call_args_list)
@@ -118,9 +121,11 @@ class TestBackfillStoresError:
 
 # ── TC-ING-08: refresh fallback to 4h window ──────────────────────────────────
 
+
 class TestRefreshFallback:
     def test_no_last_synced_uses_4h_lookback(self) -> None:  # TC-ING-08
         import base64
+
         from api.services.encryption import EncryptionService
 
         key_b64 = base64.b64encode(b"\xcc" * 32).decode()
@@ -148,8 +153,6 @@ class TestRefreshFallback:
         mock_adapter = MagicMock()
         mock_adapter.fetch_costs.side_effect = capture_fetch
 
-        now = datetime.now(timezone.utc)
-
         with (
             patch("api.workers.ingestion._get_supabase", return_value=db),
             patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
@@ -170,15 +173,16 @@ class TestRefreshFallback:
 
 # ── TC-ING-09: _ingest_window applies tag rules ────────────────────────────────
 
+
 class TestIngestWindowTagRules:
     def test_tag_rules_applied_to_events(self) -> None:  # TC-ING-09
+
         from api.adapters.base import NormalizedUsageEvent
-        from decimal import Decimal as D
 
         db = _mock_db()
 
-        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 5, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 5, 1, tzinfo=UTC)
+        end = datetime(2026, 5, 2, tzinfo=UTC)
 
         fake_event = NormalizedUsageEvent(
             provider="openai",
@@ -187,9 +191,9 @@ class TestIngestWindowTagRules:
             input_tokens=1000,
             output_tokens=500,
             cached_tokens=0,
-            cost_usd=D("0.05"),
+            cost_usd=Decimal("0.05"),
             request_count=1,
-            bucket_hour=datetime(2026, 5, 1, 0, tzinfo=timezone.utc),
+            bucket_hour=datetime(2026, 5, 1, 0, tzinfo=UTC),
             raw_meta={},
         )
 
@@ -205,7 +209,11 @@ class TestIngestWindowTagRules:
         ]
 
         compiled_rules = [
-            {"match_type": "contains", "match_pattern": "feature-a", "tags": {"type": "feature_tag", "name": "checkout"}}
+            {
+                "match_type": "contains",
+                "match_pattern": "feature-a",
+                "tags": {"type": "feature_tag", "name": "checkout"},
+            }
         ]
 
         inserted_rows: list[dict] = []
@@ -221,7 +229,12 @@ class TestIngestWindowTagRules:
         mock_adapter = MagicMock()
         mock_adapter.fetch_costs.return_value = iter([fake_event])
 
-        applied_tags = {"feature_tag": "checkout", "team_tag": None, "customer_tag": None, "env_tag": None}
+        applied_tags = {
+            "feature_tag": "checkout",
+            "team_tag": None,
+            "customer_tag": None,
+            "env_tag": None,
+        }
 
         with (
             patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}),
@@ -238,6 +251,7 @@ class TestIngestWindowTagRules:
 
 # ── M1-U-ING-005: Delete-before-insert ordering ───────────────────────────────
 
+
 class TestIngestWindowIdempotency:
     def test_delete_called_before_insert(self) -> None:  # M1-U-ING-005
         """
@@ -245,12 +259,12 @@ class TestIngestWindowIdempotency:
         This ensures idempotency on task retry: running the same window twice
         yields the same final state with no duplicates.
         """
+
         from api.adapters.base import NormalizedUsageEvent
-        from decimal import Decimal as D
 
         db = _mock_db()
-        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 5, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 5, 1, tzinfo=UTC)
+        end = datetime(2026, 5, 2, tzinfo=UTC)
 
         fake_event = NormalizedUsageEvent(
             provider="openai",
@@ -259,9 +273,9 @@ class TestIngestWindowIdempotency:
             input_tokens=100,
             output_tokens=50,
             cached_tokens=0,
-            cost_usd=D("0.01"),
+            cost_usd=Decimal("0.01"),
             request_count=1,
-            bucket_hour=datetime(2026, 5, 1, 0, tzinfo=timezone.utc),
+            bucket_hour=datetime(2026, 5, 1, 0, tzinfo=UTC),
             raw_meta={},
         )
 
@@ -300,12 +314,13 @@ class TestIngestWindowIdempotency:
         assert "insert" in call_order, "Expected insert() to be called"
         delete_idx = call_order.index("delete")
         insert_idx = call_order.index("insert")
-        assert delete_idx < insert_idx, (
-            f"delete() must precede insert() for idempotency. Actual order: {call_order}"
-        )
+        assert (
+            delete_idx < insert_idx
+        ), f"delete() must precede insert() for idempotency. Actual order: {call_order}"
 
 
 # ── M1-U-ING-006: Batch insert size = _BATCH_SIZE ─────────────────────────────
+
 
 class TestIngestWindowBatchSize:
     def test_batch_insert_in_chunks_of_batch_size(self) -> None:  # M1-U-ING-006
@@ -313,13 +328,13 @@ class TestIngestWindowBatchSize:
         _ingest_window must split inserts into chunks of _BATCH_SIZE (500) rows.
         For 1200 events this means 3 insert calls: 500 + 500 + 200.
         """
+
         from api.adapters.base import NormalizedUsageEvent
-        from decimal import Decimal as D
         from api.workers.ingestion import _BATCH_SIZE
 
         db = _mock_db()
-        start = datetime(2026, 5, 1, tzinfo=timezone.utc)
-        end = datetime(2026, 5, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 5, 1, tzinfo=UTC)
+        end = datetime(2026, 5, 2, tzinfo=UTC)
 
         total = _BATCH_SIZE * 2 + 200  # 1200 if _BATCH_SIZE == 500
         events = [
@@ -330,9 +345,9 @@ class TestIngestWindowBatchSize:
                 input_tokens=100,
                 output_tokens=50,
                 cached_tokens=0,
-                cost_usd=D("0.01"),
+                cost_usd=Decimal("0.01"),
                 request_count=1,
-                bucket_hour=datetime(2026, 5, 1, 0, tzinfo=timezone.utc),
+                bucket_hour=datetime(2026, 5, 1, 0, tzinfo=UTC),
                 raw_meta={},
             )
             for _ in range(total)
@@ -370,13 +385,14 @@ class TestIngestWindowBatchSize:
             f"Expected {expected_batches} batches ({_BATCH_SIZE}+{_BATCH_SIZE}+200). "
             f"Got {len(insert_batch_sizes)}: {insert_batch_sizes}"
         )
-        assert max(insert_batch_sizes) <= _BATCH_SIZE, (
-            f"No batch should exceed _BATCH_SIZE={_BATCH_SIZE}. Got: {insert_batch_sizes}"
-        )
+        assert (
+            max(insert_batch_sizes) <= _BATCH_SIZE
+        ), f"No batch should exceed _BATCH_SIZE={_BATCH_SIZE}. Got: {insert_batch_sizes}"
         assert sum(insert_batch_sizes) == total
 
 
 # ── BUG-C1: delete window must match the day-floored fetch window ───────────────
+
 
 class TestIngestWindowDayFloorsDeleteWindow:
     """
@@ -389,8 +405,8 @@ class TestIngestWindowDayFloorsDeleteWindow:
 
     def test_delete_window_floored_to_utc_day(self) -> None:
         db = _mock_db()
-        start = datetime(2026, 6, 10, 14, 23, 5, tzinfo=timezone.utc)
-        end = datetime(2026, 6, 10, 18, 23, 5, tzinfo=timezone.utc)
+        start = datetime(2026, 6, 10, 14, 23, 5, tzinfo=UTC)
+        end = datetime(2026, 6, 10, 18, 23, 5, tzinfo=UTC)
 
         mock_adapter = MagicMock()
         mock_adapter.fetch_costs.return_value = iter([])
@@ -398,12 +414,13 @@ class TestIngestWindowDayFloorsDeleteWindow:
         with patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}):
             _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
 
-        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=UTC).isoformat()
         gte_args = [c.args for c in db.gte.call_args_list]
 
-        assert ("bucket_hour", floored_iso) in gte_args, (
-            f"Delete/snapshot lower bound must be the day-floored start. Got: {gte_args}"
-        )
+        assert (
+            "bucket_hour",
+            floored_iso,
+        ) in gte_args, f"Delete/snapshot lower bound must be the day-floored start. Got: {gte_args}"
         assert ("bucket_hour", start.isoformat()) not in gte_args, (
             "Raw mid-day start must not be used as the bucket_hour lower bound - "
             "it leaves the day's earlier bucket snapshot in place (double-count)."
@@ -413,7 +430,7 @@ class TestIngestWindowDayFloorsDeleteWindow:
         db = _mock_db()
         # last_synced_at can parse as a naive datetime depending on the DB driver
         start = datetime(2026, 6, 10, 4, 0, 0)
-        end = datetime(2026, 6, 10, 8, 0, 0, tzinfo=timezone.utc)
+        end = datetime(2026, 6, 10, 8, 0, 0, tzinfo=UTC)
 
         mock_adapter = MagicMock()
         mock_adapter.fetch_costs.return_value = iter([])
@@ -421,12 +438,13 @@ class TestIngestWindowDayFloorsDeleteWindow:
         with patch("api.workers.ingestion._ADAPTERS", {"openai": mock_adapter}):
             _ingest_window(db, INT_ID, ORG_ID, "openai", b"sk-test", start, end)
 
-        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=timezone.utc).isoformat()
+        floored_iso = datetime(2026, 6, 10, 0, 0, 0, tzinfo=UTC).isoformat()
         gte_args = [c.args for c in db.gte.call_args_list]
         assert ("bucket_hour", floored_iso) in gte_args
 
 
 # ── BUG-H3: errored integrations recover on successful refresh ──────────────────
+
 
 class TestRefreshRecoversErroredIntegration:
     def test_success_resets_status_to_active(self) -> None:
@@ -436,6 +454,7 @@ class TestRefreshRecoversErroredIntegration:
         sweep fix) was silently excluded from all future refreshes.
         """
         import base64
+
         from api.services.encryption import EncryptionService
 
         key_b64 = base64.b64encode(b"\xcc" * 32).decode()

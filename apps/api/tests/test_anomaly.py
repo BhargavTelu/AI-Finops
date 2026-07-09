@@ -3,8 +3,8 @@ Unit tests for anomaly detection algorithm.
 Target: 80% coverage on services/anomaly.py.
 """
 
-import statistics
 from decimal import Decimal
+import statistics
 
 import pytest
 
@@ -79,7 +79,7 @@ class TestDetectAnomalies:
 
     def test_medium_severity_at_three_sigma_boundary(self) -> None:
         baseline = 100.0
-        actual = baseline + 5.0 * 3.5  # z ≈ 3.5 against the $5 σ floor
+        actual = baseline + 5.0 * 3.5  # z ≈ 3.5 against the $5 sigma floor
         history = _spike_history(baseline, actual)
         result = detect_anomalies(history)
         assert result is not None
@@ -92,7 +92,7 @@ class TestDetectAnomalies:
         assert detect_anomalies(history) is None
 
     def test_small_dollar_jump_below_min_delta_is_suppressed(self) -> None:
-        # Flat $12 baseline → σ floor = $0.60; +$4 gives z ≈ 6.7, but the
+        # Flat $12 baseline → sigma floor = $0.60; +$4 gives z ≈ 6.7, but the
         # absolute jump is under the $5 minimum, so no alert.
         history = _spike_history(12.0, 16.0)
         assert detect_anomalies(history) is None

@@ -8,6 +8,8 @@ PATCH /slack/settings         - update mute preferences
 POST  /slack/disconnect       - revoke token and remove integration
 """
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 import structlog
 
@@ -24,11 +26,12 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/slack", tags=["slack"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
 # ── GET /slack/status ──────────────────────────────────────────────────────────
+
 
 @router.get("/status")
 def slack_status(org: OrgDep) -> SlackStatusResponse:
@@ -58,6 +61,7 @@ def slack_status(org: OrgDep) -> SlackStatusResponse:
 
 # ── GET /slack/oauth/state ─────────────────────────────────────────────────────
 
+
 @router.get("/oauth/state")
 def slack_oauth_state(org: OrgDep) -> dict[str, str]:
     """
@@ -79,6 +83,7 @@ def slack_oauth_state(org: OrgDep) -> dict[str, str]:
 
 
 # ── POST /slack/oauth/callback ─────────────────────────────────────────────────
+
 
 @router.post("/oauth/callback")
 def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> SlackStatusResponse:
@@ -142,13 +147,7 @@ def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> SlackStat
     db = _get_supabase()
 
     # Resolve Supabase user UUID from Clerk user_id for the installed_by column.
-    user_result = (
-        db.table("users")
-        .select("id")
-        .eq("clerk_id", org.user_id)
-        .limit(1)
-        .execute()
-    )
+    user_result = db.table("users").select("id").eq("clerk_id", org.user_id).limit(1).execute()
     db_user_id: str | None = user_result.data[0]["id"] if user_result.data else None
 
     # Upsert - one row per org; re-install to a new channel replaces the old row.
@@ -185,6 +184,7 @@ def slack_oauth_callback(body: SlackOAuthCallbackBody, org: OrgDep) -> SlackStat
 
 # ── PATCH /slack/settings ─────────────────────────────────────────────────────
 
+
 @router.patch("/settings")
 def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusResponse:
     """Update mutable Slack notification preferences (currently: alerts_muted)."""
@@ -200,9 +200,9 @@ def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusRespons
     if not result.data:
         raise HTTPException(status_code=404, detail="No Slack integration found")
 
-    db.table("slack_integrations").update(
-        {"alerts_muted": body.alerts_muted}
-    ).eq("org_id", org.org_id).execute()
+    db.table("slack_integrations").update({"alerts_muted": body.alerts_muted}).eq(
+        "org_id", org.org_id
+    ).execute()
 
     row = result.data[0]
     log.info("slack_settings_updated", org_id=org.org_id, alerts_muted=body.alerts_muted)
@@ -218,6 +218,7 @@ def slack_settings(body: SlackSettingsUpdate, org: OrgDep) -> SlackStatusRespons
 
 
 # ── POST /slack/disconnect ─────────────────────────────────────────────────────
+
 
 @router.post("/disconnect", status_code=204)
 def slack_disconnect(org: OrgDep) -> None:

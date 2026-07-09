@@ -7,17 +7,16 @@ Gap-03 (high):      Pagination terminates correctly even when a partial page is 
 Gap-04 (medium):    NULL and empty-string tags coalesce into the same summary group.
 """
 
-import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+import threading
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 
 # ── shared mock helpers ──────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     db = MagicMock()
@@ -43,7 +42,7 @@ def _mock_db() -> MagicMock:
 
 
 def _event_row(model: str, cost: str, feature_tag: str = "") -> dict:
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     bucket_ts = (today - timedelta(days=1)).isoformat() + "T00:00:00+00:00"
     return {
         "provider": "openai",
@@ -63,6 +62,7 @@ def _event_row(model: str, cost: str, feature_tag: str = "") -> dict:
 
 # ── Gap-01: Happy path ──────────────────────────────────────────────────────────
 
+
 class TestAggregationHappyPath:
     """Gap-01: aggregate_org has 0% direct coverage - verify the core pipeline."""
 
@@ -75,7 +75,7 @@ class TestAggregationHappyPath:
 
         events = [
             _event_row("gpt-4o", "5.00", "chat"),
-            _event_row("gpt-4o", "3.00", "chat"),    # same group as above
+            _event_row("gpt-4o", "3.00", "chat"),  # same group as above
             _event_row("claude-sonnet-4-5", "2.00", "api"),  # different group
         ]
 
@@ -84,9 +84,9 @@ class TestAggregationHappyPath:
 
         responses = [
             MagicMock(data=[{"id": "int-aaa"}]),  # integrations
-            MagicMock(data=[]),                    # delete summaries
-            MagicMock(data=events),               # first pagination page
-            MagicMock(data=[]),                    # empty → stop pagination
+            MagicMock(data=[]),  # delete summaries
+            MagicMock(data=events),  # first pagination page
+            MagicMock(data=[]),  # empty → stop pagination
         ]
 
         def execute_side():
@@ -105,15 +105,15 @@ class TestAggregationHappyPath:
         with patch("api.workers.aggregation._get_supabase", return_value=db):
             aggregate_org(ORG_ID)
 
-        assert len(upserted_rows) == 2, (
-            f"Expected 2 summary rows (2 distinct groups), got {len(upserted_rows)}"
-        )
+        assert (
+            len(upserted_rows) == 2
+        ), f"Expected 2 summary rows (2 distinct groups), got {len(upserted_rows)}"
 
         gpt_row = next((r for r in upserted_rows if r["model"] == "gpt-4o"), None)
         assert gpt_row is not None, "gpt-4o summary row missing"
-        assert Decimal(gpt_row["total_cost_usd"]) == Decimal("8.00"), (
-            f"Expected gpt-4o total cost 8.00, got {gpt_row['total_cost_usd']}"
-        )
+        assert Decimal(gpt_row["total_cost_usd"]) == Decimal(
+            "8.00"
+        ), f"Expected gpt-4o total cost 8.00, got {gpt_row['total_cost_usd']}"
         assert gpt_row["total_requests"] == 2
 
         claude_row = next((r for r in upserted_rows if r["model"] == "claude-sonnet-4-5"), None)
@@ -147,8 +147,8 @@ class TestAggregationHappyPath:
         db = _mock_db()
         responses = [
             MagicMock(data=[{"id": "int-aaa"}]),  # active integration
-            MagicMock(data=[]),                    # delete summaries
-            MagicMock(data=[]),                    # no events on first page
+            MagicMock(data=[]),  # delete summaries
+            MagicMock(data=[]),  # no events on first page
         ]
 
         def execute_side():
@@ -181,12 +181,13 @@ class TestAggregationHappyPath:
 
         # eq(org_id, ...) must have been called at least once during the delete chain
         eq_calls = [str(c) for c in db.eq.call_args_list]
-        assert any(ORG_ID in call for call in eq_calls), (
-            "Expected delete query to filter by org_id to prevent cross-org data wipe"
-        )
+        assert any(
+            ORG_ID in call for call in eq_calls
+        ), "Expected delete query to filter by org_id to prevent cross-org data wipe"
 
 
 # ── Gap-02: Concurrent race condition ──────────────────────────────────────────
+
 
 class TestAggregationConcurrentRace:
     """
@@ -204,8 +205,6 @@ class TestAggregationConcurrentRace:
         """
         from api.workers.aggregation import aggregate_org
 
-        today = datetime.now(timezone.utc).date()
-        bucket_ts = (today - timedelta(days=1)).isoformat() + "T00:00:00+00:00"
         event = _event_row("gpt-4o", "10.00")
 
         delete_count = [0]
@@ -217,17 +216,15 @@ class TestAggregationConcurrentRace:
             db = _mock_db()
             responses = [
                 MagicMock(data=[{"id": "int-aaa"}]),  # integrations
-                MagicMock(data=[]),                    # delete summaries
-                MagicMock(data=[event]),              # events page 1
-                MagicMock(data=[]),                    # events page 2 (done)
+                MagicMock(data=[]),  # delete summaries
+                MagicMock(data=[event]),  # events page 1
+                MagicMock(data=[]),  # events page 2 (done)
             ]
 
             def execute_side():
                 return responses.pop(0) if responses else MagicMock(data=[])
 
             db.execute.side_effect = execute_side
-
-            original_delete = db.delete
 
             def track_delete(*args, **kwargs):
                 with lock:
@@ -273,6 +270,7 @@ class TestAggregationConcurrentRace:
 
 # ── Gap-03: Pagination terminates on partial page ──────────────────────────────
 
+
 class TestAggregationPagination:
     """Gap-03 (high): Verify pagination terminates when the last page is smaller than PAGE_SIZE."""
 
@@ -281,7 +279,7 @@ class TestAggregationPagination:
         _PAGE_SIZE = 1000. If the first page has 1000 rows and the second has 5,
         the worker should make exactly 2 pagination calls and then stop.
         """
-        from api.workers.aggregation import aggregate_org, _PAGE_SIZE
+        from api.workers.aggregation import _PAGE_SIZE, aggregate_org
 
         full_page = [_event_row(f"model-{i}", "1.00") for i in range(_PAGE_SIZE)]
         partial_page = [_event_row(f"extra-{i}", "0.50") for i in range(5)]
@@ -289,7 +287,7 @@ class TestAggregationPagination:
         db = _mock_db()
         setup_responses = [
             MagicMock(data=[{"id": "int-aaa"}]),  # integrations
-            MagicMock(data=[]),                    # delete summaries
+            MagicMock(data=[]),  # delete summaries
         ]
         pagination_pages = [full_page, partial_page]
         page_call_count = [0]
@@ -318,17 +316,18 @@ class TestAggregationPagination:
             aggregate_org(ORG_ID)
 
         # Pagination should have stopped after the partial page
-        assert page_call_count[0] == 2, (
-            f"Expected exactly 2 pagination calls, got {page_call_count[0]}"
-        )
+        assert (
+            page_call_count[0] == 2
+        ), f"Expected exactly 2 pagination calls, got {page_call_count[0]}"
         # All rows from both pages should be aggregated
-        total_models = len(set(r["model"] for r in upserted_rows))
-        assert total_models == _PAGE_SIZE + 5, (
-            f"Expected {_PAGE_SIZE + 5} distinct models in summaries, got {total_models}"
-        )
+        total_models = len({r["model"] for r in upserted_rows})
+        assert (
+            total_models == _PAGE_SIZE + 5
+        ), f"Expected {_PAGE_SIZE + 5} distinct models in summaries, got {total_models}"
 
 
 # ── Gap-04: NULL vs empty-string tag coalescing ────────────────────────────────
+
 
 class TestAggregationTagCoalescing:
     """Gap-04 (medium): NULL and '' feature_tag must be merged into the same summary group."""
@@ -341,12 +340,9 @@ class TestAggregationTagCoalescing:
         """
         from api.workers.aggregation import aggregate_org
 
-        today = datetime.now(timezone.utc).date()
-        bucket_ts = (today - timedelta(days=1)).isoformat() + "T00:00:00+00:00"
-
         events = [
             {**_event_row("gpt-4o", "5.00"), "feature_tag": None},  # NULL
-            {**_event_row("gpt-4o", "3.00"), "feature_tag": ""},    # empty string
+            {**_event_row("gpt-4o", "3.00"), "feature_tag": ""},  # empty string
         ]
 
         db = _mock_db()
@@ -379,12 +375,13 @@ class TestAggregationTagCoalescing:
             f"got {len(upserted_rows)}. "
             "Both should map to '' via the `or ''` coercion in aggregate_org."
         )
-        assert Decimal(upserted_rows[0]["total_cost_usd"]) == Decimal("8.00"), (
-            f"Expected merged cost of 8.00, got {upserted_rows[0]['total_cost_usd']}"
-        )
+        assert Decimal(upserted_rows[0]["total_cost_usd"]) == Decimal(
+            "8.00"
+        ), f"Expected merged cost of 8.00, got {upserted_rows[0]['total_cost_usd']}"
 
 
 # ── M1-U-AGG-005: Revoked integration excluded ─────────────────────────────────
+
 
 class TestAggregationRevokedExclusion:
     """M1-U-AGG-005: aggregate_org passes only active integration IDs to usage_events filter."""
@@ -402,8 +399,8 @@ class TestAggregationRevokedExclusion:
         # The WHERE clause in aggregate_org excludes revoked ones (status != "revoked").
         responses = [
             MagicMock(data=[{"id": "int-active-only"}]),  # active integrations only
-            MagicMock(data=[]),                             # delete summaries
-            MagicMock(data=[]),                             # no events on first page
+            MagicMock(data=[]),  # delete summaries
+            MagicMock(data=[]),  # no events on first page
         ]
 
         def execute_side():
@@ -430,7 +427,9 @@ class TestAggregationRevokedExclusion:
             f"Got: {active_ids_used}"
         )
 
+
 # ── TC-FAN-01 & TC-FAN-02: aggregate_all_orgs fan-out ──────────────────────────
+
 
 class TestAggregateAllOrgsFanOut:
     """TC-FAN-01 and TC-FAN-02 - aggregate_all_orgs dispatches to unique org_ids."""
@@ -480,6 +479,7 @@ class TestAggregateAllOrgsFanOut:
 
 # ── TC-AGG-10: Pagination with 2 pages ──────────────────────────────────────────
 
+
 class TestAggregationPaginationTwoPages:
     """TC-AGG-10 - aggregate_org paginates and collects all rows across 2 pages."""
 
@@ -488,7 +488,7 @@ class TestAggregationPaginationTwoPages:
         Mock DB to return 1000 rows on first page and 500 on second.
         All 1500 unique models should appear in the upserted summaries.
         """
-        from api.workers.aggregation import aggregate_org, _PAGE_SIZE
+        from api.workers.aggregation import _PAGE_SIZE, aggregate_org
 
         page1 = [_event_row(f"model-p1-{i}", "1.00") for i in range(_PAGE_SIZE)]
         page2 = [_event_row(f"model-p2-{i}", "0.50") for i in range(500)]
@@ -534,6 +534,7 @@ class TestAggregationPaginationTwoPages:
 
 # ── TC-AGG-11: Revoked integration excluded from usage_events filter ──────────
 
+
 class TestAggregationRevokedIntegrationExcluded:
     """TC-AGG-11 - revoked integrations must not appear in the IN_ filter."""
 
@@ -567,6 +568,6 @@ class TestAggregationRevokedIntegrationExcluded:
             aggregate_org(ORG_ID)
 
         assert len(captured_in_filters) == 1, "Expected exactly one in_() filter on integration_id"
-        assert captured_in_filters[0] == ["int-active"], (
-            f"Expected only ['int-active'] in filter, got {captured_in_filters[0]}"
-        )
+        assert captured_in_filters[0] == [
+            "int-active"
+        ], f"Expected only ['int-active'] in filter, got {captured_in_filters[0]}"

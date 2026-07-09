@@ -11,10 +11,8 @@ Gap-17 (medium): BUG-03: _get_slack_channel uses lstrip("\\x") instead of remove
 
 import base64
 import json
-import time
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -32,9 +30,7 @@ def _make_signature(svix_id: str, svix_timestamp: str, body: bytes) -> str:
     import hmac as _hmac
 
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
-    digest = base64.b64encode(
-        _hmac.new(_SECRET_KEY, signed, hashlib.sha256).digest()
-    ).decode()
+    digest = base64.b64encode(_hmac.new(_SECRET_KEY, signed, hashlib.sha256).digest()).decode()
     return f"v1,{digest}"
 
 
@@ -57,6 +53,7 @@ def _post_webhook(payload: dict) -> MagicMock:
 
 
 # ── Gap-16: BUG-02 - .single() on missing parent row ─────────────────────────
+
 
 class TestMembershipCreatedSingleBug:
     """
@@ -110,9 +107,9 @@ class TestMembershipCreatedSingleBug:
         db.upsert.return_value = db
         db.single.return_value = db
         db.execute.side_effect = [
-            MagicMock(data={"id": "user-uuid"}),   # users.single()
-            MagicMock(data={"id": "org-uuid"}),    # organizations.single()
-            MagicMock(data=[]),                     # upsert
+            MagicMock(data={"id": "user-uuid"}),  # users.single()
+            MagicMock(data={"id": "org-uuid"}),  # organizations.single()
+            MagicMock(data=[]),  # upsert
         ]
 
         with patch("api.routers.webhooks._service_db", return_value=db):
@@ -143,12 +140,13 @@ class TestMembershipCreatedSingleBug:
 
         # With a non-empty dict (truthy), the `if not user_resp.data` guard passes
         # and then user_resp.data["id"] raises KeyError → 500 from wrong location.
-        assert resp.status_code >= 400, (
-            "Gap-16: Expected failure when user_resp.data is an error dict (not a list row)."
-        )
+        assert (
+            resp.status_code >= 400
+        ), "Gap-16: Expected failure when user_resp.data is an error dict (not a list row)."
 
 
 # ── Gap-17: BUG-03 - lstrip vs removeprefix in _get_slack_channel ────────────
+
 
 class TestSlackTokenDecryptionLstrip:
     """
@@ -208,14 +206,14 @@ class TestSlackTokenDecryptionLstrip:
         """
         # Edge case: stored without the leading backslash (malformed)
         malformed = "xdeadbeef"  # only 'x' prefix, no backslash
-        via_lstrip = malformed.lstrip("\\x")      # strips 'x' → "deadbeef" (WRONG)
+        via_lstrip = malformed.lstrip("\\x")  # strips 'x' → "deadbeef" (WRONG)
         via_removeprefix = malformed.removeprefix("\\x")  # no match → "xdeadbeef" (correct)
 
         assert via_lstrip != via_removeprefix, (
             "BUG-03: Expected lstrip and removeprefix to differ for malformed prefix - "
             "this test documents the semantic difference."
         )
-        assert via_lstrip == "deadbeef"         # lstrip silently over-strips
+        assert via_lstrip == "deadbeef"  # lstrip silently over-strips
         assert via_removeprefix == "xdeadbeef"  # removeprefix correctly leaves it unchanged
 
     def test_get_slack_channel_decrypts_correctly(self) -> None:

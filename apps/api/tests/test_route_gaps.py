@@ -11,8 +11,6 @@ import base64
 import json
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from api.deps import OrgContext, _require_org
 from api.main import app as _app
 
@@ -49,6 +47,7 @@ def _mock_db() -> MagicMock:
 
 # ── Gap-25: Slack OAuth missing 'team' field ──────────────────────────────────
 
+
 class TestSlackOAuthCallbackMissingTeam:
     """
     Gap-25 (high): slack_oauth_callback accesses slack_resp["team"]["id"] directly.
@@ -65,6 +64,7 @@ class TestSlackOAuthCallbackMissingTeam:
     def _post_callback(self, slack_resp: dict) -> MagicMock:
         """POST /slack/oauth/callback with a mocked Slack exchange response."""
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         _app.dependency_overrides[_require_org] = lambda: _org_dep()
@@ -103,9 +103,7 @@ class TestSlackOAuthCallbackMissingTeam:
         }
         resp = self._post_callback(slack_resp_no_team)
 
-        assert resp.status_code != 200, (
-            "Gap-25: Missing 'team' key must not result in 200."
-        )
+        assert resp.status_code != 200, "Gap-25: Missing 'team' key must not result in 200."
         # Document current (broken) behavior: 500 from unhandled KeyError
         # When fixed: assert resp.status_code == 400
 
@@ -126,6 +124,7 @@ class TestSlackOAuthCallbackMissingTeam:
         }
 
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         _app.dependency_overrides[_require_org] = lambda: _org_dep()
@@ -172,13 +171,14 @@ class TestSlackOAuthCallbackMissingTeam:
         If slack_client_id is not set, endpoint returns 503 immediately.
         """
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         _app.dependency_overrides[_require_org] = lambda: _org_dep()
         client = TestClient(app, raise_server_exceptions=False)
         try:
             with patch("api.routers.slack.settings") as ms:
-                ms.slack_client_id = ""   # not configured
+                ms.slack_client_id = ""  # not configured
                 ms.slack_client_secret = ""
                 resp = client.post(
                     "/api/v1/slack/oauth/callback",
@@ -193,6 +193,7 @@ class TestSlackOAuthCallbackMissingTeam:
 
 # ── Gap-26: DELETE integration cascade cleanup failure ────────────────────────
 
+
 class TestDeleteIntegrationCascadeFailure:
     """
     Gap-26 (medium): delete_integration() wraps cascade cleanup in try/except.
@@ -200,14 +201,13 @@ class TestDeleteIntegrationCascadeFailure:
     the integration is still marked revoked and the route returns 204.
     """
 
-    def _delete_integration(
-        self, cascade_raises: bool = False
-    ) -> tuple[MagicMock, MagicMock]:
+    def _delete_integration(self, cascade_raises: bool = False) -> tuple[MagicMock, MagicMock]:
         """
         Run DELETE /integrations/{id} and return (response, db mock).
         cascade_raises: if True, make usage_events.delete() raise.
         """
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         client = TestClient(app, raise_server_exceptions=False)
@@ -219,7 +219,6 @@ class TestDeleteIntegrationCascadeFailure:
         if cascade_raises:
             # Make delete raise after the first execute() call (which is the update)
             call_n = [0]
-            real_execute = db.execute.return_value
 
             def execute_side_effect():
                 call_n[0] += 1
@@ -249,9 +248,9 @@ class TestDeleteIntegrationCascadeFailure:
         """
         resp, _ = self._delete_integration(cascade_raises=True)
 
-        assert resp.status_code == 204, (
-            f"Gap-26: Expected 204 despite cascade failure. Got {resp.status_code}."
-        )
+        assert (
+            resp.status_code == 204
+        ), f"Gap-26: Expected 204 despite cascade failure. Got {resp.status_code}."
 
     def test_cascade_success_returns_204(self) -> None:
         """Baseline: when cascade cleanup succeeds, route returns 204."""
@@ -261,6 +260,7 @@ class TestDeleteIntegrationCascadeFailure:
     def test_integration_not_found_returns_404(self) -> None:
         """If integration does not exist (or belongs to a different org), returns 404."""
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         client = TestClient(app, raise_server_exceptions=False)
@@ -282,6 +282,7 @@ class TestDeleteIntegrationCascadeFailure:
         to prevent cross-org deletion (org isolation enforced in code).
         """
         from fastapi.testclient import TestClient
+
         from api.main import app
 
         client = TestClient(app, raise_server_exceptions=False)

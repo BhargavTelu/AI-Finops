@@ -7,13 +7,13 @@ Covers:
   - _snapshot_overrides / _restore_overrides helpers in the ingestion worker
 """
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, call, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
-from api.deps import OrgContext, _require_org, _require_admin_org
+from api.deps import OrgContext, _require_admin_org, _require_org
 from api.main import app
 from api.workers.ingestion import _norm_bucket_hour, _restore_overrides, _snapshot_overrides
 
@@ -45,6 +45,7 @@ client = TestClient(app)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict]) -> MagicMock:
     db = MagicMock()
@@ -84,6 +85,7 @@ def _sample_event(**overrides) -> dict:
 
 
 # ── GET /usage/events ─────────────────────────────────────────────────────────
+
 
 class TestListUsageEvents:
     def test_returns_event_list(self) -> None:
@@ -136,24 +138,35 @@ class TestListUsageEvents:
         assert resp.status_code == 200
         row = resp.json()[0]
         required = {
-            "id", "provider", "model", "api_key_label",
-            "feature_tag", "team_tag", "customer_tag", "env_tag",
-            "cost_usd", "request_count", "input_tokens", "output_tokens",
-            "bucket_hour", "manual_override",
+            "id",
+            "provider",
+            "model",
+            "api_key_label",
+            "feature_tag",
+            "team_tag",
+            "customer_tag",
+            "env_tag",
+            "cost_usd",
+            "request_count",
+            "input_tokens",
+            "output_tokens",
+            "bucket_hour",
+            "manual_override",
         }
         assert required.issubset(row.keys())
 
 
 # ── PATCH /usage/events/{id}/tags ─────────────────────────────────────────────
 
+
 class TestOverrideEventTags:
     def test_happy_path_sets_feature_tag(self) -> None:
         updated = _sample_event(feature_tag="payments", manual_override=True)
         db = _mock_db([{"id": EVENT_ID}])
         db.execute.side_effect = [
-            MagicMock(data=[{"id": EVENT_ID}]),   # ownership check
-            MagicMock(data=[{"id": EVENT_ID}]),   # user lookup
-            MagicMock(data=[updated]),             # update + return
+            MagicMock(data=[{"id": EVENT_ID}]),  # ownership check
+            MagicMock(data=[{"id": EVENT_ID}]),  # user lookup
+            MagicMock(data=[updated]),  # update + return
         ]
 
         # aggregate_org is a local import inside the endpoint; patch at source module
@@ -238,13 +251,13 @@ class TestOverrideEventTags:
     # TC-OV-101
     def test_manual_override_by_set_to_supabase_user_id(self) -> None:
         """The DB update payload must include the resolved Supabase user UUID."""
-        SUPABASE_USER_ID = "supabase-user-uuid-001"
+        supabase_user_id = "supabase-user-uuid-001"
         updated = _sample_event(feature_tag="search", manual_override=True)
         db = _mock_db([])
         db.execute.side_effect = [
-            MagicMock(data=[{"id": EVENT_ID}]),               # ownership check
-            MagicMock(data=[{"id": SUPABASE_USER_ID}]),       # user lookup
-            MagicMock(data=[updated]),                         # update + return
+            MagicMock(data=[{"id": EVENT_ID}]),  # ownership check
+            MagicMock(data=[{"id": supabase_user_id}]),  # user lookup
+            MagicMock(data=[updated]),  # update + return
         ]
 
         with (
@@ -258,7 +271,7 @@ class TestOverrideEventTags:
 
         assert resp.status_code == 200
         update_payload = db.update.call_args.args[0]
-        assert update_payload["manual_override_by"] == SUPABASE_USER_ID
+        assert update_payload["manual_override_by"] == supabase_user_id
 
     # TC-OV-102
     def test_manual_override_at_set_in_db_update(self) -> None:
@@ -285,6 +298,7 @@ class TestOverrideEventTags:
         assert ts is not None
         # Must parse as a valid timezone-aware datetime
         from datetime import datetime as _dt
+
         parsed = _dt.fromisoformat(ts)
         assert parsed.tzinfo is not None
 
@@ -294,9 +308,9 @@ class TestOverrideEventTags:
         updated = _sample_event(feature_tag="search", manual_override=True)
         db = _mock_db([])
         db.execute.side_effect = [
-            MagicMock(data=[{"id": EVENT_ID}]),   # ownership check
-            MagicMock(data=[]),                    # user lookup: no match
-            MagicMock(data=[updated]),             # update + return
+            MagicMock(data=[{"id": EVENT_ID}]),  # ownership check
+            MagicMock(data=[]),  # user lookup: no match
+            MagicMock(data=[updated]),  # update + return
         ]
 
         with (
@@ -340,6 +354,7 @@ class TestOverrideEventTags:
 
 # ── AdminOrgDep enforcement ───────────────────────────────────────────────────
 
+
 class TestAdminRequired:
     def test_non_admin_gets_403_on_events_list(self) -> None:
         # Remove the admin override so the real dependency runs
@@ -348,8 +363,8 @@ class TestAdminRequired:
             db = _mock_db([])
             # user lookup returns a row but role is 'member'
             db.execute.side_effect = [
-                MagicMock(data=[{"id": "user-uuid"}]),   # users lookup
-                MagicMock(data=[{"role": "member"}]),    # org member check
+                MagicMock(data=[{"id": "user-uuid"}]),  # users lookup
+                MagicMock(data=[{"role": "member"}]),  # org member check
             ]
             with patch("api.deps.create_client", return_value=db):
                 resp = client.get("/api/v1/usage/events")
@@ -377,8 +392,8 @@ class TestAdminRequired:
         try:
             db = _mock_db([])
             db.execute.side_effect = [
-                MagicMock(data=[{"id": "user-uuid"}]),   # users lookup
-                MagicMock(data=[{"role": "member"}]),    # org member check
+                MagicMock(data=[{"id": "user-uuid"}]),  # users lookup
+                MagicMock(data=[{"role": "member"}]),  # org member check
             ]
             with patch("api.deps.create_client", return_value=db):
                 resp = client.patch(
@@ -392,6 +407,7 @@ class TestAdminRequired:
 
 
 # ── Ingestion worker helpers ───────────────────────────────────────────────────
+
 
 class TestNormBucketHour:
     def test_iso_with_offset(self) -> None:
@@ -410,29 +426,31 @@ class TestNormBucketHour:
 class TestSnapshotOverrides:
     def test_returns_empty_when_no_overrides(self) -> None:
         db = _mock_db([])
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 1, 2, tzinfo=UTC)
 
         result = _snapshot_overrides(db, ORG_ID, "int-1", start, end)
 
         assert result == {}
 
     def test_indexes_by_model_label_hour(self) -> None:
-        db = _mock_db([
-            {
-                "model": "gpt-4o",
-                "api_key_label": "prod",
-                "bucket_hour": "2025-01-15T12:00:00+00:00",
-                "feature_tag": "payments",
-                "team_tag": None,
-                "customer_tag": None,
-                "env_tag": "prod",
-                "manual_override_by": None,
-                "manual_override_at": None,
-            }
-        ])
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 31, tzinfo=timezone.utc)
+        db = _mock_db(
+            [
+                {
+                    "model": "gpt-4o",
+                    "api_key_label": "prod",
+                    "bucket_hour": "2025-01-15T12:00:00+00:00",
+                    "feature_tag": "payments",
+                    "team_tag": None,
+                    "customer_tag": None,
+                    "env_tag": "prod",
+                    "manual_override_by": None,
+                    "manual_override_at": None,
+                }
+            ]
+        )
+        start = datetime(2025, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 1, 31, tzinfo=UTC)
 
         result = _snapshot_overrides(db, ORG_ID, "int-1", start, end)
 
@@ -445,21 +463,23 @@ class TestSnapshotOverrides:
     # TC-IW-101
     def test_none_api_key_label_normalised_to_empty_string_in_key(self) -> None:
         """api_key_label=None must produce "" in the snapshot key, not None."""
-        db = _mock_db([
-            {
-                "model": "gpt-4o",
-                "api_key_label": None,
-                "bucket_hour": "2025-01-15T12:00:00+00:00",
-                "feature_tag": "payments",
-                "team_tag": None,
-                "customer_tag": None,
-                "env_tag": None,
-                "manual_override_by": None,
-                "manual_override_at": None,
-            }
-        ])
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 1, 31, tzinfo=timezone.utc)
+        db = _mock_db(
+            [
+                {
+                    "model": "gpt-4o",
+                    "api_key_label": None,
+                    "bucket_hour": "2025-01-15T12:00:00+00:00",
+                    "feature_tag": "payments",
+                    "team_tag": None,
+                    "customer_tag": None,
+                    "env_tag": None,
+                    "manual_override_by": None,
+                    "manual_override_at": None,
+                }
+            ]
+        )
+        start = datetime(2025, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 1, 31, tzinfo=UTC)
 
         result = _snapshot_overrides(db, ORG_ID, "int-1", start, end)
 
@@ -508,7 +528,9 @@ class TestRestoreOverrides:
         db.update.return_value = db
 
         snapshot: dict = {}  # no overrides
-        rows = [{"model": "gpt-4o", "api_key_label": "prod", "bucket_hour": "2025-01-15T12:00:00+00:00"}]
+        rows = [
+            {"model": "gpt-4o", "api_key_label": "prod", "bucket_hour": "2025-01-15T12:00:00+00:00"}
+        ]
 
         _restore_overrides(db, ORG_ID, "int-1", rows, snapshot)
 
@@ -544,8 +566,16 @@ class TestRestoreOverrides:
             },
         }
         rows = [
-            {"model": "gpt-4o", "api_key_label": "prod", "bucket_hour": "2025-01-15T12:00:00+00:00"},
-            {"model": "claude-3-5-sonnet-20241022", "api_key_label": "staging", "bucket_hour": "2025-01-16T08:00:00+00:00"},
+            {
+                "model": "gpt-4o",
+                "api_key_label": "prod",
+                "bucket_hour": "2025-01-15T12:00:00+00:00",
+            },
+            {
+                "model": "claude-3-5-sonnet-20241022",
+                "api_key_label": "staging",
+                "bucket_hour": "2025-01-16T08:00:00+00:00",
+            },
         ]
 
         _restore_overrides(db, ORG_ID, "int-1", rows, snapshot)
@@ -573,8 +603,16 @@ class TestRestoreOverrides:
             },
         }
         rows = [
-            {"model": "gpt-4o", "api_key_label": "prod", "bucket_hour": "2025-01-15T12:00:00+00:00"},     # match
-            {"model": "claude-3-5-sonnet-20241022", "api_key_label": "prod", "bucket_hour": "2025-01-15T12:00:00+00:00"},  # no match
+            {
+                "model": "gpt-4o",
+                "api_key_label": "prod",
+                "bucket_hour": "2025-01-15T12:00:00+00:00",
+            },  # match
+            {
+                "model": "claude-3-5-sonnet-20241022",
+                "api_key_label": "prod",
+                "bucket_hour": "2025-01-15T12:00:00+00:00",
+            },  # no match
         ]
 
         _restore_overrides(db, ORG_ID, "int-1", rows, snapshot)

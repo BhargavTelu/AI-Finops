@@ -3,7 +3,7 @@ Unit tests for the OpenAI adapter.
 Mocks httpx to avoid real network calls.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -11,8 +11,8 @@ import pytest
 
 from api.adapters.openai import OpenAIAdapter
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_response(status_code: int, json_body: dict) -> MagicMock:
     resp = MagicMock()
@@ -30,12 +30,13 @@ def _completions_page(buckets: list[dict], has_more: bool = False) -> dict:
     return {"object": "page", "data": buckets, "has_more": has_more, "next_page": None}
 
 
-START = datetime(2025, 1, 1, tzinfo=timezone.utc)
-END = datetime(2025, 1, 2, tzinfo=timezone.utc)
+START = datetime(2025, 1, 1, tzinfo=UTC)
+END = datetime(2025, 1, 2, tzinfo=UTC)
 KEY = b"sk-admin-testkey1234567890"
 
 
 # ── validate() ────────────────────────────────────────────────────────────────
+
 
 class TestValidate:
     def test_returns_true_on_200(self) -> None:
@@ -45,7 +46,10 @@ class TestValidate:
 
     def test_raises_on_401(self) -> None:
         adapter = OpenAIAdapter()
-        with patch("api.adapters.openai.httpx.get", return_value=_mock_response(401, {"error": "unauthorized"})):
+        with patch(
+            "api.adapters.openai.httpx.get",
+            return_value=_mock_response(401, {"error": "unauthorized"}),
+        ):
             with pytest.raises(ValueError, match="Invalid or unauthorized"):
                 adapter.validate(KEY)
 
@@ -63,6 +67,7 @@ class TestValidate:
 
     def test_raises_on_network_error(self) -> None:
         import httpx as _httpx
+
         adapter = OpenAIAdapter()
         with patch("api.adapters.openai.httpx.get", side_effect=_httpx.RequestError("timeout")):
             with pytest.raises(ValueError, match="Network error"):
@@ -70,6 +75,7 @@ class TestValidate:
 
 
 # ── fetch_costs() ─────────────────────────────────────────────────────────────
+
 
 class TestFetchCosts:
     def _make_adapter_and_pages(self, cost_buckets: list[dict], completion_buckets: list[dict]):
@@ -122,7 +128,7 @@ class TestFetchCosts:
         assert e.output_tokens == 200
         assert e.cached_tokens == 50
         assert e.request_count == 3
-        assert e.bucket_hour == datetime.fromtimestamp(ts, tz=timezone.utc).replace(tzinfo=None)
+        assert e.bucket_hour == datetime.fromtimestamp(ts, tz=UTC).replace(tzinfo=None)
         assert e.raw_meta["currency"] == "usd"
 
     def test_zero_cost_results_are_skipped(self) -> None:
@@ -131,9 +137,7 @@ class TestFetchCosts:
             {
                 "start_time": ts,
                 "end_time": ts + 3600,
-                "results": [
-                    {"model": "gpt-4o-mini", "amount": {"value": 0, "currency": "usd"}}
-                ],
+                "results": [{"model": "gpt-4o-mini", "amount": {"value": 0, "currency": "usd"}}],
             }
         ]
         adapter, side_effects = self._make_adapter_and_pages(cost_buckets, [])
@@ -149,9 +153,7 @@ class TestFetchCosts:
             {
                 "start_time": ts,
                 "end_time": ts + 3600,
-                "results": [
-                    {"model": "gpt-4o", "amount": {"value": 1.00, "currency": "usd"}}
-                ],
+                "results": [{"model": "gpt-4o", "amount": {"value": 1.00, "currency": "usd"}}],
             }
         ]
         # No completion data for this bucket
@@ -213,36 +215,62 @@ class TestFetchCosts:
 
 # ── BUG-C2: per-project attribution (api_key_label) ─────────────────────────────
 
+
 class TestProjectAttribution:
     def _projects_page(self, projects: list[dict]) -> dict:
         return {"object": "list", "data": projects, "has_more": False}
 
     def test_project_id_resolves_to_project_name_label(self) -> None:
         ts = int(START.timestamp())
-        cost_buckets = [{
-            "start_time": ts,
-            "end_time": ts + 3600,
-            "results": [
-                {"line_item": "gpt-4o", "project_id": "proj_A",
-                 "amount": {"value": 0.50, "currency": "usd"}},
-                {"line_item": "gpt-4o", "project_id": "proj_B",
-                 "amount": {"value": 0.25, "currency": "usd"}},
-            ],
-        }]
-        completion_buckets = [{
-            "start_time": ts,
-            "end_time": ts + 3600,
-            "results": [
-                {"model": "gpt-4o", "project_id": "proj_A",
-                 "input_tokens": 1000, "output_tokens": 100, "num_model_requests": 5},
-                {"model": "gpt-4o", "project_id": "proj_B",
-                 "input_tokens": 200, "output_tokens": 20, "num_model_requests": 2},
-            ],
-        }]
-        projects_resp = _mock_response(200, self._projects_page([
-            {"id": "proj_A", "name": "Chat Backend"},
-            {"id": "proj_B", "name": "Evals"},
-        ]))
+        cost_buckets = [
+            {
+                "start_time": ts,
+                "end_time": ts + 3600,
+                "results": [
+                    {
+                        "line_item": "gpt-4o",
+                        "project_id": "proj_A",
+                        "amount": {"value": 0.50, "currency": "usd"},
+                    },
+                    {
+                        "line_item": "gpt-4o",
+                        "project_id": "proj_B",
+                        "amount": {"value": 0.25, "currency": "usd"},
+                    },
+                ],
+            }
+        ]
+        completion_buckets = [
+            {
+                "start_time": ts,
+                "end_time": ts + 3600,
+                "results": [
+                    {
+                        "model": "gpt-4o",
+                        "project_id": "proj_A",
+                        "input_tokens": 1000,
+                        "output_tokens": 100,
+                        "num_model_requests": 5,
+                    },
+                    {
+                        "model": "gpt-4o",
+                        "project_id": "proj_B",
+                        "input_tokens": 200,
+                        "output_tokens": 20,
+                        "num_model_requests": 2,
+                    },
+                ],
+            }
+        ]
+        projects_resp = _mock_response(
+            200,
+            self._projects_page(
+                [
+                    {"id": "proj_A", "name": "Chat Backend"},
+                    {"id": "proj_B", "name": "Evals"},
+                ]
+            ),
+        )
 
         adapter = OpenAIAdapter()
         side_effects = [
@@ -265,14 +293,19 @@ class TestProjectAttribution:
 
     def test_project_list_failure_falls_back_to_raw_id(self) -> None:
         ts = int(START.timestamp())
-        cost_buckets = [{
-            "start_time": ts,
-            "end_time": ts + 3600,
-            "results": [
-                {"line_item": "gpt-4o", "project_id": "proj_X",
-                 "amount": {"value": 1.00, "currency": "usd"}},
-            ],
-        }]
+        cost_buckets = [
+            {
+                "start_time": ts,
+                "end_time": ts + 3600,
+                "results": [
+                    {
+                        "line_item": "gpt-4o",
+                        "project_id": "proj_X",
+                        "amount": {"value": 1.00, "currency": "usd"},
+                    },
+                ],
+            }
+        ]
         adapter = OpenAIAdapter()
         side_effects = [
             _mock_response(200, _completions_page([])),
@@ -287,13 +320,15 @@ class TestProjectAttribution:
 
     def test_no_project_id_keeps_label_none_and_skips_project_fetch(self) -> None:
         ts = int(START.timestamp())
-        cost_buckets = [{
-            "start_time": ts,
-            "end_time": ts + 3600,
-            "results": [
-                {"line_item": "gpt-4o", "amount": {"value": 1.00, "currency": "usd"}},
-            ],
-        }]
+        cost_buckets = [
+            {
+                "start_time": ts,
+                "end_time": ts + 3600,
+                "results": [
+                    {"line_item": "gpt-4o", "amount": {"value": 1.00, "currency": "usd"}},
+                ],
+            }
+        ]
         adapter = OpenAIAdapter()
         # Only two responses provided: a third (project list) call would raise StopIteration
         side_effects = [

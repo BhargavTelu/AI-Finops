@@ -25,7 +25,6 @@ pip install -e ".[dev]"
 cd ../..
 
 echo "==> Copying env examples (won't overwrite existing)..."
-cp -n .env.example .env.local 2>/dev/null || true
 cp -n apps/web/.env.local.example apps/web/.env.local 2>/dev/null || true
 cp -n apps/api/.env.example apps/api/.env 2>/dev/null || true
 

@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
@@ -10,7 +10,7 @@ from api.services.db import get_supabase
 router = APIRouter(prefix="/anomalies", tags=["anomalies"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 

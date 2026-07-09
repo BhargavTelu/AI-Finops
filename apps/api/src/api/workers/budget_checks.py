@@ -2,14 +2,16 @@
 Nightly budget checks - runs at 02:00 UTC (after aggregation + anomaly detection).
 Algorithm: compare MTD spend per scope against monthly_limit.
 Fires email alert at alert_at_pct (default 80%) and 100%.
-Idempotent: notified_80_at / notified_100_at guard prevents re-alerts within the same calendar month.
+Idempotent: the notified_80_at / notified_100_at guard prevents re-alerts
+within the same calendar month.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.config import settings
@@ -19,20 +21,20 @@ from api.workers.notifications import send_budget_alert
 log = structlog.get_logger()
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 def _mtd_range() -> tuple[str, str]:
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     return today.replace(day=1).isoformat(), today.isoformat()
 
 
-def _compute_scope_spend(db, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
-    """Sum total_cost_usd from daily_cost_summaries for the current calendar month, filtered by scope."""
+def _compute_scope_spend(db: Any, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
+    """Sum total_cost_usd from daily_cost_summaries for the current month, filtered by scope."""
     first_day, today = _mtd_range()
 
-    def build_query():
+    def build_query() -> Any:
         q = (
             db.table("daily_cost_summaries")
             .select("total_cost_usd")
@@ -59,7 +61,7 @@ def _compute_scope_spend(db, org_id: str, scope_type: str, scope_value: str | No
     # spend once the month's summary rows exceed one page, silently missing
     # the alert thresholds.
     rows = fetch_all_pages(build_query)
-    return sum(Decimal(str(row["total_cost_usd"])) for row in rows)
+    return sum((Decimal(str(row["total_cost_usd"])) for row in rows), Decimal("0"))
 
 
 def _same_calendar_month(ts_str: str | None) -> bool:
@@ -68,7 +70,7 @@ def _same_calendar_month(ts_str: str | None) -> bool:
         return False
     try:
         ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return ts.year == now.year and ts.month == now.month
     except ValueError:
         return False
@@ -109,7 +111,7 @@ def check_org(org_id: str) -> None:
     if not budgets_result.data:
         return
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     alerted = 0
 
     for budget in budgets_result.data:
@@ -130,7 +132,9 @@ def check_org(org_id: str) -> None:
         if spent_pct >= 100:
             if not _same_calendar_month(budget.get("notified_100_at")):
                 send_budget_alert.delay(budget_id, 100, org_id)
-                db.table("budgets").update({"notified_100_at": now_iso}).eq("id", budget_id).execute()
+                db.table("budgets").update({"notified_100_at": now_iso}).eq(
+                    "id", budget_id
+                ).execute()
                 alerted += 1
                 log.info(
                     "budget_alert_queued",

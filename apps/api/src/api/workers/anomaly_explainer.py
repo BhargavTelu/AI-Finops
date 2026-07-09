@@ -6,10 +6,11 @@ immediately after the anomaly row is inserted. Skips if an explanation was
 already generated within the last 24 hours (cache TTL).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.config import settings
@@ -20,7 +21,7 @@ log = structlog.get_logger()
 _CACHE_TTL_HOURS = 24
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
@@ -53,7 +54,7 @@ def explain_anomaly(anomaly_id: str) -> None:
     gen_at_raw: str | None = anomaly.get("explanation_generated_at")
     if gen_at_raw:
         gen_at = datetime.fromisoformat(gen_at_raw.replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) - gen_at < timedelta(hours=_CACHE_TTL_HOURS):
+        if datetime.now(UTC) - gen_at < timedelta(hours=_CACHE_TTL_HOURS):
             log.debug("explain_anomaly_cached", anomaly_id=anomaly_id)
             return
 
@@ -64,7 +65,7 @@ def explain_anomaly(anomaly_id: str) -> None:
     db.table("anomalies").update(
         {
             "explanation": explanation,
-            "explanation_generated_at": datetime.now(timezone.utc).isoformat(),
+            "explanation_generated_at": datetime.now(UTC).isoformat(),
         }
     ).eq("id", anomaly_id).execute()
 

@@ -4,14 +4,17 @@ TC-SEC-01 to TC-SEC-08.
 """
 
 import base64
-from datetime import datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-import pytest
+from cryptography.exceptions import InvalidTag
+from fastapi import FastAPI as _FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
+from api.deps import OrgDep as _OrgDep
 from api.main import app
 from api.services.encryption import EncryptionService
 
@@ -20,7 +23,7 @@ ORG_B = "00000000-0000-0000-0000-000000000002"
 INT_ID_A = "aaaaaaaa-0000-0000-0000-000000000001"
 BUDGET_ID_A = "bbbbbbbb-0000-0000-0000-000000000001"
 ANOMALY_ID_A = "cccccccc-0000-0000-0000-000000000001"
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 # Default auth = Org A - set at import time and re-applied by the autouse fixture below.
 _ORG_A_OVERRIDE = lambda: OrgContext(user_id="user_a", org_id=ORG_A)  # noqa: E731
@@ -82,6 +85,7 @@ def _mock_db(rows: list[dict] | None = None) -> MagicMock:
 
 # ── TC-SEC-01: API key never in response ──────────────────────────────────────
 
+
 class TestApiKeyNeverInResponse:
     def test_create_integration_no_api_key_in_response(self) -> None:  # TC-SEC-01 part 1
         db = _mock_db(
@@ -100,13 +104,19 @@ class TestApiKeyNeverInResponse:
         )
         with (
             patch("api.routers.integrations._get_supabase", return_value=db),
-            patch("api.routers.integrations._ADAPTERS", {"openai": MagicMock(validate=MagicMock())}),
+            patch(
+                "api.routers.integrations._ADAPTERS", {"openai": MagicMock(validate=MagicMock())}
+            ),
             patch("api.routers.integrations.backfill_integration") as mock_bf,
         ):
             mock_bf.delay = MagicMock()
             resp = client.post(
                 "/api/v1/integrations",
-                json={"provider": "openai", "display_name": "Main", "api_key": "sk-admin-key-1234567890"},
+                json={
+                    "provider": "openai",
+                    "display_name": "Main",
+                    "api_key": "sk-admin-key-1234567890",
+                },
             )
         assert resp.status_code == 201
         data = resp.json()
@@ -138,6 +148,7 @@ class TestApiKeyNeverInResponse:
 
 # ── TC-SEC-02: Org isolation - integrations ───────────────────────────────────
 
+
 class TestOrgIsolationIntegrations:
     def test_org_b_cannot_access_org_a_integration(self) -> None:  # TC-SEC-02
         """Org B deleting Org A's integration must get 404, not 403."""
@@ -149,6 +160,7 @@ class TestOrgIsolationIntegrations:
 
 
 # ── TC-SEC-03: Org isolation - budgets ────────────────────────────────────────
+
 
 class TestOrgIsolationBudgets:
     def test_org_b_cannot_patch_org_a_budget(self) -> None:  # TC-SEC-03
@@ -163,17 +175,17 @@ class TestOrgIsolationBudgets:
 
 # ── TC-SEC-04: Org isolation - anomalies ─────────────────────────────────────
 
+
 class TestOrgIsolationAnomalies:
     def test_org_b_cannot_dismiss_org_a_anomaly(self) -> None:  # TC-SEC-04
         db = _mock_db([])  # ownership check returns empty
         with patch("api.routers.anomalies._get_supabase", return_value=db):
-            resp = client.patch(
-                f"/api/v1/anomalies/{ANOMALY_ID_A}", json={"status": "dismissed"}
-            )
+            resp = client.patch(f"/api/v1/anomalies/{ANOMALY_ID_A}", json={"status": "dismissed"})
         assert resp.status_code == 404
 
 
 # ── TC-SEC-05: EncryptionService rejects 31-byte key ─────────────────────────
+
 
 class TestEncryptionKeyLength:
     def test_31_byte_key_raises_valueerror(self) -> None:  # TC-SEC-05
@@ -184,6 +196,7 @@ class TestEncryptionKeyLength:
 
 # ── TC-SEC-06: Tampered token unreadable ──────────────────────────────────────
 
+
 class TestTamperedToken:
     def test_tampered_token_decrypt_fails(self) -> None:  # TC-SEC-06
         key_b64 = base64.b64encode(b"\xee" * 32).decode()
@@ -193,11 +206,12 @@ class TestTamperedToken:
         # Flip bits in the authentication tag (last 16 bytes)
         tampered = bytearray(encrypted)
         tampered[-1] ^= 0xFF
-        with pytest.raises(Exception):  # InvalidTag or ValueError
+        with pytest.raises(InvalidTag):
             cipher.decrypt(bytes(tampered))
 
 
 # ── TC-SEC-07: Budget 80% alert fires only once per month ─────────────────────
+
 
 class TestBudgetAlertIdempotency:
     def test_80pct_alert_fires_at_most_once_per_month(self) -> None:  # TC-SEC-07
@@ -206,11 +220,8 @@ class TestBudgetAlertIdempotency:
         When notified_80_at is already set for this month, send_budget_alert.delay
         should NOT be called again.
         """
-        from datetime import date
-
         db = _mock_db()
         today = date.today()
-        first_of_month = today.replace(day=1).isoformat()
 
         # Budget row with notified_80_at already set this month
         budget = {
@@ -243,6 +254,7 @@ class TestBudgetAlertIdempotency:
 
 # ── TC-SEC-08: Budget 100% supersedes 80% warning ────────────────────────────
 
+
 class TestBudgetExceededAlert:
     def test_100pct_alert_fires_when_not_yet_notified(self) -> None:  # TC-SEC-08
         """
@@ -266,8 +278,8 @@ class TestBudgetExceededAlert:
         }
 
         db.execute.side_effect = [
-            MagicMock(data=[budget]),   # budgets SELECT
-            MagicMock(data=[]),         # update notified_100_at
+            MagicMock(data=[budget]),  # budgets SELECT
+            MagicMock(data=[]),  # update notified_100_at
         ]
 
         mock_alert = MagicMock()
@@ -293,9 +305,6 @@ class TestBudgetExceededAlert:
 # Use a dedicated mini-app (not the shared `app`) so we never touch the global
 # dependency_overrides dict and cannot corrupt other test files' state.
 
-from fastapi import FastAPI as _FastAPI
-from api.deps import OrgDep as _OrgDep
-
 _auth_guard_app = _FastAPI()
 
 
@@ -313,12 +322,11 @@ class TestUnauthenticatedEndpoints:
     def test_usage_dashboard_requires_auth(self) -> None:
         """GET without a Bearer token must return 401 - the dependency enforces it."""
         resp = _auth_guard_client.get("/check")
-        assert resp.status_code == 401, (
-            f"Expected 401 without auth, got {resp.status_code}"
-        )
+        assert resp.status_code == 401, f"Expected 401 without auth, got {resp.status_code}"
 
 
 # ── M1-I-SEC-005: api_key min_length validation ────────────────────────────────
+
 
 class TestInputValidation:
     """M1-I-SEC-005: api_key shorter than 10 chars rejected before any adapter call."""
@@ -338,6 +346,7 @@ class TestInputValidation:
 
 # ── TC-SEC-09: GET /anomalies - org isolation (list) ──────────────────────────
 
+
 class TestOrgIsolationAnomaliesList:
     """TC-SEC-09 (CRITICAL) - Org B cannot see Org A's anomalies via GET /anomalies."""
 
@@ -355,12 +364,11 @@ class TestOrgIsolationAnomaliesList:
             app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
         assert resp.status_code == 200
-        assert resp.json() == [], (
-            "Org B must receive an empty list - not Org A's anomalies."
-        )
+        assert resp.json() == [], "Org B must receive an empty list - not Org A's anomalies."
 
 
 # ── TC-SEC-10: GET /recommendations - org isolation (list) ────────────────────
+
 
 class TestOrgIsolationRecommendationsList:
     """TC-SEC-10 (CRITICAL) - Org B cannot see Org A's recommendations."""
@@ -376,12 +384,11 @@ class TestOrgIsolationRecommendationsList:
             app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
         assert resp.status_code == 200
-        assert resp.json() == [], (
-            "Org B must receive an empty list - not Org A's recommendations."
-        )
+        assert resp.json() == [], "Org B must receive an empty list - not Org A's recommendations."
 
 
 # ── TC-SEC-11: GET /usage/summary - org isolation ─────────────────────────────
+
 
 class TestOrgIsolationUsageSummary:
     """TC-SEC-11 (HIGH) - Org B sees zero spend, not Org A's data."""
@@ -398,12 +405,13 @@ class TestOrgIsolationUsageSummary:
 
         assert resp.status_code == 200
         data = resp.json()
-        assert float(data["total_cost_usd"]) == 0.0, (
-            "Org B must see zero total cost, not Org A's spend data."
-        )
+        assert (
+            float(data["total_cost_usd"]) == 0.0
+        ), "Org B must see zero total cost, not Org A's spend data."
 
 
 # ── TC-SEC-12: GET /slack/status - org isolation ──────────────────────────────
+
 
 class TestOrgIsolationSlackStatus:
     """TC-SEC-12 (HIGH) - Org B sees {connected: false}, not Org A's Slack workspace_id."""
@@ -419,6 +427,6 @@ class TestOrgIsolationSlackStatus:
             app.dependency_overrides[_require_org] = _ORG_A_OVERRIDE
 
         assert resp.status_code == 200
-        assert resp.json()["connected"] is False, (
-            "Org B must see connected=false - not Org A's Slack workspace_id."
-        )
+        assert (
+            resp.json()["connected"] is False
+        ), "Org B must see connected=false - not Org A's Slack workspace_id."

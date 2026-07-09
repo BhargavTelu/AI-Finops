@@ -28,6 +28,7 @@ _CLERK_API_BASE = "https://api.clerk.com/v1"
 
 # ── Signature verification ─────────────────────────────────────────────────────
 
+
 def _verify_svix_signature(
     body: bytes,
     svix_id: str,
@@ -59,20 +60,12 @@ def _verify_svix_signature(
             detail="Webhook timestamp out of tolerance",
         )
 
-    key = base64.b64decode(
-        settings.clerk_webhook_secret.removeprefix("whsec_")
-    )
+    key = base64.b64decode(settings.clerk_webhook_secret.removeprefix("whsec_"))
     signed_payload = f"{svix_id}.{svix_timestamp}.".encode() + body
-    expected = base64.b64encode(
-        hmac.new(key, signed_payload, hashlib.sha256).digest()
-    ).decode()
+    expected = base64.b64encode(hmac.new(key, signed_payload, hashlib.sha256).digest()).decode()
 
     # svix-signature may contain several space-separated "v1,<b64>" entries
-    provided = [
-        s.removeprefix("v1,")
-        for s in svix_signature.split(" ")
-        if s.startswith("v1,")
-    ]
+    provided = [s.removeprefix("v1,") for s in svix_signature.split(" ") if s.startswith("v1,")]
 
     if not any(hmac.compare_digest(expected, p) for p in provided):
         # Log signature count to distinguish "no v1, signatures" from "wrong secret"
@@ -89,12 +82,14 @@ def _verify_svix_signature(
 
 # ── DB helpers ─────────────────────────────────────────────────────────────────
 
+
 def _service_db() -> Any:
     """Supabase client authenticated with the service role key (bypasses RLS)."""
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
 # ── Clerk metadata write-back ──────────────────────────────────────────────────
+
 
 async def _write_clerk_metadata(resource: str, clerk_id: str, db_id: UUID) -> None:
     """
@@ -130,6 +125,7 @@ async def _write_clerk_metadata(resource: str, clerk_id: str, db_id: UUID) -> No
 
 
 # ── Event handlers ─────────────────────────────────────────────────────────────
+
 
 def _handle_user_created(data: dict[str, Any], db: Any) -> UUID:
     """
@@ -216,28 +212,22 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
     # Use try/except so PostgREST PGRST116 (no rows) returns 500 for Svix retry,
     # not an unhandled exception. .single() raises when the row is absent.
     try:
-        user_resp = (
-            db.table("users").select("id").eq("clerk_id", clerk_user_id).single().execute()
-        )
+        user_resp = db.table("users").select("id").eq("clerk_id", clerk_user_id).single().execute()
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Parent user or org row not found; webhook will be retried",
-        )
+        ) from None
 
     try:
         org_resp = (
-            db.table("organizations")
-            .select("id")
-            .eq("clerk_id", clerk_org_id)
-            .single()
-            .execute()
+            db.table("organizations").select("id").eq("clerk_id", clerk_org_id).single().execute()
         )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Parent user or org row not found; webhook will be retried",
-        )
+        ) from None
 
     # PostgREST can return an error dict instead of a row dict - validate both.
     if not isinstance(user_resp.data, dict) or "id" not in user_resp.data:
@@ -267,6 +257,7 @@ def _handle_membership_created(data: dict[str, Any], db: Any) -> None:
 
 
 # ── Stripe billing webhook (Phase 2 / FR-21) ───────────────────────────────────
+
 
 def _claim_stripe_event(db: Any, event_id: str, event_type: str) -> bool:
     """
@@ -298,9 +289,7 @@ def _release_stripe_event(db: Any, event_id: str) -> None:
     try:
         db.table("stripe_events").delete().eq("id", event_id).execute()
     except Exception as exc:
-        log.error(
-            "stripe_event_claim_stuck_replay_manually", event_id=event_id, error=str(exc)
-        )
+        log.error("stripe_event_claim_stuck_replay_manually", event_id=event_id, error=str(exc))
 
 
 def _plan_from_price(price_id: str | None) -> str | None:
@@ -336,9 +325,7 @@ def _mirror_org_plan(db: Any, org_id: str, plan: str) -> None:
 
 
 def _handle_checkout_completed(db: Any, obj: dict[str, Any]) -> None:
-    org_id: str | None = obj.get("client_reference_id") or (obj.get("metadata") or {}).get(
-        "org_id"
-    )
+    org_id: str | None = obj.get("client_reference_id") or (obj.get("metadata") or {}).get("org_id")
     if not org_id:
         log.error("stripe_checkout_missing_org", session_id=obj.get("id"))
         return
@@ -396,11 +383,7 @@ def _handle_subscription_updated(db: Any, obj: dict[str, Any]) -> None:
 
     items = (obj.get("items") or {}).get("data") or [{}]
     price_id = ((items[0].get("price")) or {}).get("id")
-    plan = (
-        _plan_from_price(price_id)
-        or (obj.get("metadata") or {}).get("plan")
-        or "starter"
-    )
+    plan = _plan_from_price(price_id) or (obj.get("metadata") or {}).get("plan") or "starter"
     sub_status: str = obj.get("status") or "active"
 
     _upsert_billing(
@@ -437,6 +420,7 @@ def _handle_subscription_deleted(db: Any, obj: dict[str, Any]) -> None:
 
 # ── Route handlers ─────────────────────────────────────────────────────────────
 
+
 @router.post("/stripe")
 async def stripe_webhook(
     request: Request,
@@ -452,7 +436,8 @@ async def stripe_webhook(
 
     payload = await request.body()
     try:
-        event = stripe_lib.Webhook.construct_event(
+        # construct_event is untyped in the stripe SDK
+        event = stripe_lib.Webhook.construct_event(  # type: ignore[no-untyped-call]
             payload, stripe_signature, settings.stripe_webhook_secret
         )
     except (ValueError, stripe_lib.SignatureVerificationError) as exc:
