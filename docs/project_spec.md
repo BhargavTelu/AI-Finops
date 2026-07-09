@@ -94,23 +94,26 @@ Each milestone ends with a working, demoable slice. Don't skip ahead.
 
 **Done:** Design partner with 2+ providers sees Cost Explorer and says "I had no idea X was that expensive."
 
-### M3 · Intelligence Layer (11 days)
+### M3 · Intelligence Layer (11 days) ✅ COMPLETE (2026-06-10)
 - Anomaly detection (statistical, nightly job)
 - Budget CRUD + threshold alerts via Resend
-- Slack OAuth + daily digest (9am org-local) + real-time alerts
+- Slack OAuth + daily digest + real-time alerts (digest runs 09:00 UTC, not org-local - deferred)
 - Rule-based recommendations engine + `/recommendations` screen
 
 **Done:** Test org with synthetic spike fires anomaly, Slack alert lands in <10 min, recs list shows 3+ items with savings estimates.
 
-### M4 · Monetize + Polish (9 days)
-- Stripe Checkout (3 plans) + webhook handler + access gating + 14-day trial
-- CFO PDF (Puppeteer or @react-pdf/renderer) → R2 → emailed on 1st
-- Linear forecast on dashboard
-- CSV export
-- Onboarding wizard (connect → tag → Slack → budget)
-- Landing page at `/` with pricing + signup
+### M4 · Monetize + Polish (9 days) ✅ CODE-COMPLETE (2026-06-11)
 
-**Done:** Stranger lands on `/`, signs up, connects OpenAI, sets budget, gets Slack alert, pays $299 - without you touching anything.
+Executed as Phases 0–3 of [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md), which supersedes this task ordering. Deltas from the original list:
+
+- Stripe Checkout (3 plans) + webhook handler + access gating + 14-day trial ✅
+- CFO PDF → R2 → emailed on 1st ✅ (engine: **fpdf2** - WeasyPrint's Pango deps failed on Windows dev; see plan decision D1)
+- Linear forecast on dashboard ✅
+- CSV export ✅ (shipped client-side from Cost Explorer - no server endpoint)
+- Onboarding wizard → **replaced by activation checklist** (dismissible dashboard card driven by `GET /onboarding/status`)
+- Landing page at `/` with pricing + signup ✅
+
+**Done:** Stranger lands on `/`, signs up, connects OpenAI, sets budget, gets Slack alert, pays $299 - without you touching anything. *(Code-side complete; the "pays" clause needs the founder-ops launch steps in [launch_setup_guide.md](launch_setup_guide.md).)*
 
 ## Post-MVP (don't build now)
 

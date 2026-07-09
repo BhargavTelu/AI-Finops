@@ -100,9 +100,9 @@ const supabase = createClient(
 );
 ```
 
-`apps/web/src/lib/supabase/server.ts` needs to be updated to accept a
-token parameter and pass it via the `Authorization` header. This is M0
-feature work - the current cookie-based scaffold does not do this.
+`apps/web/src/lib/supabase/server.ts` implements this (done in M0) - it
+accepts the Clerk-issued token and passes it via the `Authorization`
+header. Shown here for reference when setting up a new environment.
 
 ---
 

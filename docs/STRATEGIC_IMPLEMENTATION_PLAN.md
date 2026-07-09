@@ -1,6 +1,6 @@
 # Strategic Implementation Plan
 
-**Source of truth for feature implementation order.** Derived from `docs/strategic_review_2026-06-11.docx`, then corrected against the actual codebase (2026-06-11). Supersedes the M4 task ordering in `docs/project_spec.md` where they conflict; does not change any hard rule in `CLAUDE.md`.
+**Source of truth for feature implementation order.** Derived from a founder-level strategic review (`strategic_review_2026-06-11.docx`, since deleted - in git history), then corrected against the actual codebase (2026-06-11). Supersedes the M4 task ordering in `docs/project_spec.md` where they conflict; does not change any hard rule in `CLAUDE.md`.
 
 **North star:** first real paying customer, then three. Every phase below either shortens the path to that or removes a reason a prospect says no.
 

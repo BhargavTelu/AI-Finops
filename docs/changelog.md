@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - Phases 0-3 (2026-06-11) - MVP code-complete
 
+### Maintenance - Documentation audit (2026-07-09)
+
+- Docs audited and consolidated: historical docs deleted (build checklist, test plan + results snapshot, UI redesign roadmap + brief, strategic review .docx - all in git history), `project_status.md` rewritten as a current-state snapshot, this changelog's 0.6.0/0.6.1 gap backfilled, stale claims corrected in `architecture.md` (AI layer, `slack_digests` schema), `project_spec.md` (M3/M4 completion, fpdf2), and `setup.md`; `launch_setup_guide.md` added (founder ops to go live)
+- Removed unused `openai` SDK dependency (adapters call provider APIs via httpx) and two placeholder test stubs (`test_pricing.py`, `test_tag_rules.py`)
+- Fixed two date-pinned test fixtures that expired with the calendar: `test_billing_gating.py` pinned `NOW` (its `FUTURE` trial date lapsed 2026-06-21), `test_forecast_and_onboarding_routes.py` hardcoded a June day that left the forecast windows
+
 Execution now follows [STRATEGIC_IMPLEMENTATION_PLAN.md](STRATEGIC_IMPLEMENTATION_PLAN.md) (Phases 0-5 to first paying customers). Phase 3 was executed before Phase 2 (Stripe) at founder's direction. With Phase 2 shipped, every code-side piece of the spec's MVP done-condition exists.
 
 ### Added - Phase 2: Stripe Billing + Gating (FR-21)
@@ -106,6 +112,49 @@ A no-assumptions audit of Phases 0-1 against the plan found and fixed four issue
 ### Removed - Phase 0
 
 - **`GET /usage/export.csv` 501 stub** - FR-23 (CSV export from Cost Explorer) shipped client-side via `export-button.tsx`, so the server endpoint is dead code. `test_stub_routes.py` TC-STUB-03 now guards that the route stays gone (404) instead of asserting 501.
+
+---
+
+## [0.6.1] - Critical-Audit Fixes + Premium UI Redesign (2026-06-11)
+
+### Fixed - critical-audit findings (PR #1)
+
+A pre-launch audit series across the whole codebase, each fix with regression tests:
+
+- **RLS was not enabled on `users` and `organizations`** - the two identity tables were readable across tenants; policies added
+- Anthropic pricing table corrected; dated model IDs resolved; anomaly-explainer model id fixed (previous value never existed as a model ID)
+- Aggregation paging made deterministic; every `daily_cost_summaries` read now pages past the PostgREST row cap
+- Ingestion delete window floored to UTC day - stops refresh double-counting
+- Slack OAuth `state` (CSRF) validation added; success redirect no longer swallowed
+- `api_key_label` populated from provider data so tag rules can actually match
+- Errored integrations recover on next refresh instead of silently stopping sync
+- Flat-baseline false-positive anomaly alerts stopped; valid `users.id` UUID written into integration audit events
+- Event loop no longer blocked: one Supabase client reused per process
+- Suite flakiness eliminated (timezone, override pollution, patch races); missing ESLint config added; `render.yaml` secrets declared; generated celerybeat files untracked
+
+### Changed - UI redesign, M-DS → M-PREMIUM (PR #2)
+
+Full premium design-system pass over the dashboard and marketing surfaces
+(design tokens in `apps/web/src/app/globals.css` + `tailwind.config.ts`;
+conventions in CLAUDE.md § UI Style). Roadmap + original brief deleted in the
+2026-07-09 docs audit (in git history).
+
+---
+
+## [0.6.0] - M3 Group D: Recommendations Engine (2026-06-10)
+
+603 tests passing, 2 skipped. 0 TypeScript errors. Completes M3.
+
+### Added
+
+- **Rule-based recommendations worker** (`workers/recommendations.py`) - nightly 02:30 UTC fan-out; pulls 30d `daily_cost_summaries` grouped by (provider, model, feature_tag); three rules:
+  - *Model downgrade* - avg cost/request > $0.01 AND ≥100 requests; downgrade map; savings via input-price ratio; confidence 0.85 (>500 req) or 0.60
+  - *Prompt caching* - caching-capable model AND ≥200 requests; 30% cache-hit on 70% input tokens estimate; confidence 0.60
+  - *Batch API* - gpt-4o/-mini AND ≥500 requests AND avg tokens < 2000; 50% reduction; confidence 0.80
+- **Dedup** - partial unique index `UNIQUE(org_id, type, scope_value) WHERE status='new'` (migration `20260524000000`) + pre-insert check
+- **Routes** - `GET /recommendations?status=` (ordered by projected savings), `PATCH /recommendations/:id` (applied/dismissed, sets `resolved_at`, ownership-checked)
+- **`/recommendations` page** - savings/type/effort badges, confidence bar, status tabs, effort filter, total-savings summary, empty/loading/error states
+- 40+ unit tests in `test_recommendations.py` (rule math, edge cases, confidence thresholds)
 
 ---
 

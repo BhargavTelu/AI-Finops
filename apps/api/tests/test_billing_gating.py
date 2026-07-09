@@ -14,7 +14,10 @@ import pytest
 from api.deps import OrgContext, _require_active_org
 from api.services.billing_access import evaluate_access, filter_accessible_org_ids
 
-NOW = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
+# Dynamic, not pinned: _require_active_org and filter_accessible_org_ids read
+# the real clock internally, so a pinned NOW turns FUTURE stale once the pin
+# passes. Every evaluate_access test injects now=NOW, keeping the math relative.
+NOW = datetime.now(UTC)
 FUTURE = (NOW + timedelta(days=10)).isoformat()
 PAST = (NOW - timedelta(days=3)).isoformat()
 
