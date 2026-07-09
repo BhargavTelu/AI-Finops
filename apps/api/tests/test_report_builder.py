@@ -137,8 +137,14 @@ class TestProjection:
 class TestAnomalies:
     def test_top_three_by_spike_pct(self) -> None:
         anomalies = [
-            {"detected_at": "2026-05-01", "scope_value": f"m{i}", "baseline_usd": "10",
-             "actual_usd": "50", "spike_pct": pct, "severity": "low"}
+            {
+                "detected_at": "2026-05-01",
+                "scope_value": f"m{i}",
+                "baseline_usd": "10",
+                "actual_usd": "50",
+                "spike_pct": pct,
+                "severity": "low",
+            }
             for i, pct in enumerate([150, 400, 250, 300])
         ]
         data = _build(anomaly_rows=anomalies)
@@ -148,8 +154,14 @@ class TestAnomalies:
     def test_detected_on_truncated_to_date(self) -> None:
         data = _build(
             anomaly_rows=[
-                {"detected_at": "2026-05-14T01:00:00+00:00", "scope_value": "gpt-4o",
-                 "baseline_usd": "1", "actual_usd": "5", "spike_pct": 400, "severity": "high"}
+                {
+                    "detected_at": "2026-05-14T01:00:00+00:00",
+                    "scope_value": "gpt-4o",
+                    "baseline_usd": "1",
+                    "actual_usd": "5",
+                    "spike_pct": 400,
+                    "severity": "high",
+                }
             ]
         )
         assert data.top_anomalies[0].detected_on == "2026-05-14"

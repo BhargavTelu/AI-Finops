@@ -5,8 +5,8 @@ Supabase calls are mocked. Auth dependency is overridden.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -33,6 +33,7 @@ client = TestClient(app)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict]) -> MagicMock:
     db = MagicMock()
@@ -89,6 +90,7 @@ def _rule_row(
 
 # ── GET /tags ─────────────────────────────────────────────────────────────────
 
+
 class TestListTags:
     def test_empty_db_returns_empty_list(self) -> None:
         with patch("api.routers.tags._get_supabase", return_value=_mock_db([])):
@@ -108,6 +110,7 @@ class TestListTags:
 
 
 # ── POST /tags ────────────────────────────────────────────────────────────────
+
 
 class TestCreateTag:
     def test_creates_tag_returns_201(self) -> None:
@@ -137,6 +140,7 @@ class TestCreateTag:
 
 # ── DELETE /tags/{tag_id} ─────────────────────────────────────────────────────
 
+
 class TestDeleteTag:
     def test_delete_existing_tag_returns_204(self) -> None:
         db = _mock_db([_tag_row("t1")])
@@ -152,6 +156,7 @@ class TestDeleteTag:
 
 
 # ── GET /tag-rules ────────────────────────────────────────────────────────────
+
 
 class TestListTagRules:
     def test_empty_db_returns_empty_list(self) -> None:
@@ -174,6 +179,7 @@ class TestListTagRules:
 
 # ── POST /tag-rules ───────────────────────────────────────────────────────────
 
+
 class TestCreateTagRule:
     def test_creates_rule_returns_201(self) -> None:
         created = _rule_row("r-new", "t1", "regex", r"^prod-", 50)
@@ -187,12 +193,17 @@ class TestCreateTagRule:
         # First execute() = tag ownership check, second = insert
         db.execute.side_effect = [
             MagicMock(data=[{"id": "t1"}]),  # tag check OK
-            MagicMock(data=[created]),         # insert result
+            MagicMock(data=[created]),  # insert result
         ]
         with patch("api.routers.tags._get_supabase", return_value=db):
             resp = client.post(
                 "/api/v1/tag-rules",
-                json={"tag_id": "t1", "match_type": "regex", "match_pattern": r"^prod-", "priority": 50},
+                json={
+                    "tag_id": "t1",
+                    "match_type": "regex",
+                    "match_pattern": r"^prod-",
+                    "priority": 50,
+                },
             )
         assert resp.status_code == 201
         body = resp.json()
@@ -215,6 +226,7 @@ class TestCreateTagRule:
 
 # ── DELETE /tag-rules/{rule_id} ───────────────────────────────────────────────
 
+
 class TestDeleteTagRule:
     def test_delete_existing_rule_returns_204(self) -> None:
         db = _mock_db([_rule_row("r1")])
@@ -231,12 +243,17 @@ class TestDeleteTagRule:
 
 # ── POST /tag-rules/preview ───────────────────────────────────────────────────
 
+
 class TestPreviewTagRule:
     def test_returns_matching_labels(self) -> None:
         usage_rows = [
             {"api_key_label": "prod-api-key", "provider": "openai", "model": "gpt-4o"},
             {"api_key_label": "staging-key", "provider": "openai", "model": "gpt-4o"},
-            {"api_key_label": "prod-service-key", "provider": "anthropic", "model": "claude-sonnet-4-5"},
+            {
+                "api_key_label": "prod-service-key",
+                "provider": "anthropic",
+                "model": "claude-sonnet-4-5",
+            },
         ]
         with patch("api.routers.tags._get_supabase", return_value=_mock_db(usage_rows)):
             resp = client.post(
@@ -277,6 +294,7 @@ class TestPreviewTagRule:
 
 
 # ── TC-TAG-10 to TC-TAG-14: PATCH /tags/:id and PATCH /tag-rules/:id ──────────
+
 
 class TestUpdateTag:
     """TC-TAG-10 and TC-TAG-11 - PATCH /tags/:id."""
@@ -352,6 +370,4 @@ class TestUpdateTagRule:
                 "/api/v1/tag-rules/rule-belongs-to-other-org",
                 json={"tag_id": "t1", "match_type": "exact", "match_pattern": "x"},
             )
-        assert resp.status_code == 404, (
-            f"Expected 404 (no info leak), got {resp.status_code}"
-        )
+        assert resp.status_code == 404, f"Expected 404 (no info leak), got {resp.status_code}"

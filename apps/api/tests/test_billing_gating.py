@@ -129,14 +129,16 @@ class TestFilterAccessibleOrgIds:
                 {"id": "org-paid", "trial_ends_at": PAST},
             ],
             billing_rows=[
-                {"org_id": "org-paid", "status": "active",
-                 "stripe_subscription_id": "sub_1", "plan": "growth",
-                 "current_period_end": None},
+                {
+                    "org_id": "org-paid",
+                    "status": "active",
+                    "stripe_subscription_id": "sub_1",
+                    "plan": "growth",
+                    "current_period_end": None,
+                },
             ],
         )
-        accessible = filter_accessible_org_ids(
-            db, ["org-trialing", "org-lapsed", "org-paid"]
-        )
+        accessible = filter_accessible_org_ids(db, ["org-trialing", "org-lapsed", "org-paid"])
         assert accessible == {"org-trialing", "org-paid"}
 
     def test_empty_input_returns_empty_without_queries(self) -> None:

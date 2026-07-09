@@ -24,7 +24,9 @@ _SLACK_API = "https://slack.com/api"
 _TIMEOUT = 10.0  # seconds
 
 
-def exchange_code(code: str, client_id: str, client_secret: str, redirect_uri: str) -> dict[str, Any]:
+def exchange_code(
+    code: str, client_id: str, client_secret: str, redirect_uri: str
+) -> dict[str, Any]:
     """
     Exchange a Slack OAuth v2 authorization code for a bot access token.
 

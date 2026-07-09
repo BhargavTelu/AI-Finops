@@ -3,12 +3,10 @@ Unit tests for the tag-rule engine.
 No DB access - all pure function tests.
 """
 
-import pytest
-
 from api.services.tag_engine import CompiledRule, apply_rules, compile_rules
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _db_row(
     match_type: str,
@@ -49,6 +47,7 @@ _EMPTY_TAGS = {"feature_tag": None, "team_tag": None, "customer_tag": None, "env
 
 # ── compile_rules ─────────────────────────────────────────────────────────────
 
+
 class TestCompileRules:
     def test_empty_input_returns_empty_list(self) -> None:
         assert compile_rules([]) == []
@@ -76,7 +75,13 @@ class TestCompileRules:
         assert [r.priority for r in result] == [10, 100, 200]
 
     def test_row_missing_tags_key_is_skipped(self) -> None:
-        row = {"match_type": "exact", "match_pattern": "x", "priority": 100, "enabled": True, "tags": None}
+        row = {
+            "match_type": "exact",
+            "match_pattern": "x",
+            "priority": 100,
+            "enabled": True,
+            "tags": None,
+        }
         assert compile_rules([row]) == []
 
     def test_row_without_enabled_key_defaults_to_included(self) -> None:
@@ -104,6 +109,7 @@ class TestCompileRules:
 
 # ── apply_rules - no rules ────────────────────────────────────────────────────
 
+
 class TestApplyRulesNoRules:
     def test_no_rules_returns_all_none(self) -> None:
         assert apply_rules("prod-api-key", []) == _EMPTY_TAGS
@@ -113,6 +119,7 @@ class TestApplyRulesNoRules:
 
 
 # ── apply_rules - exact matching ──────────────────────────────────────────────
+
 
 class TestExactMatching:
     def test_exact_match_assigns_tag(self) -> None:
@@ -138,6 +145,7 @@ class TestExactMatching:
 
 # ── apply_rules - substring matching ─────────────────────────────────────────
 
+
 class TestSubstringMatching:
     def test_substring_match_anywhere_in_label(self) -> None:
         rules = [_rule("feature", "chat", "substring", "chat")]
@@ -162,6 +170,7 @@ class TestSubstringMatching:
 
 
 # ── apply_rules - regex matching ──────────────────────────────────────────────
+
 
 class TestRegexMatching:
     def test_regex_match(self) -> None:
@@ -189,30 +198,37 @@ class TestRegexMatching:
 
 # ── apply_rules - priority and multi-type ────────────────────────────────────
 
+
 class TestApplyRulesPriority:
     def test_lower_priority_number_wins(self) -> None:
         """Priority 10 beats priority 50 for the same tag type."""
-        rules = compile_rules([
-            _db_row("substring", "prod", "env", "production", priority=50),
-            _db_row("substring", "prod", "env", "prod-env", priority=10),
-        ])
+        rules = compile_rules(
+            [
+                _db_row("substring", "prod", "env", "production", priority=50),
+                _db_row("substring", "prod", "env", "prod-env", priority=10),
+            ]
+        )
         result = apply_rules("prod-key", rules)
         assert result["env_tag"] == "prod-env"
 
     def test_first_match_per_type_wins_second_ignored(self) -> None:
-        rules = compile_rules([
-            _db_row("exact", "my-key", "feature", "feature-A", priority=1),
-            _db_row("exact", "my-key", "feature", "feature-B", priority=2),
-        ])
+        rules = compile_rules(
+            [
+                _db_row("exact", "my-key", "feature", "feature-A", priority=1),
+                _db_row("exact", "my-key", "feature", "feature-B", priority=2),
+            ]
+        )
         result = apply_rules("my-key", rules)
         assert result["feature_tag"] == "feature-A"
 
     def test_multiple_types_assigned_from_different_rules(self) -> None:
-        rules = compile_rules([
-            _db_row("substring", "prod", "env", "production", priority=10),
-            _db_row("substring", "chat", "feature", "chat-service", priority=20),
-            _db_row("substring", "team-a", "team", "alpha", priority=30),
-        ])
+        rules = compile_rules(
+            [
+                _db_row("substring", "prod", "env", "production", priority=10),
+                _db_row("substring", "chat", "feature", "chat-service", priority=20),
+                _db_row("substring", "team-a", "team", "alpha", priority=30),
+            ]
+        )
         result = apply_rules("prod-chat-team-a-key", rules)
         assert result["env_tag"] == "production"
         assert result["feature_tag"] == "chat-service"
@@ -220,12 +236,14 @@ class TestApplyRulesPriority:
         assert result["customer_tag"] is None
 
     def test_all_four_types_assigned(self) -> None:
-        rules = compile_rules([
-            _db_row("substring", "feat", "feature", "my-feature", priority=1),
-            _db_row("substring", "team", "team", "my-team", priority=2),
-            _db_row("substring", "cust", "customer", "my-customer", priority=3),
-            _db_row("substring", "env", "env", "my-env", priority=4),
-        ])
+        rules = compile_rules(
+            [
+                _db_row("substring", "feat", "feature", "my-feature", priority=1),
+                _db_row("substring", "team", "team", "my-team", priority=2),
+                _db_row("substring", "cust", "customer", "my-customer", priority=3),
+                _db_row("substring", "env", "env", "my-env", priority=4),
+            ]
+        )
         result = apply_rules("feat-team-cust-env-key", rules)
         assert result == {
             "feature_tag": "my-feature",

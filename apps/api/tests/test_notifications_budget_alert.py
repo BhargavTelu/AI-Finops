@@ -44,10 +44,10 @@ class TestSendBudgetAlertEmail:
         """When admin email is available, resend.Emails.send is called with budget details."""
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[_budget_row()]),             # budget fetch
-            MagicMock(data=[{"user_id": "u1"}]),         # admin member
+            MagicMock(data=[_budget_row()]),  # budget fetch
+            MagicMock(data=[{"user_id": "u1"}]),  # admin member
             MagicMock(data=[{"email": "cfo@company.com"}]),  # admin email
-            MagicMock(data=[]),                          # no Slack
+            MagicMock(data=[]),  # no Slack
         ]
         mock_resend = MagicMock()
 
@@ -75,7 +75,7 @@ class TestSendBudgetAlertEmail:
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[_budget_row()]),  # budget fetch
-            MagicMock(data=[]),               # no admin members
+            MagicMock(data=[]),  # no admin members
         ]
         mock_resend = MagicMock()
 
@@ -95,16 +95,17 @@ class TestSendBudgetAlertEmail:
 
 # ── TC-NOT-22: Slack failure does not block email ─────────────────────────────
 
+
 class TestBudgetAlertSlackNonFatal:
-    """TC-NOT-22 (HIGH) - post_message exception caught; email already sent; task returns normally."""
+    """TC-NOT-22 (HIGH) - post_message error caught; email already sent; task returns."""
 
     def test_slack_failure_does_not_block_email(self) -> None:
         """TC-NOT-22 - Slack raises; email was already sent; task completes without re-raise."""
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[_budget_row()]),                     # budget fetch
-            MagicMock(data=[{"user_id": "u1"}]),                 # admin member lookup
-            MagicMock(data=[{"email": "cfo@company.com"}]),      # admin email lookup
+            MagicMock(data=[_budget_row()]),  # budget fetch
+            MagicMock(data=[{"user_id": "u1"}]),  # admin member lookup
+            MagicMock(data=[{"email": "cfo@company.com"}]),  # admin email lookup
         ]
         mock_resend = MagicMock()
 

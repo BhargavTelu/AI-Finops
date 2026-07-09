@@ -12,6 +12,7 @@ Everything else is blocked.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 # Stripe subscription statuses that grant access. 'past_due' is deliberately
 # excluded: Stripe retries cards for ~2 weeks before cancelling, and a
@@ -40,7 +41,7 @@ def _parse_ts(value: str | None) -> datetime | None:
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
-def filter_accessible_org_ids(db, org_ids: list[str]) -> set[str]:
+def filter_accessible_org_ids(db: Any, org_ids: list[str]) -> set[str]:
     """
     Bulk version of the access rule for worker fan-outs: outbound email
     (weekly digests, monthly report mails) must not keep landing in the
@@ -51,10 +52,7 @@ def filter_accessible_org_ids(db, org_ids: list[str]) -> set[str]:
         return set()
 
     org_rows = (
-        db.table("organizations")
-        .select("id, trial_ends_at")
-        .in_("id", org_ids)
-        .execute()
+        db.table("organizations").select("id, trial_ends_at").in_("id", org_ids).execute()
     ).data
     billing_rows = (
         db.table("billing")
@@ -73,8 +71,8 @@ def filter_accessible_org_ids(db, org_ids: list[str]) -> set[str]:
 
 
 def evaluate_access(
-    org_row: dict | None,
-    billing_row: dict | None,
+    org_row: dict[str, Any] | None,
+    billing_row: dict[str, Any] | None,
     now: datetime | None = None,
 ) -> AccessState:
     now = now or datetime.now(UTC)
@@ -97,8 +95,12 @@ def evaluate_access(
         )
 
     # No (active) subscription - fall back to the built-in trial window.
-    trial_active = trial_end is not None and trial_end > now
-    days_left = max((trial_end - now).days, 0) if trial_active else None
+    if trial_end is not None and trial_end > now:
+        trial_active = True
+        days_left: int | None = max((trial_end - now).days, 0)
+    else:
+        trial_active = False
+        days_left = None
     return AccessState(
         plan="trial",
         status="trialing" if trial_active else (sub_status or "expired"),

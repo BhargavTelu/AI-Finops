@@ -7,12 +7,10 @@ Gap-22 (high): _matches() uses re.search() with no timeout - ReDoS vulnerability
 
 import time
 
-import pytest
-
 from api.services.tag_engine import CompiledRule, _matches, apply_rules, compile_rules
 
-
 # ── Helper ─────────────────────────────────────────────────────────────────────
+
 
 def _rule(
     match_type: str,
@@ -32,6 +30,7 @@ def _rule(
 
 # ── Gap-22: ReDoS vulnerability in _matches() ─────────────────────────────────
 
+
 class TestMatchesRegexSecurity:
     """Gap-22 (high): No regex timeout in _matches() - catastrophic backtracking possible."""
 
@@ -41,10 +40,10 @@ class TestMatchesRegexSecurity:
         silently. re.error is caught and suppressed - no exception escapes.
         """
         invalid_patterns = [
-            "[invalid(regex",   # unclosed bracket + group
-            "(?P<name",         # malformed named group
-            "(a|b",             # unclosed alternation
-            "\\",               # trailing backslash
+            "[invalid(regex",  # unclosed bracket + group
+            "(?P<name",  # malformed named group
+            "(a|b",  # unclosed alternation
+            "\\",  # trailing backslash
         ]
         for pattern in invalid_patterns:
             rule = _rule("regex", pattern)
@@ -134,12 +133,13 @@ class TestMatchesRegexSecurity:
                 match_pattern="anything",
                 priority=1,
             )
-            assert _matches(rule, "anything") is False, (
-                f"Unknown match_type '{unknown_type}' must return False"
-            )
+            assert (
+                _matches(rule, "anything") is False
+            ), f"Unknown match_type '{unknown_type}' must return False"
 
 
 # ── Additional compile_rules / apply_rules coverage ──────────────────────────
+
 
 class TestTagEngineRuleApplication:
     """Additional coverage for compile_rules and apply_rules edge cases."""
@@ -190,12 +190,27 @@ class TestTagEngineRuleApplication:
     def test_compile_rules_sorted_by_priority_ascending(self) -> None:
         """compile_rules must sort rules by priority ASC (lower number = higher priority)."""
         rows = [
-            {"match_type": "exact", "match_pattern": "a", "priority": 10, "enabled": True,
-             "tags": {"type": "feature", "name": "low-priority"}},
-            {"match_type": "exact", "match_pattern": "b", "priority": 1, "enabled": True,
-             "tags": {"type": "feature", "name": "high-priority"}},
-            {"match_type": "exact", "match_pattern": "c", "priority": 5, "enabled": True,
-             "tags": {"type": "feature", "name": "mid-priority"}},
+            {
+                "match_type": "exact",
+                "match_pattern": "a",
+                "priority": 10,
+                "enabled": True,
+                "tags": {"type": "feature", "name": "low-priority"},
+            },
+            {
+                "match_type": "exact",
+                "match_pattern": "b",
+                "priority": 1,
+                "enabled": True,
+                "tags": {"type": "feature", "name": "high-priority"},
+            },
+            {
+                "match_type": "exact",
+                "match_pattern": "c",
+                "priority": 5,
+                "enabled": True,
+                "tags": {"type": "feature", "name": "mid-priority"},
+            },
         ]
         compiled = compile_rules(rows)
         priorities = [r.priority for r in compiled]
@@ -204,51 +219,77 @@ class TestTagEngineRuleApplication:
 
     def test_apply_rules_first_match_per_type_wins(self) -> None:
         """Lower priority number wins when two rules match the same tag type."""
-        rules = compile_rules([
-            {
-                "match_type": "substring",
-                "match_pattern": "feature",
-                "priority": 1,
-                "enabled": True,
-                "tags": {"type": "feature", "name": "winner"},
-            },
-            {
-                "match_type": "substring",
-                "match_pattern": "feature",
-                "priority": 2,
-                "enabled": True,
-                "tags": {"type": "feature", "name": "loser"},
-            },
-        ])
+        rules = compile_rules(
+            [
+                {
+                    "match_type": "substring",
+                    "match_pattern": "feature",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "feature", "name": "winner"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "feature",
+                    "priority": 2,
+                    "enabled": True,
+                    "tags": {"type": "feature", "name": "loser"},
+                },
+            ]
+        )
         result = apply_rules("feature-api-key", rules)
         assert result["feature_tag"] == "winner"
 
     def test_apply_rules_none_label_coerced_to_empty_string(self) -> None:
         """None label is treated as '' - a rule matching '' will fire."""
-        rules = compile_rules([
-            {
-                "match_type": "exact",
-                "match_pattern": "",
-                "priority": 1,
-                "enabled": True,
-                "tags": {"type": "team", "name": "untagged"},
-            }
-        ])
+        rules = compile_rules(
+            [
+                {
+                    "match_type": "exact",
+                    "match_pattern": "",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "team", "name": "untagged"},
+                }
+            ]
+        )
         result = apply_rules(None, rules)
         assert result["team_tag"] == "untagged"
 
     def test_apply_rules_all_tag_types_resolved(self) -> None:
         """All four tag types can be resolved in one apply_rules call."""
-        rules = compile_rules([
-            {"match_type": "substring", "match_pattern": "prod", "priority": 1, "enabled": True,
-             "tags": {"type": "env", "name": "production"}},
-            {"match_type": "substring", "match_pattern": "api-key", "priority": 1, "enabled": True,
-             "tags": {"type": "feature", "name": "api"}},
-            {"match_type": "substring", "match_pattern": "platform", "priority": 1, "enabled": True,
-             "tags": {"type": "team", "name": "platform-team"}},
-            {"match_type": "substring", "match_pattern": "customer", "priority": 1, "enabled": True,
-             "tags": {"type": "customer", "name": "acme"}},
-        ])
+        rules = compile_rules(
+            [
+                {
+                    "match_type": "substring",
+                    "match_pattern": "prod",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "env", "name": "production"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "api-key",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "feature", "name": "api"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "platform",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "team", "name": "platform-team"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "customer",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "customer", "name": "acme"},
+                },
+            ]
+        )
         label = "prod-platform-api-key-customer-acme"
         result = apply_rules(label, rules)
         assert result["env_tag"] == "production"
@@ -261,19 +302,46 @@ class TestTagEngineRuleApplication:
         Once all 4 tag types are resolved, apply_rules must stop iterating.
         Verify by having a 5th rule that would only match if iteration continued.
         """
-        rules = compile_rules([
-            {"match_type": "substring", "match_pattern": "x", "priority": 1, "enabled": True,
-             "tags": {"type": "feature", "name": "feat-x"}},
-            {"match_type": "substring", "match_pattern": "x", "priority": 2, "enabled": True,
-             "tags": {"type": "team", "name": "team-x"}},
-            {"match_type": "substring", "match_pattern": "x", "priority": 3, "enabled": True,
-             "tags": {"type": "customer", "name": "cust-x"}},
-            {"match_type": "substring", "match_pattern": "x", "priority": 4, "enabled": True,
-             "tags": {"type": "env", "name": "env-x"}},
-            # This rule would overwrite feature_tag if iteration continued past 4 resolved types
-            {"match_type": "substring", "match_pattern": "x", "priority": 5, "enabled": True,
-             "tags": {"type": "feature", "name": "should-not-win"}},
-        ])
+        rules = compile_rules(
+            [
+                {
+                    "match_type": "substring",
+                    "match_pattern": "x",
+                    "priority": 1,
+                    "enabled": True,
+                    "tags": {"type": "feature", "name": "feat-x"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "x",
+                    "priority": 2,
+                    "enabled": True,
+                    "tags": {"type": "team", "name": "team-x"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "x",
+                    "priority": 3,
+                    "enabled": True,
+                    "tags": {"type": "customer", "name": "cust-x"},
+                },
+                {
+                    "match_type": "substring",
+                    "match_pattern": "x",
+                    "priority": 4,
+                    "enabled": True,
+                    "tags": {"type": "env", "name": "env-x"},
+                },
+                # This rule would overwrite feature_tag if iteration continued past 4 resolved types
+                {
+                    "match_type": "substring",
+                    "match_pattern": "x",
+                    "priority": 5,
+                    "enabled": True,
+                    "tags": {"type": "feature", "name": "should-not-win"},
+                },
+            ]
+        )
         result = apply_rules("label-x", rules)
         assert result["feature_tag"] == "feat-x"  # first match wins
         assert result["team_tag"] == "team-x"

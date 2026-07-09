@@ -157,11 +157,11 @@ class TestWeeklyEmailSend:
 class TestWeeklyEmailHtml:
     def test_contains_metrics_and_unsubscribe(self) -> None:
         html = notifications._weekly_email_html(_DIGEST_DATA)
-        assert "$280.00" in html       # week total
-        assert "$40.00" in html        # daily average
-        assert "+12%" in html          # MoM
-        assert "gpt-4o" in html        # top driver
-        assert "2 open" in html        # anomalies
+        assert "$280.00" in html  # week total
+        assert "$40.00" in html  # daily average
+        assert "+12%" in html  # MoM
+        assert "gpt-4o" in html  # top driver
+        assert "2 open" in html  # anomalies
         assert "unsubscribe" in html.lower()
 
     def test_negative_mom_renders_green(self) -> None:

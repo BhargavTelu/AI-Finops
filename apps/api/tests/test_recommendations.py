@@ -9,11 +9,15 @@ Covers:
 All Supabase calls are mocked - no network, no DB.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from fastapi.testclient import TestClient
 import pytest
 
+from api.deps import OrgContext, _require_org
+from api.main import app
 from api.services.recommendations import (
     ModelStats,
     Recommendation,
@@ -23,8 +27,8 @@ from api.services.recommendations import (
     generate_recommendations,
 )
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _stats(
     model: str,
@@ -45,6 +49,7 @@ def _stats(
 
 
 # ── model_swap ────────────────────────────────────────────────────────────────
+
 
 class TestCheckModelSwap:
     def test_triggers_on_expensive_model_with_alternative(self):
@@ -84,7 +89,9 @@ class TestCheckModelSwap:
 
     def test_skipped_when_no_cheaper_alternative(self):
         # gpt-4o-mini has no cheaper_model in _MODEL_DOWNGRADE
-        recs = _check_model_swap([_stats("gpt-4o-mini", total_cost_usd="50.00", total_requests=500)])
+        recs = _check_model_swap(
+            [_stats("gpt-4o-mini", total_cost_usd="50.00", total_requests=500)]
+        )
         assert recs == []
 
     def test_skipped_when_projected_savings_below_minimum(self):
@@ -105,9 +112,16 @@ class TestCheckModelSwap:
         assert recs[0].projected_savings_usd == Decimal("94.00")
 
     def test_anthropic_model_swap(self):
-        recs = _check_model_swap([
-            _stats("claude-opus-4-5", provider="anthropic", total_cost_usd="200.00", total_requests=300)
-        ])
+        recs = _check_model_swap(
+            [
+                _stats(
+                    "claude-opus-4-5",
+                    provider="anthropic",
+                    total_cost_usd="200.00",
+                    total_requests=300,
+                )
+            ]
+        )
         assert len(recs) == 1
         assert "claude-sonnet-4-5" in recs[0].title
 
@@ -122,14 +136,15 @@ class TestCheckModelSwap:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
+
 class TestCheckCachingOpportunity:
     def test_triggers_on_cache_eligible_model_with_enough_requests(self):
         # gpt-4o, 500 requests; need enough tokens so savings > $1 min threshold.
         # 5M tokens: est_input=3_500_000, cacheable=1_050_000,
         # savings = 1_050_000 * 1.25 / 1_000_000 = 1.3125 → $1.31
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=5_000_000, total_cost_usd="50.00")
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=5_000_000, total_cost_usd="50.00")]
+        )
         assert len(recs) == 1
         assert recs[0].type == "caching"
 
@@ -137,113 +152,128 @@ class TestCheckCachingOpportunity:
         # 10M tokens: est_input = 7_000_000, cacheable = 2_100_000
         # savings = 2_100_000 * 1.25 / 1_000_000 = 2.625
         # ROUND_HALF_EVEN: 2.625 → 2.62 (2 is even)
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=10_000_000, total_cost_usd="100.00")
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=10_000_000, total_cost_usd="100.00")]
+        )
         assert len(recs) == 1
         savings = recs[0].projected_savings_usd
         assert savings is not None
         assert savings == Decimal("2.62")
 
     def test_skipped_below_200_requests(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=199, total_tokens=5_000_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=199, total_tokens=5_000_000)]
+        )
         assert recs == []
 
     def test_skipped_for_non_cache_eligible_model(self):
         # gpt-4-turbo is not in _CACHE_SAVINGS_PER_MTOK
-        recs = _check_caching_opportunity([
-            _stats("gpt-4-turbo", total_requests=500, total_tokens=5_000_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4-turbo", total_requests=500, total_tokens=5_000_000)]
+        )
         assert recs == []
 
     def test_scope_value_includes_feature_tag(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", feature_tag="chat", total_requests=500, total_tokens=10_000_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", feature_tag="chat", total_requests=500, total_tokens=10_000_000)]
+        )
         assert recs[0].scope_value == "gpt-4o:chat"
 
     def test_scope_value_uses_all_when_no_tag(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", feature_tag=None, total_requests=500, total_tokens=10_000_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", feature_tag=None, total_requests=500, total_tokens=10_000_000)]
+        )
         assert recs[0].scope_value == "gpt-4o:all"
 
     def test_confidence_is_always_medium(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=1000, total_tokens=10_000_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=1000, total_tokens=10_000_000)]
+        )
         assert recs[0].confidence == Decimal("0.60")
 
     def test_skipped_when_projected_savings_below_minimum(self):
         # Very few tokens → savings < $1
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=200, total_tokens=10_000)
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=200, total_tokens=10_000)]
+        )
         assert recs == []
 
     def test_anthropic_claude_caching(self):
-        recs = _check_caching_opportunity([
-            _stats(
-                "claude-3-5-sonnet-20241022",
-                provider="anthropic",
-                total_requests=300,
-                total_tokens=5_000_000,
-                total_cost_usd="50.00",
-            )
-        ])
+        recs = _check_caching_opportunity(
+            [
+                _stats(
+                    "claude-3-5-sonnet-20241022",
+                    provider="anthropic",
+                    total_requests=300,
+                    total_tokens=5_000_000,
+                    total_cost_usd="50.00",
+                )
+            ]
+        )
         assert len(recs) == 1
 
 
 # ── batch ─────────────────────────────────────────────────────────────────────
 
+
 class TestCheckBatchOpportunity:
     def test_triggers_on_eligible_model(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="50.00")]
+        )
         assert len(recs) == 1
         rec = recs[0]
         assert rec.type == "batch"
         assert rec.scope_value == "gpt-4o"
 
     def test_savings_is_50_percent_of_cost(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="100.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="100.00")]
+        )
         assert recs[0].projected_savings_usd == Decimal("50.00")
 
     def test_confidence_is_high(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=1000, total_tokens=500_000, total_cost_usd="50.00")]
+        )
         assert recs[0].confidence == Decimal("0.80")
 
     def test_skipped_below_500_requests(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=499, total_tokens=500_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=499, total_tokens=500_000, total_cost_usd="50.00")]
+        )
         assert recs == []
 
     def test_skipped_when_avg_tokens_too_high(self):
         # avg = 2_000_000 / 500 = 4000 >= 2000 → skip
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=2_000_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=2_000_000, total_cost_usd="50.00")]
+        )
         assert recs == []
 
     def test_skipped_for_non_batch_eligible_model(self):
         # claude is not in _BATCH_ELIGIBLE
-        recs = _check_batch_opportunity([
-            _stats("claude-3-5-sonnet-20241022", provider="anthropic", total_requests=1000)
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("claude-3-5-sonnet-20241022", provider="anthropic", total_requests=1000)]
+        )
         assert recs == []
 
     def test_aggregates_across_feature_tags(self):
         stats = [
-            _stats("gpt-4o-mini", feature_tag="chat", total_requests=300, total_tokens=150_000, total_cost_usd="30.00"),
-            _stats("gpt-4o-mini", feature_tag="search", total_requests=300, total_tokens=150_000, total_cost_usd="30.00"),
+            _stats(
+                "gpt-4o-mini",
+                feature_tag="chat",
+                total_requests=300,
+                total_tokens=150_000,
+                total_cost_usd="30.00",
+            ),
+            _stats(
+                "gpt-4o-mini",
+                feature_tag="search",
+                total_requests=300,
+                total_tokens=150_000,
+                total_cost_usd="30.00",
+            ),
         ]
         recs = _check_batch_opportunity(stats)
         assert len(recs) == 1
@@ -252,21 +282,22 @@ class TestCheckBatchOpportunity:
 
     def test_avg_tokens_boundary_at_1999(self):
         # avg = 999_500 / 500 = 1999 < 2000 → triggers
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=999_500, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=999_500, total_cost_usd="50.00")]
+        )
         assert len(recs) == 1
 
     def test_skipped_when_projected_savings_below_minimum(self):
         # Very low cost
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=500_000, total_cost_usd="1.50")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=500_000, total_cost_usd="1.50")]
+        )
         # 1.50 * 0.50 = 0.75 < $1.00 → skip
         assert recs == []
 
 
 # ── generate_recommendations (integration) ───────────────────────────────────
+
 
 class TestGenerateRecommendations:
     def test_empty_stats_returns_empty_list(self):
@@ -305,6 +336,7 @@ class TestGenerateRecommendations:
 
 # ── worker deduplication ──────────────────────────────────────────────────────
 
+
 class TestWorkerDedup:
     """Test that generate_org_recommendations skips existing open recommendations."""
 
@@ -318,7 +350,7 @@ class TestWorkerDedup:
         db.order.return_value = db
         db.range.return_value = db
         db.execute.side_effect = [
-            MagicMock(data=summaries),   # first call: summaries query
+            MagicMock(data=summaries),  # first call: summaries query
             MagicMock(data=existing_recs),  # second call: existing open recs
             MagicMock(data=[{"id": "new-id"}]),  # third+ calls: inserts
         ]
@@ -391,13 +423,15 @@ class TestWorkerDedup:
             db.order.return_value = db
             db.range.return_value = db
 
-            execute_results = iter([
-                MagicMock(data=summaries),
-                MagicMock(data=[]),  # no existing open recs
-                MagicMock(data=[{"id": "new-1"}]),
-                MagicMock(data=[{"id": "new-2"}]),
-                MagicMock(data=[{"id": "new-3"}]),
-            ])
+            execute_results = iter(
+                [
+                    MagicMock(data=summaries),
+                    MagicMock(data=[]),  # no existing open recs
+                    MagicMock(data=[{"id": "new-1"}]),
+                    MagicMock(data=[{"id": "new-2"}]),
+                    MagicMock(data=[{"id": "new-3"}]),
+                ]
+            )
             db.execute.side_effect = lambda: next(execute_results)
             mock_sup.return_value = db
 
@@ -424,13 +458,6 @@ class TestWorkerDedup:
 
 # ── router tests ──────────────────────────────────────────────────────────────
 
-from datetime import datetime, timezone
-
-from fastapi.testclient import TestClient
-
-from api.deps import OrgContext, _require_org
-from api.main import app
-
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 OTHER_ORG = "00000000-0000-0000-0000-000000000002"
 REC_ID = "rrrrrrrr-0000-0000-0000-000000000001"
@@ -450,9 +477,10 @@ def _apply_module_auth_override():
     app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
     yield
 
+
 client = TestClient(app)
 
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 
 def _rec_row(
@@ -466,7 +494,7 @@ def _rec_row(
         "id": rec_id,
         "org_id": ORG_ID,
         "type": rec_type,
-        "title": f"Switch gpt-4o → gpt-4o-mini",
+        "title": "Switch gpt-4o → gpt-4o-mini",
         "description": "You can save money by switching models.",
         "projected_savings_usd": savings,
         "confidence": "0.85",
@@ -584,9 +612,7 @@ class TestGenerateAllOrgRecommendations:
         db.table.return_value = db
         db.select.return_value = db
         db.eq.return_value = db
-        db.execute.return_value = MagicMock(
-            data=[{"org_id": oid} for oid in org_ids]
-        )
+        db.execute.return_value = MagicMock(data=[{"org_id": oid} for oid in org_ids])
         return db
 
     def test_dispatches_one_task_per_active_org(self) -> None:  # TC-M3-A01
@@ -628,7 +654,9 @@ class TestGenerateAllOrgRecommendations:
 class TestWorkerInsertionAndAggregation:
     """TC-M3-A03, A04, A05: payload completeness, grouping, within-run dedup."""
 
-    def _db_for_org(self, summaries: list[dict], existing_recs: list[dict] | None = None) -> MagicMock:
+    def _db_for_org(
+        self, summaries: list[dict], existing_recs: list[dict] | None = None
+    ) -> MagicMock:
         db = MagicMock()
         db.table.return_value = db
         db.select.return_value = db
@@ -668,9 +696,16 @@ class TestWorkerInsertionAndAggregation:
         assert db.insert.called
         payload = db.insert.call_args_list[0][0][0]
         required_fields = {
-            "org_id", "type", "title", "description",
-            "projected_savings_usd", "confidence", "evidence",
-            "scope_value", "status", "generated_at",
+            "org_id",
+            "type",
+            "title",
+            "description",
+            "projected_savings_usd",
+            "confidence",
+            "evidence",
+            "scope_value",
+            "status",
+            "generated_at",
         }
         assert required_fields <= set(payload.keys())
         assert payload["org_id"] == "org-test"
@@ -683,12 +718,20 @@ class TestWorkerInsertionAndAggregation:
         # Two daily rows for the same group: total = $60 + $40 = $100
         summaries = [
             {
-                "provider": "openai", "model": "gpt-4o", "feature_tag": None,
-                "total_cost_usd": "60.00", "total_requests": 600, "total_tokens": 300_000,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "total_cost_usd": "60.00",
+                "total_requests": 600,
+                "total_tokens": 300_000,
             },
             {
-                "provider": "openai", "model": "gpt-4o", "feature_tag": None,
-                "total_cost_usd": "40.00", "total_requests": 400, "total_tokens": 200_000,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "total_cost_usd": "40.00",
+                "total_requests": 400,
+                "total_tokens": 200_000,
             },
         ]
 
@@ -700,7 +743,9 @@ class TestWorkerInsertionAndAggregation:
 
         with (
             patch("api.workers.recommendations._get_supabase") as mock_sup,
-            patch("api.workers.recommendations.generate_recommendations", side_effect=_capture_recs),
+            patch(
+                "api.workers.recommendations.generate_recommendations", side_effect=_capture_recs
+            ),
         ):
             db = self._db_for_org(summaries)
             mock_sup.return_value = db
@@ -709,6 +754,7 @@ class TestWorkerInsertionAndAggregation:
         # The two rows must have been merged into a single ModelStats
         assert len(captured_stats) == 1
         from decimal import Decimal
+
         assert captured_stats[0].total_cost_usd == Decimal("100.00")
         assert captured_stats[0].total_requests == 1000
         assert captured_stats[0].total_tokens == 500_000
@@ -719,9 +765,9 @@ class TestWorkerInsertionAndAggregation:
         (type, scope_value), only the first should be inserted; the second is
         blocked by the existing_keys.add() guard inside the worker loop.
         """
-        from api.workers.recommendations import generate_org_recommendations
-        from api.services.recommendations import Recommendation
         from decimal import Decimal
+
+        from api.workers.recommendations import generate_org_recommendations
 
         duplicate_rec = Recommendation(
             type="model_swap",
@@ -735,8 +781,12 @@ class TestWorkerInsertionAndAggregation:
 
         summaries = [
             {
-                "provider": "openai", "model": "gpt-4o", "feature_tag": None,
-                "total_cost_usd": "100.00", "total_requests": 1000, "total_tokens": 500_000,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "total_cost_usd": "100.00",
+                "total_requests": 1000,
+                "total_tokens": 500_000,
             }
         ]
 
@@ -757,6 +807,7 @@ class TestWorkerInsertionAndAggregation:
 
 
 # ── TC-REC-20: input_compression type not yet implemented ─────────────────────
+
 
 class TestInputCompressionNotImplemented:
     """
@@ -796,28 +847,22 @@ class TestModelSwapBoundaries:
     """Boundary conditions at exact threshold values for model_swap."""
 
     def test_exactly_100_requests_triggers(self):
-        recs = _check_model_swap([
-            _stats("gpt-4o", total_requests=100, total_cost_usd="50.00")
-        ])
+        recs = _check_model_swap([_stats("gpt-4o", total_requests=100, total_cost_usd="50.00")])
         assert len(recs) == 1
 
     def test_avg_cost_just_above_threshold_triggers(self):
         # avg = 10.01 / 1000 = $0.01001 → above $0.01 threshold
-        recs = _check_model_swap([
-            _stats("gpt-4o", total_cost_usd="10.01", total_requests=1000)
-        ])
+        recs = _check_model_swap([_stats("gpt-4o", total_cost_usd="10.01", total_requests=1000)])
         assert len(recs) == 1
 
     def test_unknown_model_not_in_price_map_skipped(self):
-        recs = _check_model_swap([
-            _stats("gpt-5-ultra", total_cost_usd="100.00", total_requests=500)
-        ])
+        recs = _check_model_swap(
+            [_stats("gpt-5-ultra", total_cost_usd="100.00", total_requests=500)]
+        )
         assert recs == []
 
     def test_zero_requests_skipped(self):
-        recs = _check_model_swap([
-            _stats("gpt-4o", total_cost_usd="0.00", total_requests=0)
-        ])
+        recs = _check_model_swap([_stats("gpt-4o", total_cost_usd="0.00", total_requests=0)])
         assert recs == []
 
 
@@ -825,15 +870,13 @@ class TestCachingBoundaries:
     """Boundary conditions for caching rule."""
 
     def test_exactly_200_requests_triggers(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=200, total_tokens=10_000_000, total_cost_usd="50.00")
-        ])
+        recs = _check_caching_opportunity(
+            [_stats("gpt-4o", total_requests=200, total_tokens=10_000_000, total_cost_usd="50.00")]
+        )
         assert len(recs) == 1
 
     def test_zero_tokens_does_not_trigger(self):
-        recs = _check_caching_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=0)
-        ])
+        recs = _check_caching_opportunity([_stats("gpt-4o", total_requests=500, total_tokens=0)])
         assert recs == []
 
 
@@ -841,22 +884,22 @@ class TestBatchBoundaries:
     """Boundary conditions for batch rule."""
 
     def test_exactly_500_requests_triggers(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=500_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=500_000, total_cost_usd="50.00")]
+        )
         assert len(recs) == 1
 
     def test_avg_tokens_exactly_2000_skipped(self):
         # avg = 1_000_000 / 500 = 2000.0 → exactly at threshold → skip (>= 2000)
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=500, total_tokens=1_000_000, total_cost_usd="50.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=500, total_tokens=1_000_000, total_cost_usd="50.00")]
+        )
         assert recs == []
 
     def test_zero_requests_does_not_crash(self):
-        recs = _check_batch_opportunity([
-            _stats("gpt-4o", total_requests=0, total_tokens=0, total_cost_usd="0.00")
-        ])
+        recs = _check_batch_opportunity(
+            [_stats("gpt-4o", total_requests=0, total_tokens=0, total_cost_usd="0.00")]
+        )
         assert recs == []
 
 
@@ -871,8 +914,8 @@ class TestRecommendationsRouterEdgeCases:
 
         db = _mock_db_router()
         db.execute.side_effect = [
-            MagicMock(data=[_rec_row()]),       # ownership check
-            MagicMock(data=[resolved_row]),      # update result
+            MagicMock(data=[_rec_row()]),  # ownership check
+            MagicMock(data=[resolved_row]),  # update result
         ]
 
         with patch("api.routers.recommendations._get_supabase", return_value=db):
@@ -906,7 +949,9 @@ class TestRecommendationsRouterEdgeCases:
     def test_patch_invalid_rec_id_format_returns_404(self):
         db = _mock_db_router([])
         with patch("api.routers.recommendations._get_supabase", return_value=db):
-            resp = client.patch("/api/v1/recommendations/nonexistent-id", json={"status": "applied"})
+            resp = client.patch(
+                "/api/v1/recommendations/nonexistent-id", json={"status": "applied"}
+            )
         assert resp.status_code == 404
 
     def test_patch_without_body_returns_422(self):
@@ -923,6 +968,7 @@ class TestRecommendationsBeatSchedule:
 
     def test_generate_recommendations_in_beat_schedule(self):
         from api.workers.celery_app import celery_app
+
         schedule = celery_app.conf.beat_schedule
         assert "generate-recommendations" in schedule
         entry = schedule["generate-recommendations"]
@@ -930,6 +976,7 @@ class TestRecommendationsBeatSchedule:
 
     def test_runs_at_0230_utc(self):
         from api.workers.celery_app import celery_app
+
         entry = celery_app.conf.beat_schedule["generate-recommendations"]
         cron = entry["schedule"]
         assert cron.hour == {2}
@@ -947,12 +994,20 @@ class TestWorkerMixedProviders:
 
         summaries = [
             {
-                "provider": "openai", "model": "gpt-4o", "feature_tag": None,
-                "total_cost_usd": "100.00", "total_requests": 1000, "total_tokens": 500_000,
+                "provider": "openai",
+                "model": "gpt-4o",
+                "feature_tag": None,
+                "total_cost_usd": "100.00",
+                "total_requests": 1000,
+                "total_tokens": 500_000,
             },
             {
-                "provider": "anthropic", "model": "claude-opus-4-5", "feature_tag": None,
-                "total_cost_usd": "200.00", "total_requests": 500, "total_tokens": 1_000_000,
+                "provider": "anthropic",
+                "model": "claude-opus-4-5",
+                "feature_tag": None,
+                "total_cost_usd": "200.00",
+                "total_requests": 500,
+                "total_tokens": 1_000_000,
             },
         ]
 

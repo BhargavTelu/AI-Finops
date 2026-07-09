@@ -4,11 +4,11 @@ TC-ANOM-01 to TC-ANOM-07.
 Supabase is mocked. Auth dependency is overridden.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -16,7 +16,7 @@ from api.main import app
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 OTHER_ORG = "00000000-0000-0000-0000-000000000002"
 ANOMALY_ID = "cccccccc-0000-0000-0000-000000000001"
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 _AUTH_OVERRIDE = lambda: OrgContext(user_id="user_test", org_id=ORG_ID)  # noqa: E731
 app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
@@ -38,6 +38,7 @@ client = TestClient(app)
 
 
 # ── Mock helpers ───────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     db = MagicMock()
@@ -76,6 +77,7 @@ def _anomaly_row(
 
 
 # ── GET /anomalies ─────────────────────────────────────────────────────────────
+
 
 class TestListAnomalies:
     def test_list_all_returns_three(self) -> None:  # TC-ANOM-01
@@ -124,6 +126,7 @@ class TestListAnomalies:
 
 # ── PATCH /anomalies/{id} ──────────────────────────────────────────────────────
 
+
 class TestUpdateAnomaly:
     def _db_for_update(self, new_status: str) -> MagicMock:
         """Ownership check returns row; update returns row with new status."""
@@ -150,30 +153,22 @@ class TestUpdateAnomaly:
     def test_patch_status_to_dismissed(self) -> None:  # TC-ANOM-04
         db = self._db_for_update("dismissed")
         with patch("api.routers.anomalies._get_supabase", return_value=db):
-            resp = client.patch(
-                f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "dismissed"}
-            )
+            resp = client.patch(f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "dismissed"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "dismissed"
 
     def test_org_isolation_returns_404(self) -> None:  # TC-ANOM-05
         db = _mock_db([])  # ownership check returns empty → 404
         with patch("api.routers.anomalies._get_supabase", return_value=db):
-            resp = client.patch(
-                f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "acked"}
-            )
+            resp = client.patch(f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "acked"})
         assert resp.status_code == 404
 
     def test_invalid_status_returns_422(self) -> None:  # TC-ANOM-06
-        resp = client.patch(
-            f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "deleted"}
-        )
+        resp = client.patch(f"/api/v1/anomalies/{ANOMALY_ID}", json={"status": "deleted"})
         assert resp.status_code == 422
 
     def test_nonexistent_anomaly_returns_404(self) -> None:  # TC-ANOM-07
         db = _mock_db([])
         with patch("api.routers.anomalies._get_supabase", return_value=db):
-            resp = client.patch(
-                "/api/v1/anomalies/nonexistent-id", json={"status": "acked"}
-            )
+            resp = client.patch("/api/v1/anomalies/nonexistent-id", json={"status": "acked"})
         assert resp.status_code == 404

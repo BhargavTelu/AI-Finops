@@ -9,6 +9,8 @@ just disables capture. Properties carry ids only - no emails, no names
 (hard rule #4 extends to analytics).
 """
 
+from typing import Any
+
 import httpx
 import structlog
 
@@ -17,7 +19,7 @@ from api.config import settings
 log = structlog.get_logger()
 
 
-def capture(distinct_id: str, event: str, properties: dict | None = None) -> None:
+def capture(distinct_id: str, event: str, properties: dict[str, Any] | None = None) -> None:
     if not settings.posthog_api_key:
         return
     try:

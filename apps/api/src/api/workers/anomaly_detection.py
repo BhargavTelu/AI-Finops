@@ -1,16 +1,17 @@
 """
 Nightly anomaly detection - runs at 01:00 UTC (after aggregation).
-Algorithm: rolling mean + 2σ over 7 days; $10 floor; ≥15 days of data required.
+Algorithm: rolling mean + 2-sigma over 7 days; $10 floor; ≥15 days of data required.
 See architecture.md § Anomaly Algorithm and services/anomaly.py.
 """
 
-import uuid
 from collections import defaultdict
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import Any
+import uuid
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.config import settings
@@ -21,10 +22,13 @@ from api.workers.notifications import send_anomaly_alert
 
 log = structlog.get_logger()
 
-_HISTORY_DAYS = 15  # need ≥15 to have a 7-day rolling window + today
+_HISTORY_DAYS = 15
+
+# (model, feature_tag, team_tag, customer_tag)
+_ScopeKey = tuple[str, str, str, str]  # need ≥15 to have a 7-day rolling window + today
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
@@ -51,7 +55,7 @@ def detect_org(org_id: str) -> None:
       4. Enqueue send_anomaly_alert for severity ≥ medium
     """
     db = _get_supabase()
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     from_date = today - timedelta(days=_HISTORY_DAYS)
 
     # Pull all relevant daily rows for the period, paged past the PostgREST
@@ -72,11 +76,10 @@ def detect_org(org_id: str) -> None:
     # Group rows by (model, feature_tag, team_tag, customer_tag).
     # Sum costs per day within each group - multiple provider rows can share
     # the same model+tag combo on the same day.
-    GroupKey = tuple[str, str, str, str]
-    group_days: dict[GroupKey, dict[date, Decimal]] = defaultdict(dict)
+    group_days: dict[_ScopeKey, dict[date, Decimal]] = defaultdict(dict)
 
     for row in summary_rows:
-        key: GroupKey = (
+        key: _ScopeKey = (
             row["model"],
             row.get("feature_tag") or "",
             row.get("team_tag") or "",
@@ -87,7 +90,7 @@ def detect_org(org_id: str) -> None:
         group_days[key][row_date] = existing + Decimal(str(row["total_cost_usd"]))
 
     # Fetch open anomalies already detected today for this org (dedup guard).
-    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
+    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=UTC)
     existing_result = (
         db.table("anomalies")
         .select("scope_kind, scope_value")

@@ -7,13 +7,13 @@ Rules applied in priority order:
   3. batch       - high request count at low tokens/request, eligible for Batch API
 
 All rules are pure functions over ModelStats - no DB access, fully testable in isolation.
-Confidence is numeric (0.0–1.0): 0.85 = high, 0.60 = medium.
+Confidence is numeric (0.0-1.0): 0.85 = high, 0.60 = medium.
 """
 
 from dataclasses import dataclass
 from decimal import Decimal
 import re
-from typing import Literal
+from typing import Any, Literal
 
 # Anthropic usage-report model IDs carry a date suffix (claude-sonnet-4-5-20250929);
 # the maps below are keyed by model family. Strip the suffix before lookup.
@@ -62,17 +62,17 @@ _INPUT_PRICE_PER_MTOK: dict[str, Decimal] = {
 # Cache-read savings per million tokens = input_price - cache_read_price (0.1x input).
 # Only models with published cache pricing are listed.
 _CACHE_SAVINGS_PER_MTOK: dict[str, Decimal] = {
-    "gpt-4o": Decimal("1.25"),                # 2.50 - 1.25
-    "gpt-4o-mini": Decimal("0.075"),          # 0.15 - 0.075
-    "claude-3-5-sonnet": Decimal("2.70"),     # 3.00 - 0.30
-    "claude-3-5-haiku": Decimal("0.72"),      # 0.80 - 0.08
-    "claude-opus-4-5": Decimal("4.50"),       # 5.00 - 0.50
+    "gpt-4o": Decimal("1.25"),  # 2.50 - 1.25
+    "gpt-4o-mini": Decimal("0.075"),  # 0.15 - 0.075
+    "claude-3-5-sonnet": Decimal("2.70"),  # 3.00 - 0.30
+    "claude-3-5-haiku": Decimal("0.72"),  # 0.80 - 0.08
+    "claude-opus-4-5": Decimal("4.50"),  # 5.00 - 0.50
     "claude-opus-4-6": Decimal("4.50"),
     "claude-opus-4-7": Decimal("4.50"),
     "claude-opus-4-8": Decimal("4.50"),
     "claude-sonnet-4-5": Decimal("2.70"),
     "claude-sonnet-4-6": Decimal("2.70"),
-    "claude-haiku-4-5": Decimal("0.90"),      # 1.00 - 0.10
+    "claude-haiku-4-5": Decimal("0.90"),  # 1.00 - 0.10
 }
 
 # Models eligible for OpenAI Batch API (50% discount, 24h turnaround).
@@ -84,9 +84,11 @@ _MIN_SAVINGS_USD = Decimal("1.00")
 
 # ── Data types ────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ModelStats:
     """Aggregated 30-day stats for one (provider, model, feature_tag) group."""
+
     provider: str
     model: str
     feature_tag: str | None
@@ -102,13 +104,14 @@ class Recommendation:
     title: str
     description: str
     projected_savings_usd: Decimal | None
-    confidence: Decimal  # 0.0–1.0
-    evidence: dict
+    confidence: Decimal  # 0.0-1.0
+    evidence: dict[str, Any]
     # Deduplication key: used by the worker to skip re-inserting an existing open rec.
     scope_value: str
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
+
 
 def generate_recommendations(stats: list[ModelStats]) -> list[Recommendation]:
     """
@@ -124,6 +127,7 @@ def generate_recommendations(stats: list[ModelStats]) -> list[Recommendation]:
 
 # ── Rule 1: model downgrade ───────────────────────────────────────────────────
 
+
 def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
     """
     Trigger: avg cost/request > $0.01 AND ≥100 requests in 30 days AND a cheaper
@@ -135,7 +139,7 @@ def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
     """
     # Aggregate across feature_tags - the recommendation is per model family,
     # not per tag. Keying by family also folds dated ID variants together.
-    by_model: dict[str, dict] = {}
+    by_model: dict[str, dict[str, Any]] = {}
     for s in stats:
         family = _model_family(s.model)
         if family not in by_model:
@@ -166,9 +170,7 @@ def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
             continue
 
         price_ratio = cheaper_price / current_price
-        projected_savings = (data["total_cost_usd"] * (1 - price_ratio)).quantize(
-            Decimal("0.01")
-        )
+        projected_savings = (data["total_cost_usd"] * (1 - price_ratio)).quantize(Decimal("0.01"))
         if projected_savings < _MIN_SAVINGS_USD:
             continue
 
@@ -202,6 +204,7 @@ def _check_model_swap(stats: list[ModelStats]) -> list[Recommendation]:
 
 
 # ── Rule 2: prompt caching ────────────────────────────────────────────────────
+
 
 def _check_caching_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     """
@@ -261,6 +264,7 @@ def _check_caching_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
 
 # ── Rule 3: Batch API ─────────────────────────────────────────────────────────
 
+
 def _check_batch_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     """
     Trigger: model is Batch-API eligible AND ≥500 requests AND avg tokens/request < 2000.
@@ -269,7 +273,7 @@ def _check_batch_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
     Suitable for offline workloads: evals, bulk classification, data extraction pipelines.
     """
     # Aggregate across feature_tags - batch eligibility is per model, not per tag.
-    by_model: dict[str, dict] = {}
+    by_model: dict[str, dict[str, Any]] = {}
     for s in stats:
         family = _model_family(s.model)
         if family not in _BATCH_ELIGIBLE:
@@ -289,15 +293,11 @@ def _check_batch_opportunity(stats: list[ModelStats]) -> list[Recommendation]:
         if data["total_requests"] < 500:
             continue
 
-        avg_tokens = (
-            data["total_tokens"] / data["total_requests"] if data["total_requests"] else 0
-        )
+        avg_tokens = data["total_tokens"] / data["total_requests"] if data["total_requests"] else 0
         if avg_tokens >= 2000:
             continue
 
-        projected_savings = (data["total_cost_usd"] * Decimal("0.50")).quantize(
-            Decimal("0.01")
-        )
+        projected_savings = (data["total_cost_usd"] * Decimal("0.50")).quantize(Decimal("0.01"))
         if projected_savings < _MIN_SAVINGS_USD:
             continue
 

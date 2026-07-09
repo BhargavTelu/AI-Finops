@@ -7,12 +7,9 @@ Replaces the placeholder in test_pricing.py.
 from decimal import Decimal
 from pathlib import Path
 
-import pytest
 import yaml
 
-_PRICING_PATH = (
-    Path(__file__).parents[3] / "packages" / "pricing" / "pricing.yaml"
-)
+_PRICING_PATH = Path(__file__).parents[3] / "packages" / "pricing" / "pricing.yaml"
 
 _REQUIRED_RATE_KEYS = {"input_per_mtok", "output_per_mtok", "cached_per_mtok"}
 
@@ -36,18 +33,14 @@ class TestPricingYaml:
         for provider, pdata in data["providers"].items():
             for model, rates in pdata["models"].items():
                 missing = _REQUIRED_RATE_KEYS - set(rates.keys())
-                assert not missing, (
-                    f"{provider}/{model} missing rate keys: {missing}"
-                )
+                assert not missing, f"{provider}/{model} missing rate keys: {missing}"
 
     def test_no_zero_rates(self) -> None:  # TC-PRI-03
         data = _load_pricing()
         for provider, pdata in data["providers"].items():
             for model, rates in pdata["models"].items():
                 for key in _REQUIRED_RATE_KEYS:
-                    assert rates[key] > 0, (
-                        f"{provider}/{model}.{key} = {rates[key]} (must be > 0)"
-                    )
+                    assert rates[key] > 0, f"{provider}/{model}.{key} = {rates[key]} (must be > 0)"
 
     def test_claude_sonnet_cost_calc(self) -> None:  # TC-PRI-04
         """1M input + 1M output tokens for claude-sonnet-4-5 = $18.00."""
@@ -71,6 +64,7 @@ class TestPricingYaml:
 
 
 # ── TC-PRI-10 + TC-PRI-11: pricing.yaml ↔ recommendations sync ───────────────
+
 
 class TestPricingYamlRecommendationsSync:
     """
@@ -114,11 +108,13 @@ class TestPricingYamlRecommendationsSync:
         yaml_prices = self._yaml_prices()
 
         for model, rec_savings in _CACHE_SAVINGS_PER_MTOK.items():
-            assert model in yaml_prices, (
-                f"Model '{model}' is in _CACHE_SAVINGS_PER_MTOK but missing from pricing.yaml."
-            )
+            assert (
+                model in yaml_prices
+            ), f"Model '{model}' is in _CACHE_SAVINGS_PER_MTOK but missing from pricing.yaml."
             rates = yaml_prices[model]
-            yaml_savings = Decimal(str(rates["input_per_mtok"])) - Decimal(str(rates["cached_per_mtok"]))
+            yaml_savings = Decimal(str(rates["input_per_mtok"])) - Decimal(
+                str(rates["cached_per_mtok"])
+            )
             assert rec_savings == yaml_savings, (
                 f"_CACHE_SAVINGS_PER_MTOK['{model}'] = {rec_savings} but "
                 f"pricing.yaml implies {yaml_savings} (input - cached). "

@@ -7,15 +7,13 @@ Covers:
 All Supabase calls are mocked - no network, no DB.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from api.workers.budget_checks import (
-    _same_calendar_month,
     _compute_scope_spend,
+    _same_calendar_month,
     check_org,
 )
 
@@ -24,6 +22,7 @@ BUDGET_ID = "bbbbbbbb-0000-0000-0000-000000000001"
 
 
 # ── DB mock ─────────────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     """Supabase client mock; all chained query methods return self."""
@@ -57,6 +56,7 @@ def _db_with_rows(rows: list[dict]) -> MagicMock:
 
 # ── _same_calendar_month ────────────────────────────────────────────────────────
 
+
 class TestSameCalendarMonth:
     def test_none_returns_false(self) -> None:
         assert _same_calendar_month(None) is False
@@ -65,12 +65,12 @@ class TestSameCalendarMonth:
         assert _same_calendar_month("") is False
 
     def test_current_month_returns_true(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ts = now.isoformat()
         assert _same_calendar_month(ts) is True
 
     def test_previous_month_returns_false(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Subtract enough days to guarantee a different month
         prev_month = now.replace(day=1)
         if prev_month.month == 1:
@@ -80,7 +80,7 @@ class TestSameCalendarMonth:
         assert _same_calendar_month(prev_ts) is False
 
     def test_z_suffix_parsed_correctly(self) -> None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         ts = now.strftime("%Y-%m-%dT%H:%M:%SZ")
         assert _same_calendar_month(ts) is True
 
@@ -89,6 +89,7 @@ class TestSameCalendarMonth:
 
 
 # ── _compute_scope_spend ────────────────────────────────────────────────────────
+
 
 class TestComputeScopeSpend:
     def _spend_rows(self, amounts: list[float]) -> list[dict]:
@@ -129,6 +130,7 @@ class TestComputeScopeSpend:
 
 
 # ── check_org ────────────────────────────────────────────────────────────────────
+
 
 def _budget_row(
     monthly_limit: float = 1000.0,
@@ -190,19 +192,19 @@ class TestCheckOrg:
 
     def test_80pct_guard_prevents_resend_same_month(self) -> None:
         """80% already notified this month → no re-alert."""
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         _, mock_alert = self._run(_budget_row(notified_80_at=now_iso), Decimal("850"))
         mock_alert.delay.assert_not_called()
 
     def test_100pct_guard_prevents_resend_same_month(self) -> None:
         """100% already notified this month → no re-alert."""
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         _, mock_alert = self._run(_budget_row(notified_100_at=now_iso), Decimal("1000"))
         mock_alert.delay.assert_not_called()
 
     def test_guard_allows_resend_new_month(self) -> None:
         """notified_80_at from last month → allowed to re-alert this month."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if now.month == 1:
             prev_ts = now.replace(year=now.year - 1, month=12, day=1).isoformat()
         else:
@@ -250,11 +252,14 @@ class TestCheckOrg:
 
     def test_custom_alert_threshold_respected(self) -> None:
         """Budget with alert_at_pct=60 fires at 60% spend."""
-        _, mock_alert = self._run(_budget_row(monthly_limit=1000.0, alert_at_pct=60), Decimal("600"))
+        _, mock_alert = self._run(
+            _budget_row(monthly_limit=1000.0, alert_at_pct=60), Decimal("600")
+        )
         mock_alert.delay.assert_called_once_with(BUDGET_ID, 60, ORG_ID)
 
 
 # ── TC-FAN-03 & TC-FAN-04: check_all_orgs fan-out ────────────────────────────
+
 
 class TestCheckAllOrgsFanOut:
     """TC-FAN-03 and TC-FAN-04 - check_all_orgs dispatches to unique org_ids."""

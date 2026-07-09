@@ -44,11 +44,11 @@ class DailyPoint(BaseModel):
 
 
 class ExploreRow(BaseModel):
-    group_key: str      # dimension value (e.g. "openai", "gpt-4o", "rag-pipeline")
+    group_key: str  # dimension value (e.g. "openai", "gpt-4o", "rag-pipeline")
     total_cost_usd: Decimal
     total_requests: int
     total_tokens: int
-    pct_of_total: float  # 0–100; 0.0 when grand total is zero
+    pct_of_total: float  # 0-100; 0.0 when grand total is zero
 
 
 class ForecastResult(BaseModel):

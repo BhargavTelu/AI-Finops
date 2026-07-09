@@ -149,6 +149,5 @@ def presign_download(key: str, expires_seconds: int = 600, *, now: datetime | No
     ).hexdigest()
 
     return (
-        f"https://{_host()}{_canonical_uri(key)}"
-        f"?{canonical_query}&X-Amz-Signature={signature}"
+        f"https://{_host()}{_canonical_uri(key)}" f"?{canonical_query}&X-Amz-Signature={signature}"
     )

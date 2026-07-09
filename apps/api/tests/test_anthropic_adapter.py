@@ -4,7 +4,7 @@ Mocks httpx to avoid real network calls.
 Cost values are computed from packages/pricing/pricing.yaml rates.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -12,8 +12,8 @@ import pytest
 
 from api.adapters.anthropic import AnthropicAdapter, _compute_cost
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _mock_response(status_code: int, json_body: dict) -> MagicMock:
     resp = MagicMock()
@@ -58,8 +58,8 @@ def _result(
     }
 
 
-START = datetime(2025, 1, 1, tzinfo=timezone.utc)
-END = datetime(2025, 1, 2, tzinfo=timezone.utc)
+START = datetime(2025, 1, 1, tzinfo=UTC)
+END = datetime(2025, 1, 2, tzinfo=UTC)
 KEY = b"sk-ant-admin-testkey1234567890"
 
 START_ISO = "2025-01-01T00:00:00Z"
@@ -67,6 +67,7 @@ END_ISO = "2025-01-02T00:00:00Z"
 
 
 # ── _compute_cost() ───────────────────────────────────────────────────────────
+
 
 class TestComputeCost:
     def test_known_model_returns_nonzero_cost(self) -> None:
@@ -93,6 +94,7 @@ class TestComputeCost:
 
 # ── validate() ────────────────────────────────────────────────────────────────
 
+
 class TestValidate:
     def test_returns_true_on_200(self) -> None:
         adapter = AnthropicAdapter()
@@ -101,7 +103,10 @@ class TestValidate:
 
     def test_raises_on_401(self) -> None:
         adapter = AnthropicAdapter()
-        with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(401, {"error": "unauthorized"})):
+        with patch(
+            "api.adapters.anthropic.httpx.get",
+            return_value=_mock_response(401, {"error": "unauthorized"}),
+        ):
             with pytest.raises(ValueError, match="Invalid or unauthorized"):
                 adapter.validate(KEY)
 
@@ -119,6 +124,7 @@ class TestValidate:
 
     def test_raises_on_network_error(self) -> None:
         import httpx as _httpx
+
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", side_effect=_httpx.RequestError("timeout")):
             with pytest.raises(ValueError, match="Network error"):
@@ -127,16 +133,27 @@ class TestValidate:
 
 # ── fetch_costs() ─────────────────────────────────────────────────────────────
 
+
 class TestFetchCosts:
     def test_yields_normalized_event_with_correct_fields(self) -> None:
         """Happy path: 1 bucket, 1 model, all fields populated correctly."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [_result("claude-sonnet-4-5", input_tokens=1000, output_tokens=200, cache_read_input_tokens=50, request_count=3)],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        _result(
+                            "claude-sonnet-4-5",
+                            input_tokens=1000,
+                            output_tokens=200,
+                            cache_read_input_tokens=50,
+                            request_count=3,
+                        )
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -157,13 +174,15 @@ class TestFetchCosts:
 
     def test_skips_rows_with_zero_tokens_and_zero_cost(self) -> None:
         """Rows with all-zero tokens produce zero cost and should be skipped."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [_result("claude-sonnet-4-5", input_tokens=0, output_tokens=0)],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [_result("claude-sonnet-4-5", input_tokens=0, output_tokens=0)],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -172,13 +191,15 @@ class TestFetchCosts:
 
     def test_unknown_model_yields_event_with_zero_cost(self) -> None:
         """Unknown model: token counts are preserved, cost is Decimal('0')."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [_result("claude-unknown-future", input_tokens=500, output_tokens=100)],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [_result("claude-unknown-future", input_tokens=500, output_tokens=100)],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -192,13 +213,15 @@ class TestFetchCosts:
 
     def test_cached_tokens_mapped_from_cache_read_input_tokens(self) -> None:
         """Anthropic field cache_read_input_tokens → NormalizedUsageEvent.cached_tokens."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [_result("claude-haiku-4-5", input_tokens=100, cache_read_input_tokens=400)],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [_result("claude-haiku-4-5", input_tokens=100, cache_read_input_tokens=400)],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -208,13 +231,22 @@ class TestFetchCosts:
 
     def test_cache_creation_tokens_stored_in_raw_meta(self) -> None:
         """cache_creation_input_tokens is preserved in raw_meta for future use."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [_result("claude-haiku-4-5", input_tokens=100, output_tokens=50, cache_creation_input_tokens=200)],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        _result(
+                            "claude-haiku-4-5",
+                            input_tokens=100,
+                            output_tokens=50,
+                            cache_creation_input_tokens=200,
+                        )
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -225,12 +257,24 @@ class TestFetchCosts:
     def test_pagination_follows_cursor(self) -> None:
         """Verifies that _paginate keeps fetching when has_more=True."""
         page1 = _usage_page(
-            [_bucket(START_ISO, END_ISO, [_result("claude-opus-4-5", input_tokens=1000, output_tokens=100)])],
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [_result("claude-opus-4-5", input_tokens=1000, output_tokens=100)],
+                )
+            ],
             has_more=True,
             next_page="cursor_xyz",
         )
         page2 = _usage_page(
-            [_bucket(START_ISO, END_ISO, [_result("claude-haiku-4-5", input_tokens=500, output_tokens=50)])],
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [_result("claude-haiku-4-5", input_tokens=500, output_tokens=50)],
+                )
+            ],
             has_more=False,
         )
 
@@ -254,16 +298,18 @@ class TestFetchCosts:
 
     def test_multiple_models_in_same_bucket(self) -> None:
         """Multiple results in a single bucket each yield a separate event."""
-        page = _usage_page([
-            _bucket(
-                START_ISO,
-                END_ISO,
-                [
-                    _result("claude-opus-4-5", input_tokens=200, output_tokens=50),
-                    _result("claude-haiku-4-5", input_tokens=1000, output_tokens=200),
-                ],
-            )
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        _result("claude-opus-4-5", input_tokens=200, output_tokens=50),
+                        _result("claude-haiku-4-5", input_tokens=1000, output_tokens=200),
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -283,6 +329,7 @@ class TestFetchCosts:
 
 
 # ── BUG-C3: pricing lookups and corrected rates ─────────────────────────────────
+
 
 class TestPricingNormalizationAndRates:
     def test_dated_model_id_resolves_to_family_rates(self) -> None:
@@ -310,16 +357,22 @@ class TestPricingNormalizationAndRates:
         assert cost == Decimal("3.75")
 
     def test_fetch_costs_includes_cache_creation_in_cost(self) -> None:
-        page = _usage_page([
-            _bucket(START_ISO, END_ISO, [
-                _result(
-                    "claude-sonnet-4-5",
-                    input_tokens=1000,
-                    output_tokens=200,
-                    cache_creation_input_tokens=2000,
-                ),
-            ])
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        _result(
+                            "claude-sonnet-4-5",
+                            input_tokens=1000,
+                            output_tokens=200,
+                            cache_creation_input_tokens=2000,
+                        ),
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch("api.adapters.anthropic.httpx.get", return_value=_mock_response(200, page)):
             events = list(adapter.fetch_costs(KEY, START, END))
@@ -332,23 +385,39 @@ class TestPricingNormalizationAndRates:
 
 # ── BUG-C2: per-key attribution (api_key_label) ─────────────────────────────────
 
+
 class TestApiKeyAttribution:
     def _api_keys_page(self, keys: list[dict]) -> dict:
         return {"data": keys, "has_more": False}
 
     def test_api_key_id_resolves_to_key_name_label(self) -> None:
-        page = _usage_page([
-            _bucket(START_ISO, END_ISO, [
-                {**_result("claude-sonnet-4-5", input_tokens=1000, output_tokens=100),
-                 "api_key_id": "apikey_A"},
-                {**_result("claude-sonnet-4-5", input_tokens=300, output_tokens=30),
-                 "api_key_id": "apikey_B"},
-            ])
-        ])
-        keys_resp = _mock_response(200, self._api_keys_page([
-            {"id": "apikey_A", "name": "prod-chat"},
-            {"id": "apikey_B", "name": "staging"},
-        ]))
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        {
+                            **_result("claude-sonnet-4-5", input_tokens=1000, output_tokens=100),
+                            "api_key_id": "apikey_A",
+                        },
+                        {
+                            **_result("claude-sonnet-4-5", input_tokens=300, output_tokens=30),
+                            "api_key_id": "apikey_B",
+                        },
+                    ],
+                )
+            ]
+        )
+        keys_resp = _mock_response(
+            200,
+            self._api_keys_page(
+                [
+                    {"id": "apikey_A", "name": "prod-chat"},
+                    {"id": "apikey_B", "name": "staging"},
+                ]
+            ),
+        )
 
         adapter = AnthropicAdapter()
         with patch(
@@ -365,12 +434,20 @@ class TestApiKeyAttribution:
         assert by_label["prod-chat"].raw_meta["api_key_id"] == "apikey_A"
 
     def test_key_list_failure_falls_back_to_raw_id(self) -> None:
-        page = _usage_page([
-            _bucket(START_ISO, END_ISO, [
-                {**_result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
-                 "api_key_id": "apikey_Z"},
-            ])
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        {
+                            **_result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
+                            "api_key_id": "apikey_Z",
+                        },
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         with patch(
             "api.adapters.anthropic.httpx.get",
@@ -382,11 +459,17 @@ class TestApiKeyAttribution:
         assert events[0].api_key_label == "apikey_Z"
 
     def test_no_api_key_id_keeps_label_none_and_skips_key_fetch(self) -> None:
-        page = _usage_page([
-            _bucket(START_ISO, END_ISO, [
-                _result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
-            ])
-        ])
+        page = _usage_page(
+            [
+                _bucket(
+                    START_ISO,
+                    END_ISO,
+                    [
+                        _result("claude-sonnet-4-5", input_tokens=100, output_tokens=10),
+                    ],
+                )
+            ]
+        )
         adapter = AnthropicAdapter()
         # Only one response: a second (key list) call would raise StopIteration
         with patch(

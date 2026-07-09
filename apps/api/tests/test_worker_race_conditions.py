@@ -6,12 +6,9 @@ Gap-09 (medium):   Dedup guard with existing open anomaly prevents duplicate ins
 Gap-10 (critical): Concurrent check_org sends duplicate budget alerts.
 """
 
+from datetime import UTC, datetime, timedelta
 import threading
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 BUDGET_ID = "cccccccc-0000-0000-0000-000000000001"
@@ -42,23 +39,26 @@ def _mock_db() -> MagicMock:
 
 def _history_rows(spike_on_last: bool = True) -> list[dict]:
     """Build 15 daily summary rows, optionally with a cost spike on the last day."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     rows = []
     for i in range(15, 0, -1):
         day = (today - timedelta(days=i)).isoformat()
         cost = "50.00" if (i == 1 and spike_on_last) else "1.00"
-        rows.append({
-            "day": day,
-            "model": "gpt-4o",
-            "feature_tag": "",
-            "team_tag": "",
-            "customer_tag": "",
-            "total_cost_usd": cost,
-        })
+        rows.append(
+            {
+                "day": day,
+                "model": "gpt-4o",
+                "feature_tag": "",
+                "team_tag": "",
+                "customer_tag": "",
+                "total_cost_usd": cost,
+            }
+        )
     return rows
 
 
 # ── Gap-08: Concurrent detect_org race ─────────────────────────────────────────
+
 
 class TestAnomalyDetectionConcurrentRace:
     """
@@ -98,7 +98,7 @@ class TestAnomalyDetectionConcurrentRace:
             db = _mock_db()
             responses = [
                 MagicMock(data=history),  # daily_cost_summaries
-                MagicMock(data=[]),        # open anomalies for today → empty (race!)
+                MagicMock(data=[]),  # open anomalies for today → empty (race!)
             ]
 
             def execute_side():
@@ -137,6 +137,7 @@ class TestAnomalyDetectionConcurrentRace:
 
 # ── Gap-09: Dedup guard boundary ───────────────────────────────────────────────
 
+
 class TestAnomalyDetectionDedupGuard:
     """Gap-09 (medium): Dedup guard (today-scoped open anomaly) prevents duplicate insert."""
 
@@ -152,8 +153,8 @@ class TestAnomalyDetectionDedupGuard:
 
         db = _mock_db()
         responses = [
-            MagicMock(data=history),       # daily_cost_summaries
-            MagicMock(data=existing_open), # dedup guard: anomaly already open today
+            MagicMock(data=history),  # daily_cost_summaries
+            MagicMock(data=existing_open),  # dedup guard: anomaly already open today
         ]
 
         def execute_side():
@@ -179,7 +180,7 @@ class TestAnomalyDetectionDedupGuard:
         db = _mock_db()
         responses = [
             MagicMock(data=history),  # daily_cost_summaries
-            MagicMock(data=[]),        # no open anomalies today → insert allowed
+            MagicMock(data=[]),  # no open anomalies today → insert allowed
         ]
 
         def execute_side():
@@ -190,7 +191,7 @@ class TestAnomalyDetectionDedupGuard:
 
         with (
             patch("api.workers.anomaly_detection._get_supabase", return_value=db),
-            patch("api.workers.anomaly_detection.send_anomaly_alert") as mock_alert,
+            patch("api.workers.anomaly_detection.send_anomaly_alert"),
             patch("api.workers.anomaly_detection.explain_anomaly"),
         ):
             detect_org(ORG_ID)
@@ -202,7 +203,7 @@ class TestAnomalyDetectionDedupGuard:
         from api.workers.anomaly_detection import detect_org
 
         # Only 10 days of history (below the 15-day minimum)
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now(UTC).date()
         short_history = [
             {
                 "day": (today - timedelta(days=i)).isoformat(),
@@ -218,7 +219,7 @@ class TestAnomalyDetectionDedupGuard:
         db = _mock_db()
         responses = [
             MagicMock(data=short_history),  # only 10 rows
-            MagicMock(data=[]),              # dedup (irrelevant)
+            MagicMock(data=[]),  # dedup (irrelevant)
         ]
 
         def execute_side():
@@ -237,6 +238,7 @@ class TestAnomalyDetectionDedupGuard:
 
 
 # ── Gap-10: Concurrent check_org budget alerts ─────────────────────────────────
+
 
 class TestBudgetCheckConcurrentRace:
     """
@@ -261,7 +263,7 @@ class TestBudgetCheckConcurrentRace:
             "scope_value": None,
             "monthly_limit": "1000.00",
             "alert_at_pct": 80,
-            "notified_80_at": None,   # neither thread has seen an alert yet
+            "notified_80_at": None,  # neither thread has seen an alert yet
             "notified_100_at": None,
         }
         spend_rows = [{"total_cost_usd": "850.00"}]  # 85% → triggers 80% threshold
@@ -302,6 +304,7 @@ class TestBudgetCheckConcurrentRace:
             patch("api.workers.budget_checks._get_supabase", side_effect=make_thread_db),
             patch("api.workers.budget_checks.send_budget_alert") as mock_alert,
         ):
+
             def track(*args, **kwargs):
                 with count_lock:
                     alert_count[0] += 1
@@ -331,7 +334,7 @@ class TestBudgetCheckConcurrentRace:
         """
         from api.workers.budget_checks import check_org
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         budget_data = {
             "id": BUDGET_ID,
             "org_id": ORG_ID,

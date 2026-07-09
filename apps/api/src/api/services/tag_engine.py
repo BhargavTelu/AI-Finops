@@ -6,25 +6,28 @@ Rule priority: lower number = higher priority. First match per tag type wins.
 """
 
 import concurrent.futures
-import re
 from dataclasses import dataclass
+import re
+from typing import Any
 
 # Shared thread pool for regex evaluation; bounded to limit resource usage.
 # Regex patterns with catastrophic backtracking are cancelled after this timeout.
-_REGEX_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="re_match")
+_REGEX_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="re_match"
+)
 _REGEX_TIMEOUT_SECS = 1.0
 
 
 @dataclass(frozen=True)
 class CompiledRule:
-    tag_type: str        # "feature" | "team" | "customer" | "env"
-    tag_name: str        # value to store in usage_events (e.g. "chat-v2")
-    match_type: str      # "regex" | "substring" | "exact"
+    tag_type: str  # "feature" | "team" | "customer" | "env"
+    tag_name: str  # value to store in usage_events (e.g. "chat-v2")
+    match_type: str  # "regex" | "substring" | "exact"
     match_pattern: str
     priority: int
 
 
-def compile_rules(db_rows: list[dict]) -> list[CompiledRule]:
+def compile_rules(db_rows: list[dict[str, Any]]) -> list[CompiledRule]:
     """
     Convert PostgREST rows (tag_rules joined with tags) into a sorted CompiledRule list.
 

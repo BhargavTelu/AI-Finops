@@ -1,3 +1,5 @@
+from typing import cast
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -77,7 +79,7 @@ class Settings(BaseSettings):
     # ── Internal AI (platform's own key - not customer keys) ──────────────────
     # Used by Celery workers for rule-based → AI recommendation upgrade (V1),
     # anomaly explainer narratives, and the monthly CFO narrative (M4).
-    # Empty in M0–M2 while recommendations are rule-based.
+    # Empty in M0-M2 while recommendations are rule-based.
     anthropic_api_key: str = ""
 
     # ── AI rate-limit ─────────────────────────────────────────────────────────
@@ -89,7 +91,7 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             import json
 
-            return json.loads(v)
+            return cast(list[str], json.loads(v))
         return v
 
 

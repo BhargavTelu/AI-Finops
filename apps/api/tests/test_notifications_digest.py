@@ -10,9 +10,7 @@ All external calls (Supabase, Slack postMessage, EncryptionService) are mocked.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from api.workers.notifications import (
     _digest_slack_blocks,
@@ -27,6 +25,7 @@ YESTERDAY = date(2026, 5, 20)
 
 
 # ── DB mock helpers ─────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     db = MagicMock()
@@ -74,55 +73,46 @@ def _db_for_digest(slack_row: dict | None = None) -> MagicMock:
     """
     db = _mock_db()
     db.execute.side_effect = [
-        MagicMock(data=[]),                              # 1. idempotency - no prior digest
+        MagicMock(data=[]),  # 1. idempotency - no prior digest
         MagicMock(data=[slack_row] if slack_row else []),  # 2. slack_integrations
-        MagicMock(data=_week_rows()),                    # 3. week data
+        MagicMock(data=_week_rows()),  # 3. week data
         MagicMock(data=[{"total_cost_usd": "25.00"}]),  # 4. MTD
         MagicMock(data=[{"total_cost_usd": "20.00"}]),  # 5. last month
-        MagicMock(data=[{"id": "a1"}, {"id": "a2"}]),   # 6. open anomalies
-        MagicMock(data=[]),                              # 7. insert record
+        MagicMock(data=[{"id": "a1"}, {"id": "a2"}]),  # 6. open anomalies
+        MagicMock(data=[]),  # 7. insert record
     ]
     return db
 
 
 # ── _digest_slack_blocks ─────────────────────────────────────────────────────────
 
+
 class TestDigestSlackBlocks:
     def test_header_contains_date(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("25"), Decimal("20"), 25, [], 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("25"), Decimal("20"), 25, [], 0)
         header_text = blocks[0]["text"]["text"]
         assert "May" in header_text
         assert "20" in header_text
 
     def test_fields_contain_spend_figures(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("25.50"), Decimal("18.75"), None, [], 3
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("25.50"), Decimal("18.75"), None, [], 3)
         fields_text = str(blocks[1]["fields"])
         assert "$25.50" in fields_text
         assert "$18.75" in fields_text
         assert "3" in fields_text
 
     def test_mom_positive(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("0"), Decimal("0"), 25, [], 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("0"), Decimal("0"), 25, [], 0)
         fields_text = str(blocks[1]["fields"])
         assert "+25%" in fields_text
 
     def test_mom_negative(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("0"), Decimal("0"), -10, [], 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("0"), Decimal("0"), -10, [], 0)
         fields_text = str(blocks[1]["fields"])
         assert "-10%" in fields_text
 
     def test_mom_none_shows_no_prior_data(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("0"), Decimal("0"), None, [], 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("0"), Decimal("0"), None, [], 0)
         fields_text = str(blocks[1]["fields"])
         assert "No prior" in fields_text
 
@@ -131,22 +121,19 @@ class TestDigestSlackBlocks:
             {"label": "gpt-4o", "usd": Decimal("20.00")},
             {"label": "claude-3-sonnet", "usd": Decimal("5.00")},
         ]
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("25"), Decimal("18"), 25, drivers, 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("25"), Decimal("18"), 25, drivers, 0)
         assert len(blocks) == 3
         driver_text = blocks[2]["text"]["text"]
         assert "gpt-4o" in driver_text
         assert "$20.00" in driver_text
 
     def test_no_drivers_block_when_empty(self) -> None:
-        blocks = _digest_slack_blocks(
-            YESTERDAY, Decimal("0"), Decimal("0"), None, [], 0
-        )
+        blocks = _digest_slack_blocks(YESTERDAY, Decimal("0"), Decimal("0"), None, [], 0)
         assert len(blocks) == 2
 
 
 # ── _fetch_digest_data ───────────────────────────────────────────────────────────
+
 
 class TestFetchDigestData:
     def _db_with(
@@ -230,12 +217,11 @@ class TestFetchDigestData:
 
 # ── send_daily_digests ──────────────────────────────────────────────────────────
 
+
 class TestSendDailyDigests:
     def test_dispatches_to_each_connected_org(self) -> None:
         db = _mock_db()
-        db.execute.return_value = MagicMock(
-            data=[{"org_id": ORG_ID}, {"org_id": ORG_ID_2}]
-        )
+        db.execute.return_value = MagicMock(data=[{"org_id": ORG_ID}, {"org_id": ORG_ID_2}])
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
             patch("api.workers.notifications.send_slack_digest") as mock_digest,
@@ -260,6 +246,7 @@ class TestSendDailyDigests:
 
 # ── send_slack_digest ───────────────────────────────────────────────────────────
 
+
 class TestSendSlackDigest:
     def test_posts_digest_when_connected(self) -> None:
         db = _db_for_digest(_slack_row())
@@ -279,8 +266,8 @@ class TestSendSlackDigest:
     def test_skips_when_no_slack_integration(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[]),   # idempotency check - no prior digest
-            MagicMock(data=[]),   # slack_integrations - not connected
+            MagicMock(data=[]),  # idempotency check - no prior digest
+            MagicMock(data=[]),  # slack_integrations - not connected
         ]
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
@@ -292,9 +279,7 @@ class TestSendSlackDigest:
 
     def test_skips_when_already_sent_today(self) -> None:
         db = _mock_db()
-        db.execute.return_value = MagicMock(
-            data=[{"id": "dddddddd-0000-0000-0000-000000000001"}]
-        )
+        db.execute.return_value = MagicMock(data=[{"id": "dddddddd-0000-0000-0000-000000000001"}])
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
             patch("api.workers.notifications.post_message") as mock_post,
@@ -323,12 +308,12 @@ class TestSendSlackDigest:
         # Each attempt needs: 1 (idempotency) + 1 (slack) + 4 (fetch) = 6 executes.
         # max_retries=2 → up to 3 attempts total.
         one_attempt = [
-            MagicMock(data=[]),                              # idempotency check
-            MagicMock(data=[_slack_row()]),                  # slack_integrations
-            MagicMock(data=_week_rows()),                    # week data
+            MagicMock(data=[]),  # idempotency check
+            MagicMock(data=[_slack_row()]),  # slack_integrations
+            MagicMock(data=_week_rows()),  # week data
             MagicMock(data=[{"total_cost_usd": "25.00"}]),  # MTD
             MagicMock(data=[{"total_cost_usd": "20.00"}]),  # last month
-            MagicMock(data=[]),                              # open anomalies
+            MagicMock(data=[]),  # open anomalies
         ]
         db = _mock_db()
         db.execute.side_effect = one_attempt * 3  # enough for all retry attempts
@@ -350,6 +335,7 @@ class TestSendSlackDigest:
 
 
 # ── TC-FAN-05: send_daily_digests fan-out ──────────────────────────────────────
+
 
 class TestSendDailyDigestsFanOut:
     """TC-FAN-05 - send_daily_digests enqueues send_slack_digest once per connected org."""

@@ -136,7 +136,5 @@ class TestGenerateReport:
         pipe = MagicMock()
         redis_mock.pipeline.return_value = pipe
         pipe.execute.return_value = [4, True]  # INCR returned 4 -> over the limit of 3
-        with patch(
-            "api.routers.reports.redis_lib.Redis.from_url", return_value=redis_mock
-        ):
+        with patch("api.routers.reports.redis_lib.Redis.from_url", return_value=redis_mock):
             assert _generate_rate_limited(ORG_ID) is True

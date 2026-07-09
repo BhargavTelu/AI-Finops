@@ -10,12 +10,11 @@ Tests cover:
 - last_month_cost_usd sums the full prior calendar month
 """
 
-from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -37,10 +36,12 @@ def _apply_module_auth_override():
     app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
     yield
 
+
 client = TestClient(app)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_row(day: date, cost: str, reqs: int = 1, tokens: int = 100) -> dict:
     return {
@@ -67,7 +68,7 @@ def _mock_db(rows: list[dict]) -> MagicMock:
 
 
 def _today() -> date:
-    return datetime.now(timezone.utc).date()
+    return datetime.now(UTC).date()
 
 
 def _yesterday() -> date:
@@ -75,6 +76,7 @@ def _yesterday() -> date:
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestDashboardEndpointStructure:
     def test_returns_200_with_all_period_keys(self) -> None:
@@ -170,8 +172,8 @@ class TestDashboardPctChange:
         yesterday = _yesterday()
         day_before = yesterday - timedelta(days=1)
         rows = [
-            _make_row(yesterday, "20.00"),     # current day
-            _make_row(day_before, "10.00"),    # prior day
+            _make_row(yesterday, "20.00"),  # current day
+            _make_row(day_before, "10.00"),  # prior day
         ]
         db = _mock_db(rows)
         with patch("api.routers.usage._get_supabase", return_value=db):
@@ -204,7 +206,7 @@ class TestDashboardPctChange:
         yesterday = _yesterday()
         day_before = yesterday - timedelta(days=1)
         rows = [
-            _make_row(yesterday, "10.00"),   # current day
+            _make_row(yesterday, "10.00"),  # current day
             _make_row(day_before, "10.00"),  # prior day - identical cost
         ]
         db = _mock_db(rows)
@@ -226,8 +228,8 @@ class TestDashboardAggregation:
         """Multiple tag-dimension rows for the same day must aggregate to one total."""
         yesterday = _yesterday()
         rows = [
-            _make_row(yesterday, "3.00"),   # e.g. feature_tag=A
-            _make_row(yesterday, "7.00"),   # e.g. feature_tag=B - same day
+            _make_row(yesterday, "3.00"),  # e.g. feature_tag=A
+            _make_row(yesterday, "7.00"),  # e.g. feature_tag=B - same day
         ]
         db = _mock_db(rows)
         with patch("api.routers.usage._get_supabase", return_value=db):

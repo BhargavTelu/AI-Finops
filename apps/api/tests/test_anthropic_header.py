@@ -17,9 +17,9 @@ class TestAnthropicHeaders:
             "BUG-01: _headers() is missing 'anthropic-beta' key. "
             "Anthropic usage-report API requires this header."
         )
-        assert headers["anthropic-beta"] == "usage-report-2024-07-01", (
-            f"Expected 'usage-report-2024-07-01', got {headers['anthropic-beta']!r}"
-        )
+        assert (
+            headers["anthropic-beta"] == "usage-report-2024-07-01"
+        ), f"Expected 'usage-report-2024-07-01', got {headers['anthropic-beta']!r}"
 
     def test_headers_include_api_key(self) -> None:
         """Sanity check that existing headers still present after bug fix."""

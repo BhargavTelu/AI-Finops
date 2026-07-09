@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Iterator
+from typing import Any
 
 import httpx
 import structlog
@@ -24,7 +25,7 @@ class OpenAIAdapter:
         Ping /v1/organization/costs with a 1-day window to confirm key works.
         Raises ValueError with a human-readable message if the key is invalid.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         yesterday = now.replace(hour=0, minute=0, second=0, microsecond=0)
         # Use a 1-day window ending at midnight today (start of today)
         start_ts = int(yesterday.timestamp()) - 86400
@@ -63,10 +64,10 @@ class OpenAIAdapter:
         # we always request complete day buckets (delete-before-insert is idempotent).
         start_day = start.replace(hour=0, minute=0, second=0, microsecond=0)
         if start_day.tzinfo is None:
-            start_day = start_day.replace(tzinfo=timezone.utc)
+            start_day = start_day.replace(tzinfo=UTC)
         end_day = (end + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         if end_day.tzinfo is None:
-            end_day = end_day.replace(tzinfo=timezone.utc)
+            end_day = end_day.replace(tzinfo=UTC)
 
         start_ts = int(start_day.timestamp())
         end_ts = int(end_day.timestamp())
@@ -138,7 +139,9 @@ class OpenAIAdapter:
                     cached_tokens=tokens["cached_tokens"],
                     cost_usd=cost,
                     request_count=tokens["request_count"],
-                    bucket_hour=datetime.fromtimestamp(bucket["start_time"], tz=timezone.utc).replace(tzinfo=None),
+                    bucket_hour=datetime.fromtimestamp(bucket["start_time"], tz=UTC).replace(
+                        tzinfo=None
+                    ),
                     raw_meta={
                         "bucket_end": bucket.get("end_time"),
                         "currency": amount.get("currency", "usd"),
@@ -181,9 +184,7 @@ class OpenAIAdapter:
             log.warning("openai_project_list_error", error=str(exc))
         return names
 
-    def _paginate(
-        self, key: bytes, path: str, params: dict[str, Any]
-    ) -> Iterator[dict[str, Any]]:
+    def _paginate(self, key: bytes, path: str, params: dict[str, Any]) -> Iterator[dict[str, Any]]:
         """Yield each bucket dict from a cursor-paginated OpenAI response."""
         cursor: str | None = None
         while True:
@@ -205,8 +206,7 @@ class OpenAIAdapter:
                 raise ValueError(f"OpenAI {path} returned {resp.status_code}: {resp.text[:200]}")
 
             body = resp.json()
-            for bucket in body.get("data", []):
-                yield bucket
+            yield from body.get("data", [])
 
             if not body.get("has_more"):
                 break

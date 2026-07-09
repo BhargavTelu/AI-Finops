@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
@@ -14,25 +15,25 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/budgets", tags=["budgets"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
 def _mtd_date_range() -> tuple[str, str]:
     """Return ISO date strings for the first day of the current month through today."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     first_day = today.replace(day=1)
     return first_day.isoformat(), today.isoformat()
 
 
-def _compute_mtd_spend(db, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
+def _compute_mtd_spend(db: Any, org_id: str, scope_type: str, scope_value: str | None) -> Decimal:
     """
     Sum daily_cost_summaries for the current calendar month scoped to this budget.
     Tag columns use empty string for unset - treat NULL and '' as 'unset'.
     """
     first_day, today = _mtd_date_range()
 
-    def build_query():
+    def build_query() -> Any:
         q = (
             db.table("daily_cost_summaries")
             .select("total_cost_usd")
@@ -59,10 +60,10 @@ def _compute_mtd_spend(db, org_id: str, scope_type: str, scope_value: str | None
     # Paged: an unpaged sum under-reports MTD spend (and spent_pct) once the
     # month's summary rows exceed the PostgREST max-rows cap.
     rows = fetch_all_pages(build_query)
-    return sum(Decimal(str(row["total_cost_usd"])) for row in rows)
+    return sum((Decimal(str(row["total_cost_usd"])) for row in rows), Decimal("0"))
 
 
-def _to_budget_read(row: dict, mtd_spend: Decimal) -> BudgetRead:
+def _to_budget_read(row: dict[str, Any], mtd_spend: Decimal) -> BudgetRead:
     limit = Decimal(str(row["monthly_limit"]))
     spent_pct = int((mtd_spend / limit * 100).to_integral_value()) if limit else 0
     return BudgetRead(
@@ -85,13 +86,18 @@ def list_budgets(org: OrgDep) -> list[BudgetRead]:
     db = _get_supabase()
     result = (
         db.table("budgets")
-        .select("id, org_id, scope_type, scope_value, monthly_limit, alert_at_pct, hard_cap, created_at, updated_at")
+        .select(
+            "id, org_id, scope_type, scope_value, monthly_limit, alert_at_pct,"
+            " hard_cap, created_at, updated_at"
+        )
         .eq("org_id", org.org_id)
         .order("created_at", desc=True)
         .execute()
     )
     return [
-        _to_budget_read(row, _compute_mtd_spend(db, org.org_id, row["scope_type"], row.get("scope_value")))
+        _to_budget_read(
+            row, _compute_mtd_spend(db, org.org_id, row["scope_type"], row.get("scope_value"))
+        )
         for row in result.data
     ]
 
@@ -112,10 +118,7 @@ def create_budget(body: BudgetCreate, org: OrgDep) -> BudgetRead:
     # Uniqueness: one active budget per (org_id, scope_type, scope_value).
     # The DB has no UNIQUE constraint for this - enforced in application layer.
     dupe_q = (
-        db.table("budgets")
-        .select("id")
-        .eq("org_id", org.org_id)
-        .eq("scope_type", body.scope_type)
+        db.table("budgets").select("id").eq("org_id", org.org_id).eq("scope_type", body.scope_type)
     )
     if body.scope_value is None:
         dupe_q = dupe_q.is_("scope_value", "null")
@@ -170,7 +173,7 @@ def update_budget(budget_id: str, body: BudgetUpdate, org: OrgDep) -> BudgetRead
     if not existing.data:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Budget not found")
 
-    patch: dict = {}
+    patch: dict[str, Any] = {}
     if body.monthly_limit is not None:
         patch["monthly_limit"] = str(body.monthly_limit)
     if body.alert_at_pct is not None:
@@ -183,15 +186,13 @@ def update_budget(budget_id: str, body: BudgetUpdate, org: OrgDep) -> BudgetRead
         )
 
     updated = (
-        db.table("budgets")
-        .update(patch)
-        .eq("id", budget_id)
-        .eq("org_id", org.org_id)
-        .execute()
+        db.table("budgets").update(patch).eq("id", budget_id).eq("org_id", org.org_id).execute()
     )
 
     if not updated.data:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Update failed")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Update failed"
+        )
 
     row = updated.data[0]
     mtd = _compute_mtd_spend(db, org.org_id, row["scope_type"], row.get("scope_value"))

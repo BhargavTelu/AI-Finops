@@ -36,7 +36,7 @@ celery_app.conf.update(
     worker_concurrency=1 if _is_windows else None,
     # Soft time limit uses SIGUSR1 - not available on Windows.
     task_soft_time_limit=None if _is_windows else 300,
-    task_time_limit=600,        # 10 min hard kill (SIGKILL, works everywhere)
+    task_time_limit=600,  # 10 min hard kill (SIGKILL, works everywhere)
     worker_max_tasks_per_child=None if _is_windows else 100,
 )
 

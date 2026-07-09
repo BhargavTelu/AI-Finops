@@ -7,9 +7,7 @@ All external calls (Supabase, Slack postMessage, EncryptionService) are mocked.
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, call, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from api.workers.notifications import (
     _anomaly_slack_blocks,
@@ -25,6 +23,7 @@ BUDGET_ID = "bbbbbbbb-0000-0000-0000-000000000001"
 
 
 # ── DB mock helpers ─────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     db = MagicMock()
@@ -49,7 +48,12 @@ def _anomaly_row(severity: str = "medium", spike_pct: int = 200) -> dict:
         "actual_usd": "37.20",
         "spike_pct": spike_pct,
         "severity": severity,
-        "context": {"model": "gpt-4o", "team_tag": "backend", "feature_tag": None, "customer_tag": None},
+        "context": {
+            "model": "gpt-4o",
+            "team_tag": "backend",
+            "feature_tag": None,
+            "customer_tag": None,
+        },
     }
 
 
@@ -73,6 +77,7 @@ def _slack_row(alerts_muted: bool = False) -> dict:
 
 
 # ── _anomaly_slack_blocks ───────────────────────────────────────────────────────
+
 
 class TestAnomalySlackBlocks:
     def test_includes_model_and_severity(self) -> None:
@@ -99,7 +104,12 @@ class TestAnomalySlackBlocks:
 
     def test_no_context_block_when_no_tags(self) -> None:
         anomaly = _anomaly_row()
-        anomaly["context"] = {"model": "gpt-4o", "team_tag": None, "feature_tag": None, "customer_tag": None}
+        anomaly["context"] = {
+            "model": "gpt-4o",
+            "team_tag": None,
+            "feature_tag": None,
+            "customer_tag": None,
+        }
         blocks = _anomaly_slack_blocks(anomaly)
         assert len(blocks) == 2  # no context block
 
@@ -115,6 +125,7 @@ class TestAnomalySlackBlocks:
 
 
 # ── _budget_slack_blocks ────────────────────────────────────────────────────────
+
 
 class TestBudgetSlackBlocks:
     def test_warning_header(self) -> None:
@@ -140,6 +151,7 @@ class TestBudgetSlackBlocks:
 
 # ── _get_slack_channel ──────────────────────────────────────────────────────────
 
+
 class TestGetSlackChannel:
     def test_returns_none_when_not_connected(self) -> None:
         db = _mock_db()
@@ -162,7 +174,9 @@ class TestGetSlackChannel:
     def test_returns_none_on_decrypt_failure(self) -> None:
         db = _mock_db()
         db.execute.return_value = MagicMock(data=[_slack_row()])
-        with patch("api.workers.notifications.EncryptionService", side_effect=ValueError("bad key")):
+        with patch(
+            "api.workers.notifications.EncryptionService", side_effect=ValueError("bad key")
+        ):
             result = _get_slack_channel(db, ORG_ID)
         assert result is None
 
@@ -180,13 +194,14 @@ class TestGetSlackChannel:
 
 # ── send_anomaly_alert ──────────────────────────────────────────────────────────
 
+
 class TestSendAnomalyAlert:
     def test_posts_to_slack_when_connected(self) -> None:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[_anomaly_row()]),   # anomaly fetch
-            MagicMock(data=[_slack_row()]),      # slack integration fetch
-            MagicMock(data=[]),                  # notified_at update
+            MagicMock(data=[_anomaly_row()]),  # anomaly fetch
+            MagicMock(data=[_slack_row()]),  # slack integration fetch
+            MagicMock(data=[]),  # notified_at update
         ]
         mock_cipher = MagicMock()
         mock_cipher.decrypt.return_value = b"xoxb-test"
@@ -216,7 +231,7 @@ class TestSendAnomalyAlert:
         db = _mock_db()
         db.execute.side_effect = [
             MagicMock(data=[_anomaly_row()]),  # anomaly found
-            MagicMock(data=[]),                # no slack
+            MagicMock(data=[]),  # no slack
         ]
         with (
             patch("api.workers.notifications._get_supabase", return_value=db),
@@ -250,6 +265,7 @@ class TestSendAnomalyAlert:
 
 # ── send_budget_alert - Slack branch ───────────────────────────────────────────
 
+
 class TestSendBudgetAlertSlack:
     """Tests for the Slack branch added in Group C.
     We mock the email send so it's a no-op and focus on whether Slack gets called.
@@ -263,10 +279,10 @@ class TestSendBudgetAlertSlack:
     def _db_for_budget(self, slack_row: dict | None) -> MagicMock:
         db = _mock_db()
         db.execute.side_effect = [
-            MagicMock(data=[_budget_row()]),                          # budget fetch
-            MagicMock(data=[{"user_id": "u1"}]),                      # admin member
-            MagicMock(data=[{"email": "admin@example.com"}]),         # admin email
-            MagicMock(data=[slack_row] if slack_row else []),         # slack fetch
+            MagicMock(data=[_budget_row()]),  # budget fetch
+            MagicMock(data=[{"user_id": "u1"}]),  # admin member
+            MagicMock(data=[{"email": "admin@example.com"}]),  # admin email
+            MagicMock(data=[slack_row] if slack_row else []),  # slack fetch
         ]
         return db
 
@@ -313,7 +329,9 @@ class TestSendBudgetAlertSlack:
             patch("api.workers.notifications.EncryptionService", return_value=mock_cipher),
             patch(self._SCOPE_SPEND_PATCH, return_value=Decimal("420")),
             patch("api.workers.notifications.resend"),
-            patch("api.workers.notifications.post_message", side_effect=ValueError("token_revoked")),
+            patch(
+                "api.workers.notifications.post_message", side_effect=ValueError("token_revoked")
+            ),
         ):
             # apply() must complete without raising - Slack failure is best-effort.
             send_budget_alert.apply(args=[BUDGET_ID, 84, ORG_ID])

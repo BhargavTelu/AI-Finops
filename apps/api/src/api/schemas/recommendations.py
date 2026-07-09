@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -13,7 +13,7 @@ class RecommendationRead(BaseModel):
     description: str
     projected_savings_usd: Decimal | None
     confidence: Decimal | None
-    evidence: dict | None
+    evidence: dict[str, Any] | None
     status: Literal["new", "applied", "dismissed"]
     scope_value: str | None
     generated_at: datetime

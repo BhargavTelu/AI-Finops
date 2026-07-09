@@ -4,18 +4,18 @@ TC-INT-01 to TC-INT-10.
 Supabase and adapters are mocked. Auth dependency is overridden.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 INT_ID = "aaaaaaaa-0000-0000-0000-000000000001"
-NOW_ISO = datetime.now(timezone.utc).isoformat()
+NOW_ISO = datetime.now(UTC).isoformat()
 
 _AUTH_OVERRIDE = lambda: OrgContext(user_id="user_test", org_id=ORG_ID)  # noqa: E731
 app.dependency_overrides[_require_org] = _AUTH_OVERRIDE
@@ -37,6 +37,7 @@ client = TestClient(app)
 
 
 # ── Mock helpers ───────────────────────────────────────────────────────────────
+
 
 def _mock_db(rows: list[dict] | None = None) -> MagicMock:
     db = MagicMock()
@@ -85,6 +86,7 @@ MOCK_ADAPTER.validate.return_value = True
 
 
 # ── POST /integrations ─────────────────────────────────────────────────────────
+
 
 class TestCreateIntegration:
     def test_happy_path_returns_201(self) -> None:  # TC-INT-01
@@ -154,9 +156,7 @@ class TestCreateIntegration:
         db.select.return_value = db
         db.insert.return_value = db
         db.eq.return_value = db
-        db.execute.side_effect = Exception(
-            "duplicate key value violates unique constraint"
-        )
+        db.execute.side_effect = Exception("duplicate key value violates unique constraint")
         with (
             patch("api.routers.integrations._get_supabase", return_value=db),
             patch("api.routers.integrations._ADAPTERS", {"openai": MOCK_ADAPTER}),
@@ -181,9 +181,13 @@ class TestCreateIntegration:
 
 # ── GET /integrations ──────────────────────────────────────────────────────────
 
+
 class TestListIntegrations:
     def test_returns_non_revoked_only(self) -> None:  # TC-INT-06
-        rows = [_integration_row("aaaaaaaa-0001", "active"), _integration_row("aaaaaaaa-0002", "active")]
+        rows = [
+            _integration_row("aaaaaaaa-0001", "active"),
+            _integration_row("aaaaaaaa-0002", "active"),
+        ]
         db = _mock_db(rows)
         with patch("api.routers.integrations._get_supabase", return_value=db):
             resp = client.get("/api/v1/integrations")
@@ -192,6 +196,7 @@ class TestListIntegrations:
 
 
 # ── DELETE /integrations/{id} ─────────────────────────────────────────────────
+
 
 class TestDeleteIntegration:
     def test_soft_revoke_returns_204(self) -> None:  # TC-INT-07

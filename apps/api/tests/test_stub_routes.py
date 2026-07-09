@@ -16,8 +16,8 @@ TC-STUB-06  /reports routes - IMPLEMENTED (Phase 1); see test_report_routes.py
 TC-WH-20    POST /webhooks/stripe - IMPLEMENTED (Phase 2)
 """
 
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from api.deps import OrgContext, _require_org
 from api.main import app
@@ -45,6 +45,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 # ── TC-STUB-01: POST /integrations/:id/test ────────────────────────────────────
 
+
 class TestIntegrationTestStub:
     """TC-STUB-01 - POST /integrations/:id/test returns 501 Not Implemented."""
 
@@ -52,7 +53,7 @@ class TestIntegrationTestStub:
         resp = client.post("/api/v1/integrations/some-id/test")
         assert resp.status_code == 501, (
             f"Expected 501 (Not Implemented) stub, got {resp.status_code}. "
-            "When M4 implements this route: assert 200 with {\"status\": \"ok\"}."
+            'When M4 implements this route: assert 200 with {"status": "ok"}.'
         )
 
 
@@ -62,6 +63,7 @@ class TestIntegrationTestStub:
 
 
 # ── TC-STUB-03: GET /usage/export.csv (removed) ───────────────────────────────
+
 
 class TestUsageExportCsvRemoved:
     """TC-STUB-03 - /usage/export.csv was removed, not implemented.

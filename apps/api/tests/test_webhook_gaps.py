@@ -12,7 +12,6 @@ import json
 import time
 from unittest.mock import MagicMock, patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
@@ -25,11 +24,10 @@ _SECRET_KEY = base64.b64decode(_WEBHOOK_SECRET.removeprefix("whsec_"))
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
+
 def _make_valid_signature(svix_id: str, svix_timestamp: str, body: bytes) -> str:
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
-    digest = base64.b64encode(
-        hmac.new(_SECRET_KEY, signed, hashlib.sha256).digest()
-    ).decode()
+    digest = base64.b64encode(hmac.new(_SECRET_KEY, signed, hashlib.sha256).digest()).decode()
     return f"v1,{digest}"
 
 
@@ -57,6 +55,7 @@ def _post_with_signature(
 
 
 # ── Gap-27: Svix multi-signature header ───────────────────────────────────────
+
 
 class TestSvixMultipleSignatures:
     """

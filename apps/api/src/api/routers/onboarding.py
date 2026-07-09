@@ -3,6 +3,8 @@ Activation checklist status (Phase 3) - four existence checks driving the
 dashboard onboarding card. Existence queries only, no new tables.
 """
 
+from typing import Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -19,11 +21,11 @@ class OnboardingStatus(BaseModel):
     budget_created: bool
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
-def _exists(db, table: str, org_id: str, **filters: str) -> bool:
+def _exists(db: Any, table: str, org_id: str, **filters: str) -> bool:
     query = db.table(table).select("id").eq("org_id", org_id)
     for column, value in filters.items():
         query = query.eq(column, value)

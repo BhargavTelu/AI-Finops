@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -16,7 +16,7 @@ class AnomalyRead(BaseModel):
     spike_pct: int
     severity: Literal["low", "medium", "high"]
     status: Literal["open", "acked", "dismissed"]
-    context: dict | None
+    context: dict[str, Any] | None
     explanation: str | None = None
 
     model_config = {"from_attributes": True}

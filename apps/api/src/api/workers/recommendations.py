@@ -9,11 +9,12 @@ For each org with active integrations:
      on partial unique index error parsing.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
-import structlog
 from celery import shared_task
+import structlog
 from supabase import create_client
 
 from api.config import settings
@@ -23,7 +24,7 @@ from api.services.recommendations import ModelStats, generate_recommendations
 log = structlog.get_logger()
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return create_client(settings.supabase_url, settings.supabase_service_role_key)
 
 
@@ -47,7 +48,7 @@ def generate_org_recommendations(org_id: str) -> None:
     partial-index error string parsing across Supabase client versions.
     """
     db = _get_supabase()
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     start_day = (today - timedelta(days=30)).isoformat()
 
     # Pull last 30d summaries - one row per (day, provider, model, feature_tag, ...).
@@ -65,7 +66,7 @@ def generate_org_recommendations(org_id: str) -> None:
         return
 
     # Group by (provider, model, feature_tag) and sum metrics.
-    grouped: dict[tuple[str, str, str | None], dict] = {}
+    grouped: dict[tuple[str, str, str | None], dict[str, Any]] = {}
     for row in summary_rows:
         key = (row["provider"], row["model"], row.get("feature_tag") or None)
         if key not in grouped:
@@ -104,16 +105,15 @@ def generate_org_recommendations(org_id: str) -> None:
         .execute()
     )
     existing_keys: set[tuple[str, str]] = {
-        (row["type"], row["scope_value"] or "")
-        for row in existing_result.data
+        (row["type"], row["scope_value"] or "") for row in existing_result.data
     }
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     inserted = 0
 
     for rec in recs:
-        key = (rec.type, rec.scope_value)
-        if key in existing_keys:
+        dedup_key = (rec.type, rec.scope_value)
+        if dedup_key in existing_keys:
             log.debug(
                 "recommendations_dedup_skip",
                 org_id=org_id,
@@ -139,7 +139,7 @@ def generate_org_recommendations(org_id: str) -> None:
             }
         ).execute()
 
-        existing_keys.add(key)  # prevent double-insert within the same run
+        existing_keys.add(dedup_key)  # prevent double-insert within the same run
         inserted += 1
 
     log.info(

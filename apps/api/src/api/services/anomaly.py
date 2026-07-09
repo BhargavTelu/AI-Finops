@@ -5,9 +5,9 @@ Algorithm from architecture.md § Anomaly Algorithm.
 Explainable to a CFO, runs in milliseconds, sufficient for < 50 customers.
 """
 
-import statistics
 from dataclasses import dataclass
 from decimal import Decimal
+import statistics
 from typing import Literal
 
 
@@ -21,7 +21,7 @@ class AnomalyResult:
     severity: Literal["low", "medium", "high"]
 
 
-# A near-flat baseline has σ≈0. Clipping only to a tiny absolute floor (the old
+# A near-flat baseline has sigma≈0. Clipping only to a tiny absolute floor (the old
 # `or 0.01`) made a $0.50 increase on $100/day spend score z=50 and fire a
 # high-severity alert. Treat day-to-day noise as at least this fraction of the
 # mean so the z-score stays meaningful on stable spend.
@@ -37,12 +37,12 @@ def detect_anomalies(
     history: list[Decimal],  # daily costs, oldest first, len >= 15
 ) -> AnomalyResult | None:
     """
-    Rolling mean + 2σ over the previous 7 days.
+    Rolling mean + 2-sigma over the previous 7 days.
     Returns None if data is insufficient or spend is below the $10 floor.
 
     Args:
         history: At least 15 daily cost values (oldest → newest).
-                 The last element is "today"; [−8:−1] is the rolling window.
+                 The last element is "today"; [-8:-1] is the rolling window.
     """
     if len(history) < 15:
         return None
@@ -54,7 +54,7 @@ def detect_anomalies(
         return None
 
     mean = statistics.mean(rolling)
-    # Floor σ at both an absolute value and a fraction of the mean. The
+    # Floor sigma at both an absolute value and a fraction of the mean. The
     # relative floor is what stops flat baselines from inflating z.
     stdev = max(statistics.pstdev(rolling), mean * _MIN_REL_STDEV, _ABS_STDEV_FLOOR)
     z = (actual - mean) / stdev
@@ -66,9 +66,7 @@ def detect_anomalies(
     if (actual - mean) < _MIN_ABS_DELTA_USD:
         return None
 
-    severity: Literal["low", "medium", "high"] = (
-        "high" if z >= 4 else "medium" if z >= 3 else "low"
-    )
+    severity: Literal["low", "medium", "high"] = "high" if z >= 4 else "medium" if z >= 3 else "low"
 
     spike_pct = int((actual - mean) / mean * 100) if mean > 0 else 0
 

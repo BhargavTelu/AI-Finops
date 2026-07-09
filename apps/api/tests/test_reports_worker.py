@@ -23,8 +23,18 @@ def _make_db(table_rows: dict[str, list[dict]]) -> MagicMock:
 
     def table(name: str) -> MagicMock:
         chain = MagicMock()
-        for method in ("select", "eq", "gte", "lte", "lt", "order", "range", "limit",
-                       "insert", "update"):
+        for method in (
+            "select",
+            "eq",
+            "gte",
+            "lte",
+            "lt",
+            "order",
+            "range",
+            "limit",
+            "insert",
+            "update",
+        ):
             getattr(chain, method).return_value = chain
         chain.execute.return_value = _query_result(table_rows.get(name, []))
         return chain
@@ -34,9 +44,14 @@ def _make_db(table_rows: dict[str, list[dict]]) -> MagicMock:
 
 
 _SUMMARY_ROW = {
-    "total_cost_usd": "100.00", "total_requests": 10, "total_tokens": 1000,
-    "provider": "openai", "model": "gpt-4o",
-    "feature_tag": "chat", "team_tag": "", "customer_tag": "",
+    "total_cost_usd": "100.00",
+    "total_requests": 10,
+    "total_tokens": 1000,
+    "provider": "openai",
+    "model": "gpt-4o",
+    "feature_tag": "chat",
+    "team_tag": "",
+    "customer_tag": "",
 }
 
 
@@ -55,28 +70,20 @@ class TestMomComparisonRange:
     of days last month, not the full prior month (-97% headline bug)."""
 
     def test_partial_month_compares_same_days(self) -> None:
-        start, end = reports_worker._mom_comparison_range(
-            date(2026, 6, 1), date(2026, 6, 11)
-        )
+        start, end = reports_worker._mom_comparison_range(date(2026, 6, 1), date(2026, 6, 11))
         assert (start, end) == (date(2026, 5, 1), date(2026, 5, 11))
 
     def test_complete_month_compares_full_prev_month(self) -> None:
         # May (31d) vs April (30d): capped at April's length -> full April.
-        start, end = reports_worker._mom_comparison_range(
-            date(2026, 5, 1), date(2026, 5, 31)
-        )
+        start, end = reports_worker._mom_comparison_range(date(2026, 5, 1), date(2026, 5, 31))
         assert (start, end) == (date(2026, 4, 1), date(2026, 4, 30))
 
     def test_march_vs_february_caps_at_28(self) -> None:
-        start, end = reports_worker._mom_comparison_range(
-            date(2026, 3, 1), date(2026, 3, 31)
-        )
+        start, end = reports_worker._mom_comparison_range(date(2026, 3, 1), date(2026, 3, 31))
         assert (start, end) == (date(2026, 2, 1), date(2026, 2, 28))
 
     def test_single_day_mtd(self) -> None:
-        start, end = reports_worker._mom_comparison_range(
-            date(2026, 6, 1), date(2026, 6, 1)
-        )
+        start, end = reports_worker._mom_comparison_range(date(2026, 6, 1), date(2026, 6, 1))
         assert (start, end) == (date(2026, 5, 1), date(2026, 5, 1))
 
 
@@ -86,9 +93,15 @@ def _all_accessible(db, org_ids):
 
 class TestGenerateMonthlyReports:
     def test_dispatches_once_per_unique_org(self) -> None:
-        db = _make_db({"integrations": [
-            {"org_id": ORG_ID}, {"org_id": ORG_ID}, {"org_id": "other-org"},
-        ]})
+        db = _make_db(
+            {
+                "integrations": [
+                    {"org_id": ORG_ID},
+                    {"org_id": ORG_ID},
+                    {"org_id": "other-org"},
+                ]
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch(
@@ -116,9 +129,14 @@ class TestGenerateMonthlyReports:
     def test_lapsed_orgs_excluded_from_fanout(self) -> None:
         # Regression: an org whose trial lapsed must not get a report (or the
         # report-ready email) generated month after month.
-        db = _make_db({"integrations": [
-            {"org_id": ORG_ID}, {"org_id": "lapsed-org"},
-        ]})
+        db = _make_db(
+            {
+                "integrations": [
+                    {"org_id": ORG_ID},
+                    {"org_id": "lapsed-org"},
+                ]
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch(
@@ -134,9 +152,11 @@ class TestGenerateMonthlyReports:
 
 class TestGenerateOrgReportIdempotency:
     def test_skips_when_complete_report_exists(self) -> None:
-        db = _make_db({
-            "reports": [{"id": "r1", "period_end": "2026-05-31"}],
-        })
+        db = _make_db(
+            {
+                "reports": [{"id": "r1", "period_end": "2026-05-31"}],
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch.object(reports_worker, "render_pdf") as mock_render,
@@ -147,11 +167,13 @@ class TestGenerateOrgReportIdempotency:
     def test_partial_does_not_block_fuller_run(self) -> None:
         # Existing row covers through the 10th; the month-end run (through the
         # 31st) must regenerate even without force.
-        db = _make_db({
-            "reports": [{"id": "r1", "period_end": "2026-05-10"}],
-            "daily_cost_summaries": [_SUMMARY_ROW],
-            "organizations": [{"name": "Acme"}],
-        })
+        db = _make_db(
+            {
+                "reports": [{"id": "r1", "period_end": "2026-05-10"}],
+                "daily_cost_summaries": [_SUMMARY_ROW],
+                "organizations": [{"name": "Acme"}],
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch.object(reports_worker, "render_pdf", return_value=b"%PDF") as mock_render,
@@ -161,19 +183,19 @@ class TestGenerateOrgReportIdempotency:
         mock_render.assert_called_once()
 
     def test_force_regenerates_complete_report(self) -> None:
-        db = _make_db({
-            "reports": [{"id": "r1", "period_end": "2026-05-31"}],
-            "daily_cost_summaries": [_SUMMARY_ROW],
-            "organizations": [{"name": "Acme"}],
-        })
+        db = _make_db(
+            {
+                "reports": [{"id": "r1", "period_end": "2026-05-31"}],
+                "daily_cost_summaries": [_SUMMARY_ROW],
+                "organizations": [{"name": "Acme"}],
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch.object(reports_worker, "render_pdf", return_value=b"%PDF") as mock_render,
             patch.object(reports_worker, "r2_configured", return_value=False),
         ):
-            reports_worker.generate_org_report(
-                ORG_ID, "2026-05-01", "2026-05-31", force=True
-            )
+            reports_worker.generate_org_report(ORG_ID, "2026-05-01", "2026-05-31", force=True)
         mock_render.assert_called_once()
 
     def test_no_data_skips_generation(self) -> None:
@@ -188,11 +210,13 @@ class TestGenerateOrgReportIdempotency:
 
 class TestUploadAndRecord:
     def test_uploads_with_stable_monthly_key(self) -> None:
-        db = _make_db({
-            "reports": [],
-            "daily_cost_summaries": [_SUMMARY_ROW],
-            "organizations": [{"name": "Acme"}],
-        })
+        db = _make_db(
+            {
+                "reports": [],
+                "daily_cost_summaries": [_SUMMARY_ROW],
+                "organizations": [{"name": "Acme"}],
+            }
+        )
         with (
             patch.object(reports_worker, "_get_supabase", return_value=db),
             patch.object(reports_worker, "r2_configured", return_value=True),
@@ -205,20 +229,24 @@ class TestUploadAndRecord:
     def test_r2_unconfigured_records_row_without_key(self) -> None:
         # Local dev: report row exists (visible in UI) but has_file is false.
         inserted: list[dict] = []
-        db = _make_db({
-            "reports": [],
-            "daily_cost_summaries": [_SUMMARY_ROW],
-            "organizations": [{"name": "Acme"}],
-        })
+        db = _make_db(
+            {
+                "reports": [],
+                "daily_cost_summaries": [_SUMMARY_ROW],
+                "organizations": [{"name": "Acme"}],
+            }
+        )
 
         original_table = db.table.side_effect
 
         def table(name: str) -> MagicMock:
             chain = original_table(name)
             if name == "reports":
+
                 def capture_insert(row: dict) -> MagicMock:
                     inserted.append(row)
                     return chain
+
                 chain.insert.side_effect = capture_insert
             return chain
 

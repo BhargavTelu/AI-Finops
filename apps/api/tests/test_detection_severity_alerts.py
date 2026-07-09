@@ -5,7 +5,7 @@ TC-DET-11: medium severity → send_anomaly_alert IS called.
 TC-DET-12: high severity → send_anomaly_alert IS called.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
@@ -38,7 +38,7 @@ def _summary_rows(spike_cost: float, n_days: int = 15) -> list[dict]:
     """
     # Must match the worker's clock (UTC), not the machine's local date -
     # using date.today() made these tests fail between local and UTC midnight.
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     rows = []
     for i in range(n_days):
         day = today - timedelta(days=n_days - i)
@@ -115,6 +115,7 @@ def _run_detect_org_with_explain(spike_cost: float) -> tuple[MagicMock, MagicMoc
         patch("api.workers.anomaly_detection.explain_anomaly", mock_explain),
     ):
         from api.workers.anomaly_detection import detect_org
+
         detect_org(ORG_ID)
 
     return mock_alert, mock_explain

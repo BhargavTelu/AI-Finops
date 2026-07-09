@@ -4,6 +4,8 @@ for purchase, Stripe Customer Portal for everything after (card, cancel,
 invoices). These routes only mint redirect URLs and report state.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 import stripe
 import structlog
@@ -25,7 +27,7 @@ log = structlog.get_logger()
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
@@ -37,7 +39,7 @@ def _price_id(plan: PlanName) -> str:
     }[plan]
 
 
-def _billing_row(db, org_id: str) -> dict | None:
+def _billing_row(db: Any, org_id: str) -> dict[str, Any] | None:
     result = (
         db.table("billing")
         .select("plan, status, stripe_customer_id, stripe_subscription_id, current_period_end")
@@ -89,18 +91,20 @@ def create_checkout(body: CheckoutRequest, org: OrgDep) -> CheckoutResponse:
     customer_id = existing.get("stripe_customer_id") if existing else None
 
     stripe.api_key = settings.stripe_secret_key
+    params: dict[str, Any] = {
+        "mode": "subscription",
+        "line_items": [{"price": price_id, "quantity": 1}],
+        "client_reference_id": org.org_id,
+        "success_url": f"{settings.app_url}/settings/billing?checkout=success",
+        "cancel_url": f"{settings.app_url}/settings/billing?checkout=cancelled",
+        "metadata": {"org_id": org.org_id, "plan": body.plan},
+        "subscription_data": {"metadata": {"org_id": org.org_id, "plan": body.plan}},
+    }
+    # Reuse the customer on re-subscribe so Stripe history stays whole.
+    if customer_id:
+        params["customer"] = customer_id
     try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
-            client_reference_id=org.org_id,
-            # Reuse the customer on re-subscribe so Stripe history stays whole.
-            customer=customer_id or None,
-            success_url=f"{settings.app_url}/settings/billing?checkout=success",
-            cancel_url=f"{settings.app_url}/settings/billing?checkout=cancelled",
-            metadata={"org_id": org.org_id, "plan": body.plan},
-            subscription_data={"metadata": {"org_id": org.org_id, "plan": body.plan}},
-        )
+        session = stripe.checkout.Session.create(**params)
     except stripe.StripeError as exc:
         log.error("checkout_session_failed", org_id=org.org_id, error=str(exc))
         raise HTTPException(status_code=502, detail="Could not start checkout.") from exc

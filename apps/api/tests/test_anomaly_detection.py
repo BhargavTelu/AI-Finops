@@ -4,16 +4,14 @@ All Supabase calls are mocked - no network, no DB.
 Pattern follows test_workers.py: mock _get_supabase, control execute() side effects.
 """
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
-
-import pytest
-
 
 ORG_ID = "00000000-0000-0000-0000-000000000001"
 
 
 # ── DB mock helper ────────────────────────────────────────────────────────────
+
 
 def _mock_db() -> MagicMock:
     """Supabase client mock where all chained calls return self; .execute() returns empty data."""
@@ -49,7 +47,7 @@ def _make_summary_rows(
     """
     # Must match the worker's clock (UTC), not the machine's local date -
     # using date.today() made these tests fail between local and UTC midnight.
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     rows = []
     for i in range(n_days):
         # day ranges from (today - n_days) up to (today - 1); none include today itself
@@ -97,6 +95,7 @@ class TestDetectOrg:
             patch("api.workers.anomaly_detection.send_anomaly_alert"),
         ):
             from api.workers.anomaly_detection import detect_org
+
             detect_org(ORG_ID)
 
         return db
@@ -127,7 +126,7 @@ class TestDetectOrg:
     def test_no_insert_when_insufficient_history(self) -> None:
         # Only 5 rows - fills the rest of the window with $0, never meets threshold
         rows = _make_summary_rows(n_days=5, cost_per_day=100.0, spike_day_cost=10_000.0)
-        db = self._run(rows)
+        self._run(rows)
         # With 10 zero-filled days, the rolling window has mostly zeros;
         # the spike is real but baseline is $0 - spike_pct corner case.
         # Either way no $10 floor-failing insert should come from 5-row data.
@@ -148,12 +147,15 @@ class TestDetectOrg:
 
         with patch("api.workers.anomaly_detection._get_supabase", return_value=db):
             from api.workers.anomaly_detection import detect_org
+
             detect_org(ORG_ID)
 
         db.insert.assert_not_called()
 
     def test_spike_sets_correct_scope_fields(self) -> None:
-        rows = _make_summary_rows(model="claude-3-5-sonnet", cost_per_day=50.0, spike_day_cost=50_000.0)
+        rows = _make_summary_rows(
+            model="claude-3-5-sonnet", cost_per_day=50.0, spike_day_cost=50_000.0
+        )
         db = self._run(rows)
         db.insert.assert_called()
         inserted = db.insert.call_args[0][0]
@@ -179,6 +181,7 @@ class TestDetectAllOrgs:
         ):
             mock_task.delay = MagicMock()
             from api.workers.anomaly_detection import detect_all_orgs
+
             detect_all_orgs()
 
         assert mock_task.delay.call_count == 2
@@ -197,6 +200,7 @@ class TestDetectAllOrgs:
         ):
             mock_task.delay = MagicMock()
             from api.workers.anomaly_detection import detect_all_orgs
+
             detect_all_orgs()
 
         mock_task.delay.assert_not_called()
@@ -204,26 +208,29 @@ class TestDetectAllOrgs:
 
 # ── TC-ANO-20: detect_org context field population ───────────────────────────
 
+
 class TestDetectOrgContextField:
     """TC-ANO-20 - detect_org inserts anomaly row with populated context dict."""
 
     def _make_history_rows(self, org_id: str) -> list[dict]:
         """Generate 15 days of baseline ($10/day) + 1 day spike ($100)."""
-        from datetime import date, timedelta, timezone
-        from decimal import Decimal
-        today = __import__("datetime").datetime.now(timezone.utc).date()
+        from datetime import timedelta
+
+        today = __import__("datetime").datetime.now(UTC).date()
         rows = []
         for i in range(15, 0, -1):
             day = (today - timedelta(days=i)).isoformat()
             cost = "100.00" if i == 1 else "10.00"  # spike on most recent day
-            rows.append({
-                "day": day,
-                "model": "gpt-4o",
-                "feature_tag": "chat",
-                "team_tag": "ml",
-                "customer_tag": "",
-                "total_cost_usd": cost,
-            })
+            rows.append(
+                {
+                    "day": day,
+                    "model": "gpt-4o",
+                    "feature_tag": "chat",
+                    "team_tag": "ml",
+                    "customer_tag": "",
+                    "total_cost_usd": cost,
+                }
+            )
         return rows
 
     def test_inserted_anomaly_has_context_with_tags(self) -> None:
@@ -277,6 +284,7 @@ class TestDetectOrgContextField:
             mock_alert.delay = MagicMock()
             mock_explain.delay = MagicMock()
             from api.workers.anomaly_detection import detect_org
+
             detect_org(org_id)
 
         assert len(inserted_rows) >= 1, "Expected at least one anomaly to be inserted"
@@ -288,6 +296,7 @@ class TestDetectOrgContextField:
 
 # ── TC-ANO-21: detect_org scope_value field ──────────────────────────────────
 
+
 class TestDetectOrgScopeValue:
     """TC-ANO-21 - detect_org sets scope_kind='model' and scope_value=model name."""
 
@@ -296,23 +305,25 @@ class TestDetectOrgScopeValue:
         TC-ANO-21 - anomaly row must have scope_kind='model' and scope_value='gpt-4o'.
         These fields drive the GET /anomalies filter queries.
         """
-        from datetime import date, timedelta, timezone
+        from datetime import timedelta
         from unittest.mock import MagicMock, patch
 
         org_id = "00000000-0000-0000-0000-000000000002"
-        today = __import__("datetime").datetime.now(timezone.utc).date()
+        today = __import__("datetime").datetime.now(UTC).date()
         rows = []
         for i in range(15, 0, -1):
             day = (today - timedelta(days=i)).isoformat()
             cost = "80.00" if i == 1 else "5.00"
-            rows.append({
-                "day": day,
-                "model": "gpt-4o",
-                "feature_tag": "",
-                "team_tag": "",
-                "customer_tag": "",
-                "total_cost_usd": cost,
-            })
+            rows.append(
+                {
+                    "day": day,
+                    "model": "gpt-4o",
+                    "feature_tag": "",
+                    "team_tag": "",
+                    "customer_tag": "",
+                    "total_cost_usd": cost,
+                }
+            )
 
         inserted_rows: list[dict] = []
 
@@ -355,9 +366,14 @@ class TestDetectOrgScopeValue:
             mock_alert.delay = MagicMock()
             mock_explain.delay = MagicMock()
             from api.workers.anomaly_detection import detect_org
+
             detect_org(org_id)
 
         assert len(inserted_rows) >= 1, "Expected at least one anomaly to be inserted"
         row = inserted_rows[0]
-        assert row.get("scope_kind") == "model", f"Expected scope_kind='model', got {row.get('scope_kind')}"
-        assert row.get("scope_value") == "gpt-4o", f"Expected scope_value='gpt-4o', got {row.get('scope_value')}"
+        assert (
+            row.get("scope_kind") == "model"
+        ), f"Expected scope_kind='model', got {row.get('scope_kind')}"
+        assert (
+            row.get("scope_value") == "gpt-4o"
+        ), f"Expected scope_value='gpt-4o', got {row.get('scope_value')}"

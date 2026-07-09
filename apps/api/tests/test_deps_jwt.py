@@ -9,17 +9,17 @@ Gap-15 (medium): Malformed Clerk 'o' claim (not a dict) → 403 not 500.
 """
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 import json
 import time
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import jwt as pyjwt
-import pytest
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import jwt as pyjwt
+import pytest
 
 from api.deps import OrgDep
 
@@ -50,8 +50,8 @@ def _make_rs256_token(
     payload: dict = {
         "sub": sub,
         "iss": issuer,
-        "exp": datetime.now(timezone.utc) + timedelta(seconds=exp_offset_s),
-        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(UTC) + timedelta(seconds=exp_offset_s),
+        "iat": datetime.now(UTC),
     }
     if org_id is not None:
         payload["org_id"] = org_id
@@ -79,12 +79,11 @@ _test_client = TestClient(_test_app, raise_server_exceptions=False)
 
 
 def _authed_get(token: str):
-    return _test_client.get(
-        "/protected", headers={"Authorization": f"Bearer {token}"}
-    )
+    return _test_client.get("/protected", headers={"Authorization": f"Bearer {token}"})
 
 
 # ── Shared fixture ─────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def _reset_jwks_cache():
@@ -99,6 +98,7 @@ def _reset_jwks_cache():
 
 
 # ── Gap-11: Algorithm confusion attack ────────────────────────────────────────
+
 
 class TestAlgorithmConfusion:
     """Gap-11 (high): Non-RS256 tokens must be rejected before JWKS lookup fires."""
@@ -128,9 +128,7 @@ class TestAlgorithmConfusion:
 
         # Craft a manually assembled alg:none token (no signature)
         header = _b64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').rstrip(b"=").decode()
-        payload_b64 = _b64.urlsafe_b64encode(
-            b'{"sub":"x","org_id":"evil"}'
-        ).rstrip(b"=").decode()
+        payload_b64 = _b64.urlsafe_b64encode(b'{"sub":"x","org_id":"evil"}').rstrip(b"=").decode()
         none_token = f"{header}.{payload_b64}."
 
         resp = _authed_get(none_token)
@@ -145,9 +143,7 @@ class TestAlgorithmConfusion:
     def test_non_bearer_prefix_returns_401(self) -> None:
         """'Token <jwt>' prefix (not 'Bearer ') → 401."""
         token = _make_rs256_token()
-        resp = _test_client.get(
-            "/protected", headers={"Authorization": f"Token {token}"}
-        )
+        resp = _test_client.get("/protected", headers={"Authorization": f"Token {token}"})
         assert resp.status_code == 401
 
     def test_malformed_jwt_returns_401(self) -> None:
@@ -157,6 +153,7 @@ class TestAlgorithmConfusion:
 
 
 # ── Gap-12: JWKS cache concurrent refresh race ────────────────────────────────
+
 
 class TestJwksConcurrentRefreshRace:
     """
@@ -212,6 +209,7 @@ class TestJwksConcurrentRefreshRace:
 
 # ── Gap-13: Unknown kid forces exactly one refresh ────────────────────────────
 
+
 class TestUnknownKidRefreshBehavior:
     """Gap-13 (high): Unknown kid triggers one cache refresh then 401 - not infinite retries."""
 
@@ -249,6 +247,7 @@ class TestUnknownKidRefreshBehavior:
 
 # ── Gap-14: JWKS fetch timeout ────────────────────────────────────────────────
 
+
 class TestJwksFetchTimeout:
     """Gap-14 (high): JWKS timeout must not leak an unhandled traceback as 500."""
 
@@ -283,6 +282,7 @@ class TestJwksFetchTimeout:
 
 # ── Gap-15: Malformed Clerk 'o' claim ────────────────────────────────────────
 
+
 class TestMalformedOClaim:
     """Gap-15 (medium): 'o' claim that is not a dict must return 403, not 500."""
 
@@ -304,9 +304,9 @@ class TestMalformedOClaim:
             ms.clerk_issuer = _TEST_ISSUER
             resp = _authed_get(token)
 
-        assert resp.status_code == 403, (
-            f"Gap-15: Expected 403 for non-dict 'o' claim. Got {resp.status_code}."
-        )
+        assert (
+            resp.status_code == 403
+        ), f"Gap-15: Expected 403 for non-dict 'o' claim. Got {resp.status_code}."
 
     def test_integer_o_claim_returns_403(self) -> None:
         """Non-dict 'o' (integer) must also return 403, not 500."""

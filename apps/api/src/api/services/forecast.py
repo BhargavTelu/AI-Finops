@@ -66,10 +66,7 @@ def forecast_month_end(
         values = [float(v) for v in mtd_daily]
         slope, intercept = _linear_fit(values)
         # Per-day predictions clamped at zero - spend cannot be negative.
-        predictions = [
-            max(slope * x + intercept, 0.0)
-            for x in range(len(values), days_in_month)
-        ]
+        predictions = [max(slope * x + intercept, 0.0) for x in range(len(values), days_in_month)]
         projected = float(actual_total) + sum(predictions)
 
         fitted = [slope * x + intercept for x in range(len(values))]

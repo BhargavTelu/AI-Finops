@@ -3,8 +3,8 @@ GET  /recommendations?status=new|applied|dismissed  - list for the org, ordered 
 PATCH /recommendations/:id                          - mark applied or dismissed
 """
 
-from datetime import datetime, timezone
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
@@ -16,7 +16,7 @@ from api.services.db import get_supabase
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
-def _get_supabase():
+def _get_supabase() -> Any:
     return get_supabase()
 
 
@@ -68,7 +68,7 @@ def update_recommendation(
         .update(
             {
                 "status": body.status,
-                "resolved_at": datetime.now(timezone.utc).isoformat(),
+                "resolved_at": datetime.now(UTC).isoformat(),
             }
         )
         .eq("id", recommendation_id)

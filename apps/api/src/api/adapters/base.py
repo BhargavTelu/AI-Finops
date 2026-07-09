@@ -1,7 +1,8 @@
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterator, Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 
 @dataclass
@@ -20,7 +21,7 @@ class NormalizedUsageEvent:
     cost_usd: Decimal
     request_count: int
     bucket_hour: datetime  # floored to UTC hour
-    raw_meta: dict
+    raw_meta: dict[str, Any]
 
 
 @runtime_checkable
