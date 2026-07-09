@@ -8,6 +8,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased] - Phases 0-3 (2026-06-11) - MVP code-complete
 
+### Maintenance - Repository audit (2026-07-10)
+
+- **Fixed: tags settings page mutations failed with 401 after ~60s** - `tags-client.tsx` reused a Clerk session token minted at page render (tokens expire in ~60s) and embedded it in the RSC payload; it now fetches a fresh token per request via `useAuth()` like every other client component
+- API lint/type debt cleared: `ruff check`, `black --check`, and `mypy --strict` now pass on `apps/api` (previously 362 ruff violations and 200 strict-mypy errors); behavior unchanged - 750 tests passing, 95% coverage
+- Removed outdated `types-stripe` stubs (masked stripe 15's inline types); checkout now omits the `customer` param instead of passing `None`; removed unused `python-multipart` and `python-dotenv` deps
+- Removed dead `packages/types` workspace package (consumed by nothing; its camelCase shapes contradicted the real snake_case API types in `apps/web/src/lib/types.ts`) and the unused `SettingsTabs` alias export
+- Integrations page: revoke failures now surface as a toast (was `console.error` only); "Copy key identifier" actually copies the integration id
+- Renamed pending migration `20260611000000_add_email_digest_opt_out.sql` to `20260611010000` (version collided with the applied RLS migration); removed a dead root-`.env.example` copy from `bootstrap.sh`
+
 ### Maintenance - Documentation audit (2026-07-09)
 
 - Docs audited and consolidated: historical docs deleted (build checklist, test plan + results snapshot, UI redesign roadmap + brief, strategic review .docx - all in git history), `project_status.md` rewritten as a current-state snapshot, this changelog's 0.6.0/0.6.1 gap backfilled, stale claims corrected in `architecture.md` (AI layer, `slack_digests` schema), `project_spec.md` (M3/M4 completion, fpdf2), and `setup.md`; `launch_setup_guide.md` added (founder ops to go live)
