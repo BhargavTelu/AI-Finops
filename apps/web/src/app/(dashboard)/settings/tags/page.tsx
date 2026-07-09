@@ -14,5 +14,5 @@ export default async function SettingsTagsPage() {
     api.get<TagRule[]>("/tag-rules").catch(() => [] as TagRule[]),
   ]);
 
-  return <TagsClient tags={tags} rules={rules} token={token!} />;
+  return <TagsClient tags={tags} rules={rules} />;
 }

@@ -90,6 +90,3 @@ export function SettingsSidebar() {
     </nav>
   );
 }
-
-// Keep the old name exported so any existing imports don't break during transition
-export { SettingsSidebar as SettingsTabs };
