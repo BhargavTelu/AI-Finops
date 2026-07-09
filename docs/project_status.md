@@ -19,7 +19,7 @@ founder ops, not code (~1-2 hours + DNS wait) — the full walkthrough is
 
 1. Create the 3 Products/Prices in Stripe (test mode first) and set `STRIPE_PRICE_*` env vars
 2. Register the Stripe webhook endpoint (`/api/webhooks/stripe`) and set `STRIPE_WEBHOOK_SECRET`
-3. Apply pending migrations to Supabase: `20260611000000_add_email_digest_opt_out.sql`, `20260611120000_add_stripe_events.sql`
+3. Apply pending migrations to Supabase: `20260611010000_add_email_digest_opt_out.sql`, `20260611120000_add_stripe_events.sql`
 4. Set R2 credentials in Railway and sanity-check one report upload/download (SigV4 is unit-tested, never live-tested)
 5. Run pre-deploy smoke: RLS probe, signup→chart on staging, one test-mode checkout end to end
 

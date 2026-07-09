@@ -69,7 +69,7 @@ separate project (recommended: separate, free tier is fine to start).
    (format: `postgresql://postgres:<password>@db.<project>.supabase.co:5432/postgres`).
 4. **Apply the 2 pending migrations** (SQL Editor → paste file contents → Run,
    in timestamp order):
-   - `infra/migrations/20260611000000_add_email_digest_opt_out.sql`
+   - `infra/migrations/20260611010000_add_email_digest_opt_out.sql`
    - `infra/migrations/20260611120000_add_stripe_events.sql`
 
    For a brand-new project, run **all** files in `infra/migrations/` in
