@@ -94,10 +94,11 @@ Full stack table and schema → [docs/architecture.md](docs/architecture.md).
 - [Project Spec](docs/project_spec.md) - Full requirements, FRs, milestones
 - [Architecture](docs/architecture.md) - System design, schema, API, data flow
 - [Setup](docs/setup.md) - Clerk JWT template + Supabase JWT secret (completed for M0; re-read before deploying to a new environment)
+- [Launch Setup Guide](docs/launch_setup_guide.md) - Founder ops: every account, API key, webhook, and env var needed to go live (Stripe, R2, Resend, Upstash, deploy, smoke checklist)
 - [Changelog](docs/changelog.md) - Version history
 - [Project Status](docs/project_status.md) - Current milestone, what's done, what's next
-- [UI Redesign Brief](docs/ai_finops_ui_redesign_general_prompt.md) - Design philosophy, color/type/spacing system, per-page requirements
-- [UI Redesign Implementation Plan](docs/ui_redesign_implementation_plan.md) - Milestone roadmap, component specs, file change map for full UI overhaul
+- UI design system: living tokens are in `apps/web/src/app/globals.css` + `tailwind.config.ts` (conventions documented inline); day-to-day conventions in § UI Style above.
+- Historical/completed docs (build checklist, test plans, UI redesign roadmap/brief, strategic review) were deleted in the 2026-07-09 docs audit - recover from git history if ever needed; do not recreate them.
 - Update files in the `docs/` folder after major milestones and major additions to the project.
 - Use the `/update-docs-and-commit` slash command when making git commits.
 

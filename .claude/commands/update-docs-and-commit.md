@@ -15,7 +15,7 @@ Optional argument (commit type/scope hint or extra context): $ARGUMENTS
    - `docs/project_status.md` - update if milestone progress moved (something completed, started, or got blocked)
    - `docs/architecture.md` - update if the schema, API surface, data flow, or stack changed
    - `docs/project_spec.md` - update only if requirements/FRs themselves changed
-   - `docs/ui_redesign_implementation_plan.md` - update if UI/design-system work shipped
+   - `CLAUDE.md` § UI Style - update if UI/design-system tokens or conventions changed (token conventions are also documented inline in `globals.css`)
    - `CLAUDE.md` - update if a hard rule, the stack, a constraint, or the milestone one-liner changed, or a new doc was added under `docs/` (link it in §Documentation)
 
    Do NOT invent doc updates for changes that don't warrant them. Skipping all docs is valid for pure refactors/test fixes - say so instead of padding.

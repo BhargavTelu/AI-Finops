@@ -3,6 +3,7 @@ Route tests for GET /usage/forecast (FR-24) and GET /onboarding/status.
 Supabase mocked, auth dependency overridden.
 """
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -47,8 +48,12 @@ class TestForecastRoute:
 
     def test_returns_forecast_with_all_fields(self) -> None:
         # Same rows serve MTD, trailing, and prior-month queries - enough to
-        # assert the response contract without modeling each window.
-        rows = [{"day": "2026-06-01", "total_cost_usd": "25.00"}]
+        # assert the response contract without modeling each window. The day
+        # must be yesterday (UTC): the route reads the real clock and both its
+        # windows end at yesterday (complete days only), so a hardcoded date
+        # eventually falls out of every window and the route 404s.
+        yesterday = datetime.now(UTC).date() - timedelta(days=1)
+        rows = [{"day": yesterday.isoformat(), "total_cost_usd": "25.00"}]
         with patch("api.routers.usage._get_supabase", return_value=_chain_db(rows)):
             resp = client.get("/api/v1/usage/forecast")
         assert resp.status_code == 200

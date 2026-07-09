@@ -134,6 +134,8 @@ INDEX (org_id, status, projected_savings_usd DESC)
 
 -- INTEGRATIONS (3rd party)
 slack_integrations (id, org_id unique, workspace_id, channel_id, channel_name, bot_token_enc, installed_by)
+slack_digests (id, org_id, digest_date, UNIQUE(org_id, digest_date))  -- daily-digest idempotency guard
+INDEX (org_id, digest_date DESC)
 billing (org_id PK FK, stripe_customer_id, stripe_subscription_id, plan, status, current_period_end)
 stripe_events (id text PK, type, received_at)  -- webhook idempotency claims; RLS on, no policies (service-role only)
 reports (id, org_id, type, period_start, period_end, r2_object_key, generated_at)
@@ -386,13 +388,15 @@ Idempotency: `notified_80_at` / `notified_100_at` timestamps are compared at `(y
 
 ## AI Layer
 
-| Use | Model | Trigger | Cap |
-|---|---|---|---|
-| Recommendations | Haiku 4.5 | daily/org | $0.02 |
-| Anomaly explainer | Haiku 4.5 | on creation, 24h cache | $0.01 |
-| Monthly narrative | Sonnet 4.6 | 1×/month/org | $0.05 |
+Only one feature calls an LLM. Recommendations are **rule-based** (no AI) and AI narratives were cut per the strategic plan (V1 at the earliest).
 
-**Hard cap:** 3 AI calls/org/day enforced in Redis. Only aggregated summaries in prompts - never raw events, never PII. All outputs cached in DB.
+| Use | Model | Trigger | Status |
+|---|---|---|---|
+| Anomaly explainer | Haiku (`services/anomaly_explainer.py`) | on anomaly creation, output cached | Shipped; frozen - invest nothing further |
+| Recommendations | none - rule engine (`services/recommendations.py`) | nightly 02:30 UTC | Shipped |
+| Monthly narrative | - | - | Cut (strategic plan); revisit in V1 |
+
+**Hard cap:** ≤ $0.05/org/day; 3 AI calls/org/day enforced in Redis. Only aggregated summaries in prompts - never raw events, never PII. All outputs cached in DB. `ANTHROPIC_API_KEY` may be left empty in MVP (explainer degrades gracefully).
 
 ## Engineering Reqs
 

@@ -2,7 +2,7 @@
 
 **LLM cost intelligence for AI startups.** Per-feature, per-team, and per-customer cost attribution, anomaly alerts, budgets, and savings recommendations for OpenAI, Anthropic, and Gemini API spend — built for CTOs and CFOs who need to know exactly where the money goes.
 
-> **Status:** M3 (Intelligence Layer) complete — anomaly detection, budgets + email alerts, Slack integration, and the recommendations engine are live. M4 is next.
+> **Status:** MVP code-complete — Phases 0–3 of the [Strategic Implementation Plan](docs/STRATEGIC_IMPLEMENTATION_PLAN.md) shipped (CFO PDF, Stripe billing + gating, forecast, activation checklist, landing page, weekly digest) on top of M0–M3. Remaining before launch is founder ops (see [docs/launch_setup_guide.md](docs/launch_setup_guide.md)); next code work is Phase 4 (trust & traction).
 
 ## What it does
 
@@ -42,7 +42,7 @@ packages/
 infra/
   migrations/ Forward-only SQL migrations (UTC-timestamp prefixed)
   scripts/    Smoke tests and ops scripts
-docs/         Spec, architecture, setup, status, changelog, UI design system
+docs/         Spec, architecture, setup, status, changelog
 ```
 
 ## Getting started
@@ -100,11 +100,11 @@ Before pushing: `pnpm test` (web) and `pytest` (api) must pass. The API suite co
 |-----|----------|
 | [Project Spec](docs/project_spec.md) | Requirements, FRs, milestones |
 | [Architecture](docs/architecture.md) | System design, schema, API, data flow |
+| [Strategic Implementation Plan](docs/STRATEGIC_IMPLEMENTATION_PLAN.md) | Source of truth for feature order (Phases 0–5) |
 | [Setup](docs/setup.md) | Clerk JWT template + Supabase JWT secret |
+| [Launch Setup Guide](docs/launch_setup_guide.md) | Founder ops: accounts, keys, webhooks, env vars to go live |
 | [Project Status](docs/project_status.md) | Current milestone, what's done, what's next |
 | [Changelog](docs/changelog.md) | Version history |
-| [UI Redesign Brief](docs/ai_finops_ui_redesign_general_prompt.md) | Design philosophy and per-page requirements |
-| [UI Implementation Plan](docs/ui_redesign_implementation_plan.md) | Design system tokens, component specs, milestone log |
 
 ## Security model
 
